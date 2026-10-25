@@ -30,6 +30,7 @@ import '../../../services/local/protection.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/media/media_service.dart';
 import '../model/decks_status.dart';
+import '../model/thumbnail_cache.dart';
 
 class DuplicatesController extends GetxController {
   DuplicatesController({required this.media, required this.local});
@@ -55,8 +56,12 @@ class DuplicatesController extends GetxController {
   final RxString errorKey = ''.obs;
   final RxInt threshold = defaultThreshold.obs;
   final RxList<DuplicateGroup> groups = <DuplicateGroup>[].obs;
-  final RxMap<String, Uint8List> thumbnails = <String, Uint8List>{}.obs;
-  final RxSet<String> failedThumbnails = <String>{}.obs;
+
+  /// Phase 1.8: bounded cache (64 entries / 16 MiB, FIFO) replacing
+  /// the unbounded maps. Views read through these getters unchanged.
+  final BoundedThumbnailCache _cache = BoundedThumbnailCache();
+  RxMap<String, Uint8List> get thumbnails => _cache.thumbnails;
+  RxSet<String> get failedThumbnails => _cache.failedThumbnails;
 
   /// Phase 3A: favourited non-keepers kept out of a delete-marking
   /// run (count shown as a banner in the view, never silent).
@@ -252,7 +257,7 @@ class DuplicatesController extends GetxController {
   }
 
   Future<void> _loadThumbnail(String id) async {
-    if (thumbnails.containsKey(id) || failedThumbnails.contains(id)) {
+    if (_cache.contains(id)) {
       return;
     }
     final Result<Uint8List> result = await media.getThumbnail(
@@ -260,8 +265,8 @@ class DuplicatesController extends GetxController {
       thumbnailSize,
     );
     result.fold(
-      onSuccess: (Uint8List bytes) => thumbnails[id] = bytes,
-      onFailure: (_) => failedThumbnails.add(id),
+      onSuccess: (Uint8List bytes) => _cache.put(id, bytes),
+      onFailure: (_) => _cache.markFailed(id),
     );
   }
 }

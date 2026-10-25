@@ -31,6 +31,7 @@ import '../../deck/controller/deck_protection.dart';
 import '../../deck/controller/deck_retention.dart';
 import '../../deck/model/retention.dart';
 import '../model/smart_deck_launch.dart';
+import '../model/thumbnail_cache.dart';
 
 class SmartDeckController extends GetxController {
   SmartDeckController({
@@ -60,8 +61,12 @@ class SmartDeckController extends GetxController {
   final RxSet<String> favouriteIds = <String>{}.obs;
   final RxInt currentIndex = 0.obs;
   final RxList<String> undoStack = <String>[].obs;
-  final RxMap<String, Uint8List> thumbnails = <String, Uint8List>{}.obs;
-  final RxSet<String> failedThumbnails = <String>{}.obs;
+
+  /// Phase 1.8: bounded cache (64 entries / 16 MiB, FIFO) replacing
+  /// the unbounded maps. Views read through these getters unchanged.
+  final BoundedThumbnailCache _cache = BoundedThumbnailCache();
+  RxMap<String, Uint8List> get thumbnails => _cache.thumbnails;
+  RxSet<String> get failedThumbnails => _cache.failedThumbnails;
 
   /// Phase 3A favourites protection (see DeckProtection).
   final DeckProtection protection = DeckProtection();
@@ -203,7 +208,7 @@ class SmartDeckController extends GetxController {
   }
 
   Future<void> _loadThumbnail(String id) async {
-    if (thumbnails.containsKey(id) || failedThumbnails.contains(id)) {
+    if (_cache.contains(id)) {
       return;
     }
     final Result<Uint8List> result = await media.getThumbnail(
@@ -211,8 +216,8 @@ class SmartDeckController extends GetxController {
       thumbnailSize,
     );
     result.fold(
-      onSuccess: (Uint8List bytes) => thumbnails[id] = bytes,
-      onFailure: (_) => failedThumbnails.add(id),
+      onSuccess: (Uint8List bytes) => _cache.put(id, bytes),
+      onFailure: (_) => _cache.markFailed(id),
     );
   }
 
