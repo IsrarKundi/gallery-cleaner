@@ -96,7 +96,11 @@ class _Media implements MediaService {
   }
 
   @override
-  Future<Result<Uint8List>> getThumbnail(String assetId, int size, {int quality = 85}) async {
+  Future<Result<Uint8List>> getThumbnail(
+    String assetId,
+    int size, {
+    int quality = 85,
+  }) async {
     return Success<Uint8List>(Uint8List.fromList(<int>[1, 2, 3]));
   }
 }
@@ -191,15 +195,15 @@ void main() {
           local: local,
         );
         await controller.init();
-        controller.markCurrent(DeckMark.delete);
+        await controller.markCurrent(DeckMark.delete);
         expect(controller.marks['plain'], DeckMark.delete);
-        controller.markCurrent(DeckMark.delete);
+        await controller.markCurrent(DeckMark.delete);
         expect(controller.marks.containsKey('fav'), isFalse);
         expect(controller.currentAsset?.id, 'fav');
         expect(controller.protection.blockedKey.value, isNotEmpty);
         controller.markCurrent(DeckMark.keep);
         expect(controller.protection.blockedKey.value, isEmpty);
-        controller.markCurrent(DeckMark.delete);
+        await controller.markCurrent(DeckMark.delete);
         expect(controller.marks.containsKey('sys'), isFalse);
         expect(controller.protection.blockedKey.value, isNotEmpty);
       },
@@ -213,7 +217,7 @@ void main() {
         local: local,
       );
       await controller.init();
-      controller.markCurrent(DeckMark.delete);
+      await controller.markCurrent(DeckMark.delete);
       expect(controller.marks['fav'], DeckMark.delete);
     });
   });

@@ -77,6 +77,10 @@ class AppSizes {
   // Height matching the generated logo aspect (755:200 viewBox).
   double get splashLogoHeight => 53;
   Duration get splashHold => const Duration(milliseconds: 3000);
+  // Reduced-motion splash (Phase 2.2): no Lottie runs, so the 3.0s
+  // fallback would be the whole wait. A short hold lets the brand
+  // mark register, then the splash exits — far below the fallback.
+  Duration get splashReducedMotionHold => const Duration(milliseconds: 800);
 
   // Private blur (Phase 3A): the Gaussian sigma for blurred
   // thumbnails on Review (Trash rows are metadata-only, so there is

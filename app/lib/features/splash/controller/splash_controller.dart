@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
 import '../../../core/constants/app_sizes.dart';
+import '../../../services/warmup/deck_warm_up.dart';
 
 /// Splash completion contract (design.md §13).
 ///
@@ -23,7 +24,12 @@ class SplashController extends GetxController {
     this.onComplete,
     this.beforeComplete,
     Duration? holdDuration,
-  }) : holdDuration = holdDuration ?? const AppSizes().splashHold;
+    Duration? reducedMotionHoldDuration,
+    this.warmUp,
+  }) : holdDuration = holdDuration ?? const AppSizes().splashHold,
+       reducedMotionHoldDuration =
+           reducedMotionHoldDuration ??
+           const AppSizes().splashReducedMotionHold;
 
   /// Called exactly once when the splash completes, however it ends.
   final VoidCallback? onComplete;
@@ -34,10 +40,22 @@ class SplashController extends GetxController {
   /// theme). Null in tests, where completion stays synchronous.
   final Future<void> Function()? beforeComplete;
 
+  /// Phase 2.2: started while the splash plays, so permission +
+  /// page 0 overlap the animation instead of following it. Null in
+  /// tests, where no warm-up runs.
+  final DeckWarmUp? warmUp;
+
   /// Fallback duration; see the class doc.
   final Duration holdDuration;
 
+  /// Reduced-motion hold (solutions 2.2): no Lottie runs, so the
+  /// 3.0s fallback would be the whole wait. A short hold lets the
+  /// brand mark register, then completes — far below the fallback.
+  final Duration reducedMotionHoldDuration;
+
   Timer? _holdTimer;
+  Timer? _reducedMotionTimer;
+  bool _reducedMotionArmed = false;
   bool _completed = false;
 
   /// True once completion has fired (exactly once, by any path).
@@ -49,6 +67,10 @@ class SplashController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    // Phase 2.2: overlap the deck's critical path with the splash.
+    // The animation itself is not shortened; this only starts the
+    // work early so the deck can join it.
+    warmUp?.start();
     _holdTimer = Timer(holdDuration, _complete);
   }
 
@@ -70,11 +92,26 @@ class SplashController extends GetxController {
     _complete();
   }
 
-  /// Cancels the fallback timer without completing. Exposed so the view
-  /// and tests can assert the cancel-timer pattern directly.
+  /// Reduced-motion splash shown (static logo, no Lottie): cancel
+  /// the 3.0s fallback and complete after the short hold instead.
+  /// Idempotent — the view may rebuild and call this again.
+  void onReducedMotionShown() {
+    if (_completed || _reducedMotionArmed) {
+      return;
+    }
+    _reducedMotionArmed = true;
+    cancelHoldTimer();
+    _reducedMotionTimer = Timer(reducedMotionHoldDuration, _complete);
+  }
+
+  /// Cancels the fallback timer (and any reduced-motion hold timer)
+  /// without completing. Exposed so the view and tests can assert
+  /// the cancel-timer pattern directly.
   void cancelHoldTimer() {
     _holdTimer?.cancel();
     _holdTimer = null;
+    _reducedMotionTimer?.cancel();
+    _reducedMotionTimer = null;
   }
 
   Future<void> _complete() async {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:get/get.dart';
@@ -12,6 +13,7 @@ import '../../../services/media/media_service.dart';
 import '../../../services/share/share_service.dart';
 import '../../../services/trash/trash_entry.dart';
 import '../../../services/trash/trash_service.dart';
+import '../../../services/warmup/deck_warm_up.dart';
 import '../model/deck_filter.dart';
 import '../model/deck_queue.dart';
 import '../model/deck_status.dart';
@@ -45,6 +47,7 @@ class DeckController extends GetxController {
     required this.trash,
     required this.local,
     ShareService? share,
+    this.warmUp,
   }) : _preloader = ThumbnailPreloader(media: media),
        retention = DeckRetention(local: local, share: share),
        access = DeckAccess(media: media),
@@ -53,6 +56,11 @@ class DeckController extends GetxController {
   final MediaService media;
   final TrashService trash;
   final LocalService local;
+
+  /// Phase 2.2 warm-up, started by the splash binding. Null in tests
+  /// and on any entry path that skips the splash: the deck then runs
+  /// its normal path (fresh permission + fresh page 0).
+  final DeckWarmUp? warmUp;
 
   /// Phase 2B retention glue (summary, share, snooze expiry,
   /// completion days). No share backend = no share button.
@@ -100,6 +108,20 @@ class DeckController extends GetxController {
   bool _hasMore = true;
   int _nextPage = 0;
   bool _loadingPage = false;
+
+  /// Phase 2.2: warmed work is consumed on the first init only; a
+  /// retry always re-requests permission and re-fetches page 0.
+  bool _warmUpUsed = false;
+
+  /// Phase 2.2: parallel, non-gating work. Tutorial and protection
+  /// land when they land (the meter refreshes after ready — see
+  /// _loadFilterData); they are fire-and-forget by design, marked
+  /// with unawaited so the intent is explicit. Protection is the
+  /// exception: its future is held so a delete mark can await it.
+  Future<void>? _protectionFuture;
+
+  /// Phase 2.2: albums load lazily via [ensureAlbums], not at init.
+  bool _albumsLoaded = false;
 
   /// Current card, or null when the queue is empty or finished.
   MediaAsset? get currentAsset {
@@ -169,7 +191,22 @@ class DeckController extends GetxController {
 
   Future<void> _init() async {
     status.value = DeckStatus.loading;
-    final Result<MediaPermission> result = await media.requestPermission();
+    // Phase 2.2: join warmed work on the first init only. A warmed
+    // denial means the user already answered the dialog (over the
+    // splash); the deck must not re-prompt. A retry always goes fresh.
+    final bool useWarmUp = !_warmUpUsed && (warmUp?.started ?? false);
+    _warmUpUsed = true;
+    MediaPermission? warmedPermission;
+    if (useWarmUp) {
+      try {
+        warmedPermission = await warmUp!.permission;
+      } catch (_) {
+        warmedPermission = null;
+      }
+    }
+    final Result<MediaPermission> result = warmedPermission != null
+        ? Success<MediaPermission>(warmedPermission)
+        : await media.requestPermission();
     final bool granted = result.fold(
       onSuccess: (MediaPermission value) {
         permission.value = value;
@@ -189,25 +226,29 @@ class DeckController extends GetxController {
       }
       return;
     }
-    await _loadFilterData();
+    await _loadFilterData(initial: true, useWarmUpPage: useWarmUp);
   }
 
-  /// Loads albums, meter inputs, the tutorial flag, the saved session
-  /// for the current filter and the first page. Never shows a blocking
-  /// "building deck" overlay: the deck becomes interactive as soon as
-  /// the first page is ready (design.md §7).
-  Future<void> _loadFilterData() async {
-    final Result<List<MediaAlbum>> albumResult = await media.getAlbums();
-    albumResult.fold(
-      onSuccess: albums.assignAll,
-      onFailure: (_) => albums.clear(),
-    );
-    await meterState.refresh(trashEntries, history);
-    final Result<bool> tutorialResult = await local.isTutorialSeen();
-    showTutorial.value = tutorialResult.fold(
-      onSuccess: (bool seen) => !seen,
-      onFailure: (_) => false,
-    );
+  /// Staged ready-gate (solutions 2.2). The critical path to ready
+  /// is ONLY: session + page 0 + restore. Everything else moved:
+  /// albums load lazily via [ensureAlbums]; the tutorial flag reads
+  /// in parallel (initial load only — it is a global flag, not per
+  /// filter); protection loads in parallel and is awaited only by
+  /// the first delete-mark attempt (see [_ensureProtectionLoaded]);
+  /// the meter refreshes after ready, without gating it. Filter
+  /// changes reload session + page only (plus a parallel protection
+  /// refresh, so a Settings toggle applies on the next load).
+  ///
+  /// Never shows a blocking "building deck" overlay: the deck becomes
+  /// interactive as soon as the first page is ready (design.md §7).
+  Future<void> _loadFilterData({
+    bool initial = false,
+    bool useWarmUpPage = false,
+  }) async {
+    if (initial) {
+      unawaited(_readTutorialFlag());
+    }
+    _protectionFuture = protection.load(local);
     DeckSession? session;
     final Result<DeckSession?> sessionResult = await local.loadSession(
       filter.value.filterKey,
@@ -216,7 +257,9 @@ class DeckController extends GetxController {
       onSuccess: (DeckSession? value) => session = value,
       onFailure: (_) => session = null,
     );
-    final bool firstPageOk = await _loadPage(0);
+    final bool firstPageOk = initial
+        ? await _loadFirstPage(useWarmUpPage)
+        : await _loadPage(0);
     if (!firstPageOk) {
       status.value = DeckStatus.error;
       errorKey.value = AppStrings.errorMediaLoad;
@@ -225,12 +268,82 @@ class DeckController extends GetxController {
     if (await retention.restoreSession(marks, favouriteIds, session)) {
       _persist();
     }
-    // Phase 3A protection, loaded with the session so a toggle
-    // change in Settings applies on the next deck load.
-    await protection.load(local);
     currentIndex.value = firstUndecidedIndex(queue, marks);
     status.value = DeckStatus.ready;
     _preloader.preloadAround(queue, currentIndex.value);
+    // Post-ready: meter inputs refresh without gating readiness.
+    // The meter view is reactive, so it picks the values up when
+    // they land.
+    unawaited(meterState.refresh(trashEntries, history));
+  }
+
+  /// Reads the tutorial flag without gating ready. The view shows
+  /// the overlay reactively when the flag lands.
+  Future<void> _readTutorialFlag() async {
+    final Result<bool> tutorialResult = await local.isTutorialSeen();
+    showTutorial.value = tutorialResult.fold(
+      onSuccess: (bool seen) => !seen,
+      onFailure: (_) => false,
+    );
+  }
+
+  /// Page 0 for the initial load: warmed assets when the splash
+  /// warmed them, otherwise a fresh fetch (also the fallback when
+  /// the warmed fetch failed). Applies the page with exactly the
+  /// same bookkeeping as [_loadPage].
+  Future<bool> _loadFirstPage(bool useWarmUpPage) async {
+    if (useWarmUpPage && warmUp != null) {
+      List<MediaAsset>? warmed;
+      try {
+        warmed = await warmUp!.firstPage;
+      } catch (_) {
+        warmed = null;
+      }
+      if (warmed != null) {
+        queue.assignAll(warmed);
+        _hasMore = warmed.length == pageSize;
+        _nextPage = 1;
+        _refreshMonths();
+        return true;
+      }
+    }
+    return _loadPage(0);
+  }
+
+  /// Loads the album list on demand (filter sheet / album picker).
+  /// Loaded once per controller life; a failure leaves the list
+  /// empty and retries on the next open, never blocking the deck.
+  Future<void> ensureAlbums() async {
+    if (_albumsLoaded) {
+      return;
+    }
+    final Result<List<MediaAlbum>> albumResult = await media.getAlbums();
+    albumResult.fold(
+      onSuccess: (List<MediaAlbum> value) {
+        albums.assignAll(value);
+        _albumsLoaded = true;
+      },
+      onFailure: (_) => albums.clear(),
+    );
+  }
+
+  /// Awaits the latest protection load, once. Delete marks call this
+  /// before deciding; every other mark skips it (protection only
+  /// ever blocks deletes). A load failure reads as protection OFF,
+  /// the same default as a settings-load failure inside
+  /// [DeckProtection.load], so a broken settings read never blocks
+  /// the deck.
+  Future<void> _ensureProtectionLoaded() async {
+    final Future<void>? pending = _protectionFuture;
+    if (pending == null) {
+      return;
+    }
+    try {
+      await pending;
+    } catch (_) {
+      // Fail open to unprotected (see doc comment).
+    }
+    _protectionFuture = null;
   }
 
   /// Loads one page; page 0 replaces the queue, later pages append.
@@ -274,13 +387,20 @@ class DeckController extends GetxController {
   }
 
   /// Records [mark] for the current card and advances. No-op with
-  /// no current card (empty or finished deck).
-  void markCurrent(DeckMark mark) {
+  /// no current card (empty or finished deck). Async because a
+  /// delete mark awaits the parallel protection load first (2.2);
+  /// every other mark skips that wait.
+  Future<void> markCurrent(DeckMark mark) async {
     final MediaAsset? asset = currentAsset;
     if (asset == null || status.value != DeckStatus.ready) {
       return;
     }
     // Phase 3A: a protected delete mark is blocked, not recorded.
+    // Protection loads in parallel with the deck; only a delete
+    // mark waits for it, so keep/maybe/favourite never stall.
+    if (mark == DeckMark.delete) {
+      await _ensureProtectionLoaded();
+    }
     if (protection.blocksDelete(mark, asset, favouriteIds)) {
       return;
     }

@@ -18,6 +18,8 @@ import '../../services/video/video_compression_service.dart';
 import '../../services/video/video_compression_service_impl.dart';
 import '../../services/trash/trash_service.dart';
 import '../../services/trash/trash_service_impl.dart';
+import '../../services/warmup/deck_warm_up.dart';
+import '../../services/warmup/deck_warm_up_impl.dart';
 
 /// The ONLY place global Get.put lives (AGENTS.md).
 ///
@@ -39,6 +41,12 @@ class InitialBinding extends Bindings {
   void dependencies() {
     Get.put<LocalService>(LocalServiceImpl(), permanent: true);
     Get.put<MediaService>(MediaServiceImpl(), permanent: true);
+    // Phase 2.2: permanent warm-up for the deck's critical path.
+    // Started by the splash binding; the deck joins it on first init.
+    Get.put<DeckWarmUp>(
+      DeckWarmUpImpl(media: Get.find<MediaService>()),
+      permanent: true,
+    );
     Get.lazyPut<VideoCompressionService>(
       VideoCompressionServiceImpl.new,
       fenix: true,

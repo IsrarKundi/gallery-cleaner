@@ -128,7 +128,11 @@ class FakeMedia implements MediaService {
   }
 
   @override
-  Future<Result<Uint8List>> getThumbnail(String assetId, int size, {int quality = 85}) async {
+  Future<Result<Uint8List>> getThumbnail(
+    String assetId,
+    int size, {
+    int quality = 85,
+  }) async {
     return Success<Uint8List>(_png);
   }
 }
@@ -350,6 +354,9 @@ void main() {
       expect(controller.status.value, DeckStatus.ready);
       expect(controller.isPartialAccess, isFalse);
       expect(controller.months, <String>['2026-10', '2026-09', '2025-10']);
+      // Phase 2.2: albums load lazily, not at init.
+      expect(controller.albums, isEmpty);
+      await controller.ensureAlbums();
       expect(controller.albums.map((a) => a.name).toList(), contains('Camera'));
     });
   });
@@ -359,7 +366,7 @@ void main() {
       final DeckController controller = makeController();
       await controller.init();
       controller.markCurrent(DeckMark.keep);
-      controller.markCurrent(DeckMark.delete);
+      await controller.markCurrent(DeckMark.delete);
       controller.markCurrent(DeckMark.maybe);
       controller.markCurrent(DeckMark.favourite);
       expect(controller.marks, <String, DeckMark>{
@@ -377,7 +384,7 @@ void main() {
       final DeckController controller = makeController();
       await controller.init();
       controller.markCurrent(DeckMark.keep);
-      controller.markCurrent(DeckMark.delete);
+      await controller.markCurrent(DeckMark.delete);
       controller.undo();
       expect(controller.currentAsset?.id, 'a2');
       expect(controller.marks.containsKey('a2'), isFalse);
@@ -416,8 +423,8 @@ void main() {
         local: local,
       );
       await controller.init();
-      controller.markCurrent(DeckMark.delete);
-      controller.markCurrent(DeckMark.delete);
+      await controller.markCurrent(DeckMark.delete);
+      await controller.markCurrent(DeckMark.delete);
       final meter = controller.meter;
       expect(meter.markedBytes, 3000000);
       expect(meter.inTrashBytes, 4000000);
@@ -429,7 +436,7 @@ void main() {
       final DeckController controller = makeController();
       await controller.init();
       controller.markCurrent(DeckMark.keep);
-      controller.markCurrent(DeckMark.delete);
+      await controller.markCurrent(DeckMark.delete);
       controller.markCurrent(DeckMark.keep);
       controller.clearDeleteMarks(<String>['a2']);
       expect(controller.marks.containsKey('a2'), isFalse);
@@ -495,7 +502,7 @@ void main() {
       final FakeLocal local = FakeLocal();
       final DeckController controller = makeController(local: local);
       await controller.init();
-      controller.markCurrent(DeckMark.delete);
+      await controller.markCurrent(DeckMark.delete);
       expect(local.sessions['all']?.marks['a1'], DeckMark.delete);
       expect(local.sessions['all']?.currentIndex, 1);
     });

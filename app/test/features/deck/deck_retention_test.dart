@@ -78,7 +78,11 @@ class _Media implements MediaService {
   }
 
   @override
-  Future<Result<Uint8List>> getThumbnail(String assetId, int size, {int quality = 85}) async {
+  Future<Result<Uint8List>> getThumbnail(
+    String assetId,
+    int size, {
+    int quality = 85,
+  }) async {
     return Success<Uint8List>(Uint8List.fromList(<int>[1, 2, 3]));
   }
 }
@@ -323,7 +327,7 @@ void main() {
       );
       await controller.init();
       controller.markCurrent(DeckMark.keep);
-      controller.markCurrent(DeckMark.delete);
+      await controller.markCurrent(DeckMark.delete);
       expect(controller.isFinished, isTrue);
       expect(local.completions.length, 1);
       final DateTime today = DateTime.now();
@@ -347,7 +351,7 @@ void main() {
       );
       await controller.init();
       controller.markCurrent(DeckMark.keep);
-      controller.markCurrent(DeckMark.delete);
+      await controller.markCurrent(DeckMark.delete);
       await controller.retention.shareSummary(
         controller.summary,
         Uint8List.fromList(<int>[9, 9, 9]),

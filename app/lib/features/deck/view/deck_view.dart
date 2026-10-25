@@ -58,6 +58,23 @@ class DeckView extends GetView<DeckController> {
     );
   }
 
+  /// Albums load lazily (Phase 2.2): fetch them before opening any
+  /// sheet that lists them, so the sheet is populated without
+  /// blocking deck readiness at init.
+  Future<void> _openFiltersWithAlbums(BuildContext context) async {
+    await controller.ensureAlbums();
+    if (context.mounted) {
+      _openFilters(context);
+    }
+  }
+
+  Future<void> _openAlbumPickerWithAlbums(BuildContext context) async {
+    await controller.ensureAlbums();
+    if (context.mounted) {
+      _openAlbumPicker(context);
+    }
+  }
+
   void _shareCurrentAsset() {
     final MediaAsset? asset = controller.currentAsset;
     if (asset == null) {
@@ -115,7 +132,7 @@ class DeckView extends GetView<DeckController> {
           IconButton(
             icon: Icon(AppIcons.filter, size: context.sizes.iconMd),
             tooltip: AppStrings.tr(AppStrings.filterTitle),
-            onPressed: () => _openFilters(context),
+            onPressed: () => _openFiltersWithAlbums(context),
           ),
         ],
         bottomBar: showBar
@@ -126,7 +143,7 @@ class DeckView extends GetView<DeckController> {
                 onReview: controller.goToReview,
                 isFavourite: isFav,
                 onFavorite: () => controller.markCurrent(DeckMark.favourite),
-                onAddToAlbum: () => _openAlbumPicker(context),
+                onAddToAlbum: () => _openAlbumPickerWithAlbums(context),
                 onShare: _shareCurrentAsset,
               )
             : null,

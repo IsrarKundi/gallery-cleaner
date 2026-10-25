@@ -20,8 +20,9 @@ import '../controller/splash_controller.dart';
 ///   splash (the hold timer is fallback only, cancelled on finish).
 /// - Reduced motion on (system "Remove animations", or the in-app
 ///   toggle via main.dart's MediaQuery override): the final frame
-///   renders statically as the logo SVG — no Lottie playback — and the
-///   hold timer (or a tap) completes the splash.
+///   renders statically as the logo SVG — no Lottie playback — and
+///   the short reduced-motion hold (or a tap) completes the splash,
+///   not the 3.0s fallback.
 /// - Tap anywhere skips, cancelling the timer.
 ///
 /// Layout only: all completion logic lives in [SplashController].
@@ -62,6 +63,21 @@ class _SplashViewState extends State<SplashView>
         _splashController.onLottieFinish();
       }
     });
+  }
+
+  /// Reduced motion renders the static logo, so no Lottie finish
+  /// ever fires: tell the controller once, so it exits on the short
+  /// hold instead of the 3.0s fallback (solutions 2.2). Guarded
+  /// because didChangeDependencies runs on every theme change too.
+  bool _reducedMotionNotified = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_reducedMotionNotified && MediaQuery.disableAnimationsOf(context)) {
+      _reducedMotionNotified = true;
+      _splashController.onReducedMotionShown();
+    }
   }
 
   @override
