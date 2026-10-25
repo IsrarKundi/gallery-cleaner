@@ -293,7 +293,7 @@ class ReviewView extends GetView<ReviewController> {
                               onRetry: () =>
                                   controller.retryThumbnail(asset.id),
                             );
-                          });
+                          }, key: ValueKey<String>(asset.id));
                         },
                       ),
                     ),

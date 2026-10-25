@@ -20,7 +20,7 @@ import '../../../services/detection/grouping.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../core/widgets/secondary_button.dart';
 
-class DuplicateGroupCard extends StatelessWidget {
+class DuplicateGroupCard extends StatefulWidget {
   const DuplicateGroupCard({
     super.key,
     required this.group,
@@ -36,12 +36,42 @@ class DuplicateGroupCard extends StatelessWidget {
   final ValueChanged<String> onKeeperTap;
   final VoidCallback onMarkNonKeepers;
 
+  /// Brief 3.5: at most this many previews render collapsed.
+  static const int previewCap = 20;
+
+  @override
+  State<DuplicateGroupCard> createState() => _DuplicateGroupCardState();
+}
+
+class _DuplicateGroupCardState extends State<DuplicateGroupCard> {
+  /// Collapsed by default (bounded render); expanding reveals
+  /// every member. Display state only — picking and marking
+  /// still live in the controller.
+  bool _expanded = false;
+
   @override
   Widget build(BuildContext context) {
+    final DuplicateGroup group = widget.group;
     final int totalBytes = group.assets.fold<int>(
       0,
       (int sum, MediaAsset a) => sum + a.sizeBytes,
     );
+    // Collapsed previews: the first 20 members, plus the keeper
+    // when it sits beyond them (its badge must never hide —
+    // the button below marks every non-keeper, seen or not).
+    final List<MediaAsset> shown = _expanded
+        ? group.assets
+        : <MediaAsset>[
+            ...group.assets.take(DuplicateGroupCard.previewCap),
+            if (group.assets.length > DuplicateGroupCard.previewCap &&
+                !group.assets
+                    .take(DuplicateGroupCard.previewCap)
+                    .any((MediaAsset a) => a.id == group.keeperId))
+              group.assets.firstWhere((MediaAsset a) => a.id == group.keeperId),
+          ];
+    // Members not yet shown (0 when expanded; accounts for the
+    // keeper appended above, so the overflow count is exact).
+    final int hidden = _expanded ? 0 : group.assets.length - shown.length;
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: context.palette.border),
@@ -70,13 +100,43 @@ class DuplicateGroupCard extends StatelessWidget {
             spacing: context.sizes.sm,
             runSpacing: context.sizes.sm,
             children: <Widget>[
-              for (final MediaAsset asset in group.assets)
+              for (final MediaAsset asset in shown)
                 _Thumb(
                   asset: asset,
-                  bytes: thumbnails[asset.id],
-                  failed: failedThumbnails.contains(asset.id),
+                  bytes: widget.thumbnails[asset.id],
+                  failed: widget.failedThumbnails.contains(asset.id),
                   isKeeper: asset.id == group.keeperId,
-                  onTap: () => onKeeperTap(asset.id),
+                  onTap: () => widget.onKeeperTap(asset.id),
+                ),
+              // Collapsed overflow: tapping reveals every member
+              // (the keeper pick must reach members beyond the
+              // cap — there is no detail screen to show them).
+              if (!_expanded && hidden > 0)
+                Semantics(
+                  button: true,
+                  label: AppStrings.tr(
+                    AppStrings.duplicatesShowMore,
+                    <String, String>{'count': '$hidden'},
+                  ),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _expanded = true),
+                    child: Container(
+                      width: context.sizes.duplicateThumb,
+                      height: context.sizes.duplicateThumb,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: context.palette.border),
+                        borderRadius: BorderRadius.circular(
+                          context.sizes.radiusMd,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '+$hidden',
+                          style: context.textStyles.titleMedium,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
             ],
           ),
@@ -84,7 +144,7 @@ class DuplicateGroupCard extends StatelessWidget {
           SecondaryButton(
             label: AppStrings.tr(AppStrings.duplicatesMarkNonKeepers),
             icon: AppIcons.delete,
-            onPressed: onMarkNonKeepers,
+            onPressed: widget.onMarkNonKeepers,
           ),
         ],
       ),

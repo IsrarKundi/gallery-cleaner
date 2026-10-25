@@ -174,6 +174,7 @@ class AppStrings {
   static const String duplicatesKeeper = 'duplicatesKeeper';
   static const String duplicatesTapToKeep = 'duplicatesTapToKeep';
   static const String duplicatesMarkNonKeepers = 'duplicatesMarkNonKeepers';
+  static const String duplicatesShowMore = 'duplicatesShowMore';
   static const String duplicatesSliderLabel = 'duplicatesSliderLabel';
   static const String duplicatesSliderValue = 'duplicatesSliderValue';
   static const String duplicatesSliderHint = 'duplicatesSliderHint';
@@ -321,6 +322,7 @@ class AppStrings {
   static const String compressDiscard = 'compressDiscard';
   static const String compressSaved = 'compressSaved';
   static const String compressOriginalKept = 'compressOriginalKept';
+  static const String compressSavedAndKept = 'compressSavedAndKept';
   static const String compressCancelled = 'compressCancelled';
   static const String errorCompress = 'errorCompress';
   static const String errorCompressNotVideo = 'errorCompressNotVideo';
@@ -383,6 +385,7 @@ class AppStrings {
     duplicatesKeeper: 'Keeper',
     duplicatesTapToKeep: 'Tap a photo to make it the keeper.',
     duplicatesMarkNonKeepers: 'Mark others for deletion',
+    duplicatesShowMore: 'Show {count} more photos',
     duplicatesSliderLabel: 'Similarity',
     duplicatesSliderValue: 'Distance {value}',
     duplicatesSliderHint: 'Higher values group photos that look less alike. Groups update instantly.',
@@ -652,6 +655,11 @@ class AppStrings {
         'Your original video is still in your library. To remove it, '
         'mark it for deletion and confirm it in Review — it is not '
         'counted as freed until trash is emptied.',
+    compressSavedAndKept:
+        'Compressed copy saved to your library. Your original video '
+        'is still in your library. To remove it, mark it for '
+        'deletion and confirm it in Review — it is not counted as '
+        'freed until trash is emptied.',
     compressCancelled: 'Compression cancelled. The original is untouched.',
     errorCompress: 'Compression did not complete. The original is untouched.',
     errorCompressNotVideo: 'Only videos can be compressed.',

@@ -117,6 +117,12 @@ class TrashController extends GetxController {
     arrivalSnackDate.value = '';
   }
 
+  /// True once [init] has fully finished (list + settings). The
+  /// arrival snackbar waits for this (Phase 3.4): the auto-empty
+  /// prompt flag is set asynchronously at the end of init, so a
+  /// snackbar shown before init completes would race the dialog.
+  final RxBool initComplete = false.obs;
+
   /// Loads the recorded Trash list. Shared by onInit and retry.
   /// Also loads the Phase 3A settings (blur + auto-empty prompt):
   /// the prompt fires only when the setting is ON and expired
@@ -143,6 +149,7 @@ class TrashController extends GetxController {
       },
       onFailure: (_) {},
     );
+    initComplete.value = true;
   }
 
   /// Flips private blur and persists it (same setting as Review

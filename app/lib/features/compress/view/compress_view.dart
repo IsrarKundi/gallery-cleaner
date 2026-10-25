@@ -40,14 +40,12 @@ class CompressView extends GetView<CompressController> {
     if (!context.mounted) {
       return;
     }
+    // Phase 3.4: one snackbar. The old code showed two in a row
+    // and the second hid the first before it could be read.
     if (saved) {
       AppSnackbar.show(
         context,
-        message: AppStrings.tr(AppStrings.compressSaved),
-      );
-      AppSnackbar.show(
-        context,
-        message: AppStrings.tr(AppStrings.compressOriginalKept),
+        message: AppStrings.tr(AppStrings.compressSavedAndKept),
       );
     }
   }

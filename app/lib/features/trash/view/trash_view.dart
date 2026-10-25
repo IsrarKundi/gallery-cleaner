@@ -237,7 +237,10 @@ class _Body extends StatelessWidget {
               itemCount: controller.entries.length,
               itemBuilder: (BuildContext context, int index) {
                 final entry = controller.entries[index];
+                // Phase 3.4: keyed rows, so a restore keeps each
+                // row's state with its entry instead of its slot.
                 return TrashRow(
+                  key: ValueKey<String>(entry.assetId),
                   entry: entry,
                   onRestore: () => onRestoreSingle(entry.assetId),
                 );
@@ -268,24 +271,61 @@ class _ArrivalSnack extends StatefulWidget {
 }
 
 class _ArrivalSnackState extends State<_ArrivalSnack> {
+  Worker? _initWorker;
+  bool _shown = false;
+
   @override
   void initState() {
     super.initState();
-    if (widget.controller.arrivalSnackDate.value.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) {
-          return;
-        }
-        AppSnackbar.show(
-          context,
-          message: AppStrings.tr(
-            AppStrings.snackMovedToTrashUntil,
-            <String, String>{'date': widget.controller.arrivalSnackDate.value},
-          ),
-        );
-        widget.controller.clearArrivalSnack();
-      });
+    if (widget.controller.arrivalSnackDate.value.isEmpty) {
+      return;
     }
+    // Phase 3.4: one feedback surface per arrival. The old code
+    // fired on the first frame, before init had set the
+    // auto-empty prompt flag — so a snackbar and the prompt
+    // dialog could stack. Now the snackbar waits for init to
+    // complete and yields to the dialog when it is pending
+    // (the dialog is the actionable surface; the entries still
+    // carry their recoverable-until dates).
+    _initWorker = ever<bool>(
+      widget.controller.initComplete,
+      (_) => _maybeShow(),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShow());
+  }
+
+  @override
+  void dispose() {
+    _initWorker?.dispose();
+    super.dispose();
+  }
+
+  void _maybeShow() {
+    if (_shown || !widget.controller.initComplete.value) {
+      return;
+    }
+    _shown = true;
+    // Capture before consuming: the snackbar reads the date in
+    // a post-frame callback. Consume exactly once in both
+    // paths, so a later revisit never replays a stale arrival
+    // snackbar.
+    final String date = widget.controller.arrivalSnackDate.value;
+    widget.controller.clearArrivalSnack();
+    if (widget.controller.autoEmptyPromptPending.value) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      AppSnackbar.show(
+        context,
+        message: AppStrings.tr(
+          AppStrings.snackMovedToTrashUntil,
+          <String, String>{'date': date},
+        ),
+      );
+    });
   }
 
   @override
