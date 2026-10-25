@@ -116,9 +116,13 @@ class LibraryScanner {
         if (analyses.containsKey(asset.id)) {
           continue;
         }
+        // Phase 1.5: analysis keeps q100 — cached analyses were
+        // hashed from q100 thumbnails, and display quality (q85)
+        // must not silently mix hash versions (issues file F-12).
         final Result<Uint8List> thumb = await media.getThumbnail(
           asset.id,
           analysisThumbnailSize,
+          quality: 100,
         );
         final PhotoAnalysis? analysis = thumb.fold(
           onSuccess: (Uint8List bytes) => analyzeThumbnail(

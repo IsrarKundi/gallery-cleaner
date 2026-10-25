@@ -169,7 +169,11 @@ class MediaServiceImpl implements MediaService {
   }
 
   @override
-  Future<Result<Uint8List>> getThumbnail(String assetId, int size) async {
+  Future<Result<Uint8List>> getThumbnail(
+    String assetId,
+    int size, {
+    int quality = 85,
+  }) async {
     try {
       final AssetEntity? entity = await AssetEntity.fromId(assetId);
       if (entity == null) {
@@ -177,8 +181,11 @@ class MediaServiceImpl implements MediaService {
           AppFailure(messageKey: AppStrings.errorMediaLoad),
         );
       }
+      // Phase 1.5: explicit format + quality (was implicit JPEG q100).
       final Uint8List? bytes = await entity.thumbnailDataWithSize(
         ThumbnailSize.square(size),
+        format: ThumbnailFormat.jpeg,
+        quality: quality,
       );
       if (bytes == null) {
         return const Failure<Uint8List>(

@@ -96,7 +96,7 @@ class _Media implements MediaService {
   }
 
   @override
-  Future<Result<Uint8List>> getThumbnail(String assetId, int size) async {
+  Future<Result<Uint8List>> getThumbnail(String assetId, int size, {int quality = 85}) async {
     return Success<Uint8List>(Uint8List.fromList(<int>[1, 2, 3]));
   }
 }

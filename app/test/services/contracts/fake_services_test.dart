@@ -282,7 +282,7 @@ class FakeMediaService implements MediaService {
   }
 
   @override
-  Future<Result<Uint8List>> getThumbnail(String assetId, int size) async {
+  Future<Result<Uint8List>> getThumbnail(String assetId, int size, {int quality = 85}) async {
     if (fail) {
       return const Failure<Uint8List>(
         AppFailure(messageKey: AppStrings.errorMediaLoad),

@@ -64,7 +64,7 @@ class FakeMedia implements MediaService {
     int pageSize = 50,
   }) async => const Success<List<MediaAsset>>(<MediaAsset>[]);
   @override
-  Future<Result<Uint8List>> getThumbnail(String assetId, int size) async =>
+  Future<Result<Uint8List>> getThumbnail(String assetId, int size, {int quality = 85}) async =>
       Success<Uint8List>(Uint8List.fromList(<int>[1, 2, 3]));
 }
 

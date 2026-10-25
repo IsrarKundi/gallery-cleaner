@@ -15,7 +15,7 @@ import 'package:klara/services/trash/trash_service.dart';
 
 class _FakeMedia implements MediaService {
   @override
-  Future<Result<Uint8List>> getThumbnail(String assetId, int size) async =>
+  Future<Result<Uint8List>> getThumbnail(String assetId, int size, {int quality = 85}) async =>
       Success<Uint8List>(Uint8List(0));
 
   @override

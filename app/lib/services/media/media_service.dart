@@ -56,5 +56,15 @@ abstract class MediaService {
 
   /// Thumbnail bytes for one asset at [size] x [size] pixels, for
   /// deck preloading. Returns the raw bytes; the deck renders them.
-  Future<Result<Uint8List>> getThumbnail(String assetId, int size);
+  ///
+  /// Phase 1.5: [quality] is explicit JPEG quality (default 85 for
+  /// display — the plugin's implicit q100 was the largest byte count
+  /// for no visible gain). Analysis callers MUST pass 100: cached
+  /// analyses were hashed from q100 thumbnails, and a quality change
+  /// would silently mix hash versions (issues file F-12).
+  Future<Result<Uint8List>> getThumbnail(
+    String assetId,
+    int size, {
+    int quality = 85,
+  });
 }
