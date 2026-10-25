@@ -1,0 +1,43 @@
+// Media library access: permission, albums, assets, thumbnails.
+//
+// Interface only — the implementation is the single file allowed to
+// import photo_manager (AGENTS.md dependency rules). Every method
+// returns [Result]; failures carry string keys, never exception text.
+// No method here reads, logs or sends photo content: thumbnails are
+// bytes handed to the deck for display only.
+
+import 'dart:typed_data';
+
+import '../../core/utils/result.dart';
+import 'media_asset.dart';
+
+abstract class MediaService {
+  /// Requests photo access and reports the grant distinctly:
+  /// [MediaPermission.grantedFull], [MediaPermission.grantedLimited]
+  /// (Android 14 user-selected partial access — the deck works on
+  /// exactly those photos and says so) or [MediaPermission.denied].
+  Future<Result<MediaPermission>> requestPermission();
+
+  /// Album/folder list with asset counts, including the whole-library
+  /// ("Recent") album. Type filter is not applied here: album counts
+  /// are for the filter picker, which then filters in [getAssets].
+  Future<Result<List<MediaAlbum>>> getAlbums();
+
+  /// One page of assets from an album, newest first.
+  ///
+  /// [albumId] null means the whole-library album. [monthKey] is
+  /// `yyyy-MM` and restricts to assets created in that month; an
+  /// invalid key fails the call rather than silently returning all.
+  /// [page] is zero-based; [pageSize] must be positive.
+  Future<Result<List<MediaAsset>>> getAssets({
+    String? albumId,
+    String? monthKey,
+    MediaFilterType type = MediaFilterType.all,
+    int page = 0,
+    int pageSize = 50,
+  });
+
+  /// Thumbnail bytes for one asset at [size] x [size] pixels, for
+  /// deck preloading. Returns the raw bytes; the deck renders them.
+  Future<Result<Uint8List>> getThumbnail(String assetId, int size);
+}

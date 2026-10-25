@@ -39,6 +39,7 @@ dependencies:
   phosphoricons_flutter: ^1.1.1
   flutter_svg: ^2.3.0
   lottie: ^3.6.1
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_test:

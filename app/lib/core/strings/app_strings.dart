@@ -97,6 +97,14 @@ class AppStrings {
   static const String errorGeneric = 'errorGeneric';
   static const String errorRetry = 'errorRetry';
 
+  // Service failures (services return keys, never raw exception text).
+  static const String errorMediaPermission = 'errorMediaPermission';
+  static const String errorMediaLoad = 'errorMediaLoad';
+  static const String errorMediaAlbum = 'errorMediaAlbum';
+  static const String errorTrash = 'errorTrash';
+  static const String errorTrashUnsupported = 'errorTrashUnsupported';
+  static const String errorLocal = 'errorLocal';
+
   // Scan and session.
   static const String scanNow = 'scanNow';
   static const String scanAgain = 'scanAgain';
@@ -188,6 +196,12 @@ class AppStrings {
     emptyNoFilterCta: 'Clear filters',
     errorGeneric: 'Something went wrong',
     errorRetry: 'Retry',
+    errorMediaPermission: 'Could not check photo access. Try again.',
+    errorMediaLoad: 'Could not load your photos. Try again.',
+    errorMediaAlbum: 'That album could not be found.',
+    errorTrash: 'That trash action did not complete. Try again.',
+    errorTrashUnsupported: 'Trash needs Android 11 or newer on this device.',
+    errorLocal: 'Could not save or load your cleaning data. Try again.',
     scanNow: 'Scan now',
     scanAgain: 'Scan again',
     clearFilters: 'Clear filters',
