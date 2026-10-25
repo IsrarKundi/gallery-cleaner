@@ -133,6 +133,11 @@ class _Trash implements TrashService {
 }
 
 class _Local implements LocalService {
+  @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    return const Success<int>(0);
+  }
+
   final Map<String, DeckSession> sessions = <String, DeckSession>{};
   final Map<String, DateTime> snoozes = <String, DateTime>{};
   final List<HistoryRecord> history = <HistoryRecord>[];

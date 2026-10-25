@@ -151,6 +151,17 @@ class FakeLocalService implements LocalService {
   }
 
   @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    final List<String> orphaned = _analyses.keys
+        .where((String id) => !liveIds.contains(id))
+        .toList();
+    for (final String id in orphaned) {
+      _analyses.remove(id);
+    }
+    return Success<int>(orphaned.length);
+  }
+
+  @override
   Future<Result<void>> setTutorialSeen(bool seen) async {
     tutorialSeen = seen;
     return const Success<void>(null);

@@ -29,6 +29,11 @@ TrashEntry _entry(String id, DateTime at) {
 
 /// Local fake with a fixed settings object.
 class _Local implements LocalService {
+  @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    return const Success<int>(0);
+  }
+
   _Local({required this.settings});
 
   final AppSettings settings;

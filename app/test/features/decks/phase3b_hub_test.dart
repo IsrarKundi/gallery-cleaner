@@ -49,6 +49,11 @@ PhotoAnalysis _analysis(String id, int hash) {
     height: 10,
     blurScore: 1000,
     meanLuminance: 100,
+    // Phase 5.3: seeded cache entries must carry the fingerprint
+    // of the asset they describe (default size 1000, no modified
+    // date, matching _asset above) or the scanner rightly treats
+    // them as stale pre-5.3 entries and re-analyses.
+    sizeBytes: 1000,
   );
 }
 
@@ -96,7 +101,11 @@ class _Media implements MediaService {
   }
 
   @override
-  Future<Result<Uint8List>> getThumbnail(String assetId, int size, {int quality = 85}) async {
+  Future<Result<Uint8List>> getThumbnail(
+    String assetId,
+    int size, {
+    int quality = 85,
+  }) async {
     return const Failure<Uint8List>(AppFailure(messageKey: 'errorMediaLoad'));
   }
 
@@ -107,6 +116,11 @@ class _Media implements MediaService {
 }
 
 class _Local implements LocalService {
+  @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    return const Success<int>(0);
+  }
+
   _Local({
     this.sessions = const <DeckSession>[],
     this.analyses = const <String, PhotoAnalysis>{},

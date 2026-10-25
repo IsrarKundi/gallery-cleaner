@@ -69,7 +69,11 @@ class FakeMedia implements MediaService {
   }
 
   @override
-  Future<Result<Uint8List>> getThumbnail(String assetId, int size, {int quality = 85}) async {
+  Future<Result<Uint8List>> getThumbnail(
+    String assetId,
+    int size, {
+    int quality = 85,
+  }) async {
     return Success<Uint8List>(Uint8List.fromList(<int>[1, 2, 3]));
   }
 
@@ -80,6 +84,11 @@ class FakeMedia implements MediaService {
 }
 
 class FakeLocal implements LocalService {
+  @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    return const Success<int>(0);
+  }
+
   final Map<String, DeckSession> sessions = <String, DeckSession>{};
   final List<TrashEntry> trash = <TrashEntry>[];
   final List<HistoryRecord> history = <HistoryRecord>[];

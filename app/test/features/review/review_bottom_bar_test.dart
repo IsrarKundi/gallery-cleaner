@@ -37,6 +37,11 @@ class _FakeTrash implements TrashService {
 
 class _FakeLocal implements LocalService {
   @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    return const Success<int>(0);
+  }
+
+  @override
   Future<Result<AppSettings>> loadSettings() async =>
       const Success<AppSettings>(AppSettings());
 

@@ -32,6 +32,8 @@
 // - Dark: mean luminance (0-255) under 40.0. A night photo with a
 //   bright subject can pass; a mostly-black frame flags.
 
+import '../media/media_asset.dart';
+
 /// Laplacian-variance score at or below which a photo counts blurry.
 const double blurThreshold = 100.0;
 
@@ -44,9 +46,24 @@ const int hashGridSize = 8;
 /// Side of the square grayscale grid the blur score is computed from.
 const int blurGridSize = 64;
 
+/// Algorithm version stamped on every analysis (solutions 5.3).
+/// Bump it whenever the hash/blur/dark computation changes, so
+/// old-version cache entries are re-analysed instead of mixed
+/// with new-version ones. Version 0 is reserved for entries
+/// written before versioning existed (see [PhotoAnalysis.fromJson]).
+const int analysisAlgorithmVersion = 1;
+
 /// One asset's cached analysis: hash + scores + the dimensions the
 /// hash was computed against. Stored by LocalService (hash cache) so
 /// regrouping and re-scans never re-download thumbnails.
+///
+/// Phase 5.3 fingerprint: [sizeBytes], [modifiedDateMs] and
+/// [algorithmVersion] together say whether a cached entry still
+/// describes the asset (see [isAnalysisFresh]). All three are
+/// optional for construction — tests and old cache entries omit
+/// them — but a missing version reads back as 0 (stale), and a
+/// missing size/modified date reads back as null (stale unless
+/// the asset also lacks that fact).
 class PhotoAnalysis {
   const PhotoAnalysis({
     required this.assetId,
@@ -55,6 +72,9 @@ class PhotoAnalysis {
     required this.height,
     required this.blurScore,
     required this.meanLuminance,
+    this.sizeBytes,
+    this.modifiedDateMs,
+    this.algorithmVersion = analysisAlgorithmVersion,
   });
 
   final String assetId;
@@ -69,6 +89,13 @@ class PhotoAnalysis {
 
   /// Mean grayscale luminance, 0-255.
   final double meanLuminance;
+
+  /// Fingerprint facts from the asset at analysis time (5.3).
+  /// Null means "unknown" — from an old cache entry, or from an
+  /// asset that reported no such fact.
+  final int? sizeBytes;
+  final int? modifiedDateMs;
+  final int algorithmVersion;
 
   bool get isBlurry => blurScore <= blurThreshold;
   bool get isDark => meanLuminance < darkThreshold;
@@ -87,6 +114,9 @@ class PhotoAnalysis {
       'height': height,
       'blurScore': blurScore,
       'meanLuminance': meanLuminance,
+      'sizeBytes': sizeBytes,
+      'modifiedDateMs': modifiedDateMs,
+      'algorithmVersion': algorithmVersion,
     };
   }
 
@@ -98,8 +128,40 @@ class PhotoAnalysis {
       height: json['height'] as int,
       blurScore: (json['blurScore'] as num).toDouble(),
       meanLuminance: (json['meanLuminance'] as num).toDouble(),
+      // Back-compat: entries written before 5.3 carry none of
+      // these fields. Missing version reads as 0, so the entry
+      // is stale by version mismatch and is re-analysed, never
+      // mixed with current-version entries.
+      sizeBytes: (json['sizeBytes'] as num?)?.toInt(),
+      modifiedDateMs: (json['modifiedDateMs'] as num?)?.toInt(),
+      algorithmVersion: (json['algorithmVersion'] as num?)?.toInt() ?? 0,
     );
   }
+}
+
+/// True when a cached [analysis] still describes [asset] (solutions
+/// 5.3): same algorithm version AND same width, height, size and
+/// modified date. A modified-date component matches when BOTH
+/// sides lack it (an asset that reports no modified date), and
+/// mismatches when exactly one side lacks it — an unknown is not
+/// silently treated as unchanged. The scanner uses this instead
+/// of a bare id lookup, so an edited photo is re-analysed on
+/// rescan instead of keeping its pre-edit hash.
+bool isAnalysisFresh(PhotoAnalysis analysis, MediaAsset asset) {
+  if (analysis.algorithmVersion != analysisAlgorithmVersion) {
+    return false;
+  }
+  if (analysis.width != asset.width || analysis.height != asset.height) {
+    return false;
+  }
+  if (analysis.sizeBytes != asset.sizeBytes) {
+    return false;
+  }
+  final int? assetModifiedMs = asset.modifiedDate?.millisecondsSinceEpoch;
+  if (analysis.modifiedDateMs != assetModifiedMs) {
+    return false;
+  }
+  return true;
 }
 
 /// Average hash from an 8x8 row-major grayscale grid (64 values,

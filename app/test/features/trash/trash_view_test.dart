@@ -28,6 +28,11 @@ TrashEntry _entry(String id, int size, DateTime at) {
 }
 
 class _Local implements LocalService {
+  @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    return const Success<int>(0);
+  }
+
   final List<HistoryRecord> history = <HistoryRecord>[];
 
   @override

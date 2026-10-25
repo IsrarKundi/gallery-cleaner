@@ -92,6 +92,11 @@ class _RecordingMedia implements MediaService {
 }
 
 class _FakeLocal implements LocalService {
+  @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    return const Success<int>(0);
+  }
+
   _FakeLocal({
     this.protectionOn = false,
     this.tutorialSeen = true,

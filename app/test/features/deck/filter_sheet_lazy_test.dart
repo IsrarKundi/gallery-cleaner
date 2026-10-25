@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:klara/core/theme/app_theme.dart';
+import 'package:klara/core/utils/result.dart';
 import 'package:klara/features/deck/controller/deck_controller.dart';
 import 'package:klara/features/deck/widgets/filter_sheet.dart';
 import 'package:klara/services/local/local_service.dart';
@@ -22,6 +23,11 @@ class _Media implements MediaService {
 
 /// Local fake: never called by this test.
 class _Local implements LocalService {
+  @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    return const Success<int>(0);
+  }
+
   @override
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError(
     'not used by the filter-sheet test: ${invocation.memberName}',

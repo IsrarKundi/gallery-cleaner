@@ -30,6 +30,7 @@ class MediaAsset {
     required this.title,
     required this.albumName,
     this.isSystemFavourite = false,
+    this.modifiedDate,
   });
 
   /// MediaStore id. This is the only handle trash/restore need.
@@ -41,6 +42,14 @@ class MediaAsset {
   /// File size in bytes, for the review counts and space meter.
   final int sizeBytes;
   final DateTime createDate;
+
+  /// Last-modified date from the platform entity (photo_manager
+  /// `modifiedDateTime`), if the platform reports one. Phase 5.3
+  /// fingerprint component: together with size and dimensions it
+  /// tells a rescan whether a cached analysis still describes
+  /// this file. Null when the platform reports none — the
+  /// freshness check treats null-vs-null as matching.
+  final DateTime? modifiedDate;
 
   /// Display name (may be empty when MediaStore has none).
   final String title;

@@ -40,6 +40,11 @@ PhotoAnalysis _analysis(String id, int hash, double blur) {
     height: 10,
     blurScore: blur,
     meanLuminance: 128,
+    // Phase 5.3: seeded cache entries must carry the fingerprint
+    // of the asset they describe (size 1000, no modified date,
+    // matching _asset above) or the scanner rightly treats them
+    // as stale pre-5.3 entries and re-analyses.
+    sizeBytes: 1000,
   );
 }
 
@@ -111,6 +116,11 @@ class _Media implements MediaService {
 }
 
 class _Local implements LocalService {
+  @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    return const Success<int>(0);
+  }
+
   final Map<String, DeckSession> sessions = <String, DeckSession>{};
   final Map<String, PhotoAnalysis> analyses = <String, PhotoAnalysis>{
     'a': _analysis('a', 0, 900),

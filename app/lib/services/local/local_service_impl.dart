@@ -484,6 +484,29 @@ class LocalServiceImpl implements LocalService {
   }
 
   @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    try {
+      final Map<String, dynamic> all = await _analyses.readMap();
+      final List<String> orphaned = all.keys
+          .where((String id) => !liveIds.contains(id))
+          .toList();
+      if (orphaned.isEmpty) {
+        return const Success<int>(0);
+      }
+      for (final String id in orphaned) {
+        all.remove(id);
+      }
+      // Atomic tmp+rename via the Phase 4 store, same as every
+      // other analyses write — a kill mid-prune never leaves a
+      // torn cache file.
+      await _analyses.writeNow();
+      return Success<int>(orphaned.length);
+    } catch (_) {
+      return Failure<int>(_failure);
+    }
+  }
+
+  @override
   Future<Result<AppSettings>> loadSettings() async {
     try {
       // Served from the shared settings snapshot after the first

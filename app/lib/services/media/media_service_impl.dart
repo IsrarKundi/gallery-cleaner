@@ -196,6 +196,7 @@ class MediaServiceImpl implements MediaService {
             title: entity.title ?? '',
             albumName: album,
             isSystemFavourite: entity.isFavorite,
+            modifiedDate: entity.modifiedDateTime,
           ),
         );
       }
@@ -244,6 +245,7 @@ class MediaServiceImpl implements MediaService {
             title: entity.title ?? '',
             albumName: _resolveAlbumName(entity.relativePath, ''),
             isSystemFavourite: entity.isFavorite,
+            modifiedDate: entity.modifiedDateTime,
           ),
         );
       }

@@ -139,6 +139,11 @@ class _StackMedia implements MediaService {
 
 class _StackLocal implements LocalService {
   @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    return const Success<int>(0);
+  }
+
+  @override
   Future<Result<DeckSession?>> loadSession(String filterKey) async {
     return Success<DeckSession?>(
       DeckSession(

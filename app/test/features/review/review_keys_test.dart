@@ -76,6 +76,11 @@ class _Media implements MediaService {
 
 /// Local fake: session map + settings.
 class _Local implements LocalService {
+  @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    return const Success<int>(0);
+  }
+
   final Map<String, DeckSession> sessions = <String, DeckSession>{};
 
   @override

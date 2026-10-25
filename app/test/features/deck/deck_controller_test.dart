@@ -187,6 +187,11 @@ class FakeTrash implements TrashService {
 }
 
 class FakeLocal implements LocalService {
+  @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    return const Success<int>(0);
+  }
+
   final Map<String, DeckSession> sessions = <String, DeckSession>{};
   final List<HistoryRecord> historyRecords = <HistoryRecord>[];
   final List<TrashEntry> trash = <TrashEntry>[];

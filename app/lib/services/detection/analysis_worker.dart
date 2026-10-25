@@ -31,12 +31,20 @@ class AnalysisBatchInput {
     required this.bytes,
     required this.width,
     required this.height,
+    required this.sizeBytes,
+    this.modifiedDateMs,
   });
 
   final String assetId;
   final TransferableTypedData bytes;
   final int width;
   final int height;
+
+  /// Fingerprint facts (solutions 5.3) stamped onto the analysis
+  /// the worker produces, so the cache entry describes the exact
+  /// file version that was hashed.
+  final int sizeBytes;
+  final int? modifiedDateMs;
 }
 
 /// Runs a batch analysis on a worker isolate. A function of this
@@ -73,6 +81,8 @@ List<PhotoAnalysis?> analyzeBatchSync(List<AnalysisBatchInput> inputs) {
         bytes: bytes,
         width: input.width,
         height: input.height,
+        sizeBytes: input.sizeBytes,
+        modifiedDateMs: input.modifiedDateMs,
       );
     } catch (_) {
       return null;

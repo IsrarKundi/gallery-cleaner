@@ -155,6 +155,11 @@ class _Media implements MediaService {
 }
 
 class _Local implements LocalService {
+  @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    return const Success<int>(0);
+  }
+
   final Map<String, DeckSession> sessions = <String, DeckSession>{};
   final Map<String, PhotoAnalysis> analyses = <String, PhotoAnalysis>{};
 

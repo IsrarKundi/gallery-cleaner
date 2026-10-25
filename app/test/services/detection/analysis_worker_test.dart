@@ -29,6 +29,7 @@ AnalysisBatchInput _input(String id, Uint8List bytes) {
     bytes: TransferableTypedData.fromList(<Uint8List>[bytes]),
     width: 100,
     height: 100,
+    sizeBytes: bytes.length,
   );
 }
 

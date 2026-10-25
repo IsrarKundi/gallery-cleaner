@@ -189,12 +189,20 @@ class LibraryScanner {
       // (platform channels live there), but every decode and
       // score runs in ONE worker batch per page — never per
       // photo, and never on the UI thread when the worker spawns.
+      // Phase 5.3: a cached entry is reused only when it is
+      // still fresh for this exact file (version + dimensions +
+      // size + modified date). An edited photo's stale entry is
+      // re-analysed, and the fresh result overwrites it below.
+      bool needsAnalysis(MediaAsset asset) {
+        if (asset.type != MediaAssetType.image) {
+          return false;
+        }
+        final PhotoAnalysis? cached = analyses[asset.id];
+        return cached == null || !isAnalysisFresh(cached, asset);
+      }
+
       final List<MediaAsset> toAnalyse = pageAssets
-          .where(
-            (MediaAsset asset) =>
-                asset.type == MediaAssetType.image &&
-                !analyses.containsKey(asset.id),
-          )
+          .where(needsAnalysis)
           .toList();
       if (toAnalyse.isNotEmpty) {
         if (cancelled()) {
@@ -266,6 +274,17 @@ class LibraryScanner {
       await local.saveAnalyses(unsavedFresh);
       unsavedFresh.clear();
     }
+    if (!pageFailed) {
+      // Phase 5.3: prune only after a FULL enumeration. A
+      // page-failed scan never prunes: assets beyond the failure
+      // were never seen and must not be mistaken for deleted.
+      // A prune failure is ignored — the scan still succeeds,
+      // the analyses stay in memory for this run, and the next
+      // full scan retries.
+      await local.pruneAnalyses(
+        all.map((MediaAsset asset) => asset.id).toSet(),
+      );
+    }
     return LibraryScan(
       assets: all,
       analyses: analyses,
@@ -331,6 +350,8 @@ class LibraryScanner {
           bytes: TransferableTypedData.fromList(<Uint8List>[bytes[i]]),
           width: assets[i].width,
           height: assets[i].height,
+          sizeBytes: assets[i].sizeBytes,
+          modifiedDateMs: assets[i].modifiedDate?.millisecondsSinceEpoch,
         ),
       );
     }

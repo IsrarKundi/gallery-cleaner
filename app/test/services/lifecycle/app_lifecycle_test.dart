@@ -13,6 +13,11 @@ import 'package:klara/services/media/library_change_source.dart';
 import 'package:klara/services/trash/trash_entry.dart';
 
 class _FakeLocal implements LocalService {
+  @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    return const Success<int>(0);
+  }
+
   int flushCalls = 0;
 
   @override

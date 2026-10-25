@@ -25,11 +25,16 @@ const int analysisThumbnailSize = 128;
 /// null when the bytes do not decode (corrupt/unsupported format).
 /// [width]/[height] are the asset's real dimensions from MediaAsset,
 /// used for the exact-duplicate rule — not the thumbnail's size.
+/// [sizeBytes]/[modifiedDateMs] are fingerprinted onto the
+/// analysis (solutions 5.3) so a rescan can tell whether the
+/// cached entry still describes the file.
 PhotoAnalysis? analyzeThumbnail({
   required String assetId,
   required Uint8List bytes,
   required int width,
   required int height,
+  int? sizeBytes,
+  int? modifiedDateMs,
 }) {
   final img.Image? decoded = img.decodeImage(bytes);
   if (decoded == null) {
@@ -44,6 +49,8 @@ PhotoAnalysis? analyzeThumbnail({
     height: height,
     blurScore: laplacianVariance(gray64, blurGridSize),
     meanLuminance: meanLuminance(gray64),
+    sizeBytes: sizeBytes,
+    modifiedDateMs: modifiedDateMs,
   );
 }
 

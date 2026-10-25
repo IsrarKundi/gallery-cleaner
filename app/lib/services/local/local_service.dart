@@ -333,4 +333,14 @@ abstract class LocalService {
   /// The whole hash cache (asset id -> analysis), or empty when
   /// nothing has been scanned yet.
   Future<Result<Map<String, PhotoAnalysis>>> loadAnalyses();
+
+  /// Removes cached analyses whose asset id is NOT in [liveIds]
+  /// and returns how many were removed (solutions 5.3). Called
+  /// only after a fully completed scan — never after a cancelled
+  /// or page-failed one, where unseen assets must not be mistaken
+  /// for deleted. Writes only when something was actually removed,
+  /// so a scan with no deletions pays no rewrite. A failure
+  /// returns [Failure] and the caller keeps the old cache: the
+  /// next full scan retries.
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds);
 }

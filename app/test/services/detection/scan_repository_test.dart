@@ -362,21 +362,28 @@ void main() {
 
     test('onPage carries fresh analyses only, never cumulative', () async {
       await local.saveAnalyses(<PhotoAnalysis>[
+        // Phase 5.3: seeded entries must carry the fingerprint
+        // of the assets they describe (100x100, size 1000, no
+        // modified date, matching _asset above) or the scanner
+        // rightly treats them as stale and re-analyses them as
+        // fresh — which would break this test's fresh-only claim.
         const PhotoAnalysis(
           assetId: 'cached0',
           hash: 1,
-          width: 10,
-          height: 10,
+          width: 100,
+          height: 100,
           blurScore: 1,
           meanLuminance: 1,
+          sizeBytes: 1000,
         ),
         const PhotoAnalysis(
           assetId: 'cached1',
           hash: 2,
-          width: 10,
-          height: 10,
+          width: 100,
+          height: 100,
           blurScore: 1,
           meanLuminance: 1,
+          sizeBytes: 1000,
         ),
       ]);
       final _FakeMedia media = _FakeMedia(

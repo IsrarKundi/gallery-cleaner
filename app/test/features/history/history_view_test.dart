@@ -15,6 +15,11 @@ import 'package:klara/services/local/local_service.dart';
 import 'package:klara/services/trash/trash_entry.dart';
 
 class _Local implements LocalService {
+  @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    return const Success<int>(0);
+  }
+
   _Local({this.history = const <HistoryRecord>[]});
 
   final List<HistoryRecord> history;

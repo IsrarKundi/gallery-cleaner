@@ -204,6 +204,10 @@ void main() {
         height: 100,
         blurScore: 1,
         meanLuminance: 2,
+        // Phase 5.3: the seeded entry must carry the fingerprint
+        // of _asset('a1') (size 1000, no modified date) or the
+        // scanner rightly treats it as stale and re-analyses.
+        sizeBytes: 1000,
       ),
     ]);
     final _FakeMedia media = _FakeMedia(

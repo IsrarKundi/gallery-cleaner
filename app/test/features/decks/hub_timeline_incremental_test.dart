@@ -80,6 +80,11 @@ class _FakeMedia implements MediaService {
 
 class _FakeLocal implements LocalService {
   @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    return const Success<int>(0);
+  }
+
+  @override
   Future<Result<void>> saveSession(DeckSession session) async =>
       const Success<void>(null);
 

@@ -112,6 +112,11 @@ class _CountingMedia implements MediaService {
 /// Local fake: session map + settings. Everything else throws if
 /// touched (these tests never touch it).
 class _Local implements LocalService {
+  @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    return const Success<int>(0);
+  }
+
   final Map<String, DeckSession> sessions = <String, DeckSession>{};
 
   @override

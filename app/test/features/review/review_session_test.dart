@@ -101,6 +101,11 @@ class _SessionMedia implements MediaService {
 }
 
 class _SessionLocal implements LocalService {
+  @override
+  Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
+    return const Success<int>(0);
+  }
+
   _SessionLocal(this.session);
 
   final DeckSession? session;
