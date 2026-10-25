@@ -31,18 +31,23 @@ import '../../deck/controller/deck_protection.dart';
 import '../../deck/controller/deck_retention.dart';
 import '../../deck/model/retention.dart';
 import '../model/smart_deck_launch.dart';
-import '../model/thumbnail_cache.dart';
+import '../../../services/thumbnail/thumbnail_service.dart';
+import '../../../services/thumbnail/thumbnail_service_impl.dart';
 
 class SmartDeckController extends GetxController {
   SmartDeckController({
     required this.media,
     required this.local,
     this.initialLaunch,
-  });
+    ThumbnailService? thumbnailService,
+  }) : _thumbnails = thumbnailService ?? ThumbnailServiceImpl(media: media);
 
   final MediaService media;
   final LocalService local;
   final SmartDeckLaunch? initialLaunch;
+
+  /// Phase 2.3: bytes live in the shared thumbnail service.
+  final ThumbnailService _thumbnails;
 
   /// Phase 2B retention glue, shared with the main deck controller
   /// (summary, snooze expiry, completion days). No share backend:
@@ -62,11 +67,11 @@ class SmartDeckController extends GetxController {
   final RxInt currentIndex = 0.obs;
   final RxList<String> undoStack = <String>[].obs;
 
-  /// Phase 1.8: bounded cache (64 entries / 16 MiB, FIFO) replacing
-  /// the unbounded maps. Views read through these getters unchanged.
-  final BoundedThumbnailCache _cache = BoundedThumbnailCache();
-  RxMap<String, Uint8List> get thumbnails => _cache.thumbnails;
-  RxSet<String> get failedThumbnails => _cache.failedThumbnails;
+  /// Phase 2.3: service-owned bytes / failures for the deck size.
+  /// Views read through these getters unchanged.
+  RxMap<String, Uint8List> get thumbnails =>
+      _thumbnails.thumbnailsFor(thumbnailSize);
+  RxSet<String> get failedThumbnails => _thumbnails.failedFor(thumbnailSize);
 
   /// Phase 3A favourites protection (see DeckProtection).
   final DeckProtection protection = DeckProtection();
@@ -202,23 +207,14 @@ class SmartDeckController extends GetxController {
   }
 
   void _preloadAround(int start) {
-    for (int i = start; i < queue.length && i <= start + preloadAhead; i++) {
-      _loadThumbnail(queue[i].id);
-    }
-  }
-
-  Future<void> _loadThumbnail(String id) async {
-    if (_cache.contains(id)) {
-      return;
-    }
-    final Result<Uint8List> result = await media.getThumbnail(
-      id,
-      thumbnailSize,
-    );
-    result.fold(
-      onSuccess: (Uint8List bytes) => _cache.put(id, bytes),
-      onFailure: (_) => _cache.markFailed(id),
-    );
+    final List<String> ids = <String>[
+      for (int i = start; i < queue.length && i <= start + preloadAhead; i++)
+        queue[i].id,
+    ];
+    _thumbnails.prefetch(ids, thumbnailSize);
+    _thumbnails.cancelOutside(<ThumbnailKey>{
+      for (final String id in ids) (id: id, size: thumbnailSize, quality: 85),
+    });
   }
 
   void _persist() {

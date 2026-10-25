@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 
 import '../../../core/constants/app_icons.dart';
@@ -10,7 +11,6 @@ import '../../../core/utils/decode_size.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_skeleton.dart';
 import '../../../services/media/media_asset.dart';
-import '../../../services/media/media_service.dart';
 import '../model/timeline_grouping.dart';
 
 /// Timeline section matching the screenshot:
@@ -25,7 +25,9 @@ class TimelineSection extends StatelessWidget {
     required this.onYearSelected,
     required this.onToggleSort,
     required this.onMonthTap,
-    this.media,
+    required this.thumbnails,
+    required this.failedThumbnails,
+    required this.requestThumbnail,
     this.isScanning = false,
   });
 
@@ -35,7 +37,12 @@ class TimelineSection extends StatelessWidget {
   final ValueChanged<int> onYearSelected;
   final VoidCallback onToggleSort;
   final ValueChanged<String> onMonthTap;
-  final MediaService? media;
+
+  /// Phase 2.3: shared thumbnail maps for the 256px month covers,
+  /// plus the idempotent request callback (no per-card fetching).
+  final RxMap<String, Uint8List> thumbnails;
+  final RxSet<String> failedThumbnails;
+  final void Function(String id) requestThumbnail;
   final bool isScanning;
 
   @override
@@ -197,7 +204,9 @@ class TimelineSection extends StatelessWidget {
                 final MonthSummary month = months[index];
                 return _MonthCard(
                   summary: month,
-                  media: media,
+                  thumbnails: thumbnails,
+                  failedThumbnails: failedThumbnails,
+                  requestThumbnail: requestThumbnail,
                   onTap: () => onMonthTap(month.monthKey),
                 );
               },
@@ -254,154 +263,142 @@ class _YearChip extends StatelessWidget {
   }
 }
 
-class _MonthCard extends StatefulWidget {
+/// Phase 2.3: stateless month card. Renders from the shared
+/// thumbnail maps; a missing, not-failed cover warms the cache
+/// idempotently. Failure keeps the placeholder icon (the pre-2.3
+/// behaviour).
+class _MonthCard extends StatelessWidget {
   const _MonthCard({
     required this.summary,
-    required this.media,
+    required this.thumbnails,
+    required this.failedThumbnails,
+    required this.requestThumbnail,
     required this.onTap,
   });
 
   final MonthSummary summary;
-  final MediaService? media;
+  final RxMap<String, Uint8List> thumbnails;
+  final RxSet<String> failedThumbnails;
+  final void Function(String id) requestThumbnail;
   final VoidCallback onTap;
 
   @override
-  State<_MonthCard> createState() => _MonthCardState();
-}
-
-class _MonthCardState extends State<_MonthCard> {
-  Uint8List? _bytes;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetch();
-  }
-
-  @override
-  void didUpdateWidget(covariant _MonthCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.summary.monthKey != widget.summary.monthKey) {
-      _bytes = null;
-      _fetch();
-    }
-  }
-
-  Future<void> _fetch() async {
-    final MediaAsset? asset = widget.summary.coverAsset;
-    final MediaService? media = widget.media;
-    if (asset == null || media == null) return;
-    final result = await media.getThumbnail(asset.id, 256);
-    if (!mounted) return;
-    result.fold(
-      onSuccess: (bytes) => setState(() => _bytes = bytes),
-      onFailure: (_) {},
-    );
-  }
-
-  @override
   Widget build(BuildContext context) {
-    const double cardWidth = 140;
-
-    return Container(
-      width: cardWidth,
-      decoration: BoxDecoration(
-        color: context.palette.surfaceVariant,
-        borderRadius: BorderRadius.circular(context.sizes.radiusLg),
-        border: Border.all(color: context.palette.border, width: 1),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: widget.onTap,
-          child: Stack(
-            fit: StackFit.expand,
-            children: <Widget>[
-              // Cover Photo
-              // Phase 1.6: decode at display size, never larger
-              // than the fetched thumbnail (see decode_size.dart).
-              // The card fetches at 256px (see _fetch).
-              if (_bytes != null)
-                LayoutBuilder(
-                  builder: (BuildContext context, BoxConstraints constraints) {
-                    final int side = decodeSide(
-                      width: constraints.maxWidth,
-                      height: constraints.maxHeight,
-                      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
-                      sourceSize: 256,
-                    );
-                    return Image.memory(
-                      _bytes!,
-                      fit: BoxFit.cover,
-                      cacheWidth: side,
-                      cacheHeight: side,
-                    );
-                  },
-                )
-              else
-                Container(
-                  color: context.palette.surfaceVariant,
-                  child: Center(
-                    child: Icon(
-                      AppIcons.photos,
-                      size: context.sizes.iconLg,
-                      color: context.palette.textTertiary,
+    return Obx(() {
+      final MediaAsset? coverAsset = summary.coverAsset;
+      // Always read the map — even for a month without a cover —
+      // so Obx has an observable to subscribe to (GetX throws on
+      // zero reads). '' is never a real asset id.
+      final Uint8List? bytes = thumbnails[coverAsset?.id ?? ''];
+      if (coverAsset != null &&
+          bytes == null &&
+          !failedThumbnails.contains(coverAsset.id)) {
+        requestThumbnail(coverAsset.id);
+      }
+      const double cardWidth = 140;
+      return Container(
+        width: cardWidth,
+        decoration: BoxDecoration(
+          color: context.palette.surfaceVariant,
+          borderRadius: BorderRadius.circular(context.sizes.radiusLg),
+          border: Border.all(color: context.palette.border, width: 1),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            child: Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                // Cover Photo
+                // Phase 1.6: decode at display size, never larger
+                // than the fetched thumbnail (see decode_size.dart).
+                // The card fetches at 256px (see _fetch).
+                if (bytes != null)
+                  LayoutBuilder(
+                    builder:
+                        (BuildContext context, BoxConstraints constraints) {
+                          final int side = decodeSide(
+                            width: constraints.maxWidth,
+                            height: constraints.maxHeight,
+                            devicePixelRatio: MediaQuery.devicePixelRatioOf(
+                              context,
+                            ),
+                            sourceSize: 256,
+                          );
+                          return Image.memory(
+                            bytes,
+                            fit: BoxFit.cover,
+                            cacheWidth: side,
+                            cacheHeight: side,
+                          );
+                        },
+                  )
+                else
+                  Container(
+                    color: context.palette.surfaceVariant,
+                    child: Center(
+                      child: Icon(
+                        AppIcons.photos,
+                        size: context.sizes.iconLg,
+                        color: context.palette.textTertiary,
+                      ),
+                    ),
+                  ),
+                // Gradient Overlay for Text Readability
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: <Color>[
+                          Colors.black.withValues(alpha: 0.1),
+                          Colors.black.withValues(alpha: 0.4),
+                          Colors.black.withValues(alpha: 0.85),
+                        ],
+                        stops: const <double>[0.0, 0.45, 1.0],
+                      ),
                     ),
                   ),
                 ),
-              // Gradient Overlay for Text Readability
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: <Color>[
-                        Colors.black.withValues(alpha: 0.1),
-                        Colors.black.withValues(alpha: 0.4),
-                        Colors.black.withValues(alpha: 0.85),
-                      ],
-                      stops: const <double>[0.0, 0.45, 1.0],
-                    ),
+                // Bottom Left: Month title + item count & size
+                Positioned(
+                  left: context.sizes.md,
+                  right: context.sizes.md,
+                  bottom: context.sizes.md,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        summary.monthName,
+                        style: context.textStyles.titleLarge.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 20,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      SizedBox(height: context.sizes.xxs),
+                      Text(
+                        '${summary.count} Items · ${Formatters.formatBytes(summary.totalBytes)}',
+                        style: context.textStyles.labelSmall.copyWith(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              // Bottom Left: Month title + item count & size
-              Positioned(
-                left: context.sizes.md,
-                right: context.sizes.md,
-                bottom: context.sizes.md,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      widget.summary.monthName,
-                      style: context.textStyles.titleLarge.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 20,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    SizedBox(height: context.sizes.xxs),
-                    Text(
-                      '${widget.summary.count} Items · ${Formatters.formatBytes(widget.summary.totalBytes)}',
-                      style: context.textStyles.labelSmall.copyWith(
-                        color: Colors.white.withValues(alpha: 0.9),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
-    );
+      );
+    });
   }
 }

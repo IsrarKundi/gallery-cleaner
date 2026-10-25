@@ -152,7 +152,10 @@ class _HubBody extends StatelessWidget {
               child: OnThisDayHeroCard(
                 assets: onThisDayAssets,
                 onTap: () => controller.openDeck(SmartDeckId.onThisDay),
-                media: controller.media,
+                thumbnails: controller.thumbnailsFor(128),
+                failedThumbnails: controller.failedFor(128),
+                requestThumbnail: (String id) =>
+                    controller.requestThumbnail(id, 128),
               ),
             ),
           ] else if (scanning) ...<Widget>[
@@ -173,7 +176,10 @@ class _HubBody extends StatelessWidget {
             onYearSelected: (int y) => controller.selectedYear.value = y,
             onToggleSort: () => controller.timelineAscending.toggle(),
             onMonthTap: controller.openMonth,
-            media: controller.media,
+            thumbnails: controller.thumbnailsFor(256),
+            failedThumbnails: controller.failedFor(256),
+            requestThumbnail: (String id) =>
+                controller.requestThumbnail(id, 256),
             isScanning: scanning,
           ),
           SizedBox(height: context.sizes.lg),
@@ -273,7 +279,10 @@ class _SmartDecksSection extends StatelessWidget {
                       count: assets.length,
                       totalBytes: controller.totalBytesFor(id),
                       assets: assets,
-                      media: controller.media,
+                      thumbnails: controller.thumbnailsFor(128),
+                      failedThumbnails: controller.failedFor(128),
+                      requestThumbnail: (String id) =>
+                          controller.requestThumbnail(id, 128),
                       onTap: () => controller.openDeck(id),
                     );
                   },

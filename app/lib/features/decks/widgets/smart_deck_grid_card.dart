@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
@@ -8,7 +9,6 @@ import '../../../core/utils/decode_size.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../services/detection/smart_decks.dart';
 import '../../../services/media/media_asset.dart';
-import '../../../services/media/media_service.dart';
 import '../model/smart_deck_meta.dart';
 
 /// 2x2 Grid card for Smart Decks section (matching screenshot):
@@ -22,7 +22,9 @@ class SmartDeckGridCard extends StatelessWidget {
     required this.totalBytes,
     required this.assets,
     required this.onTap,
-    this.media,
+    required this.thumbnails,
+    required this.failedThumbnails,
+    required this.requestThumbnail,
   });
 
   final SmartDeckId deckId;
@@ -30,7 +32,12 @@ class SmartDeckGridCard extends StatelessWidget {
   final int totalBytes;
   final List<MediaAsset> assets;
   final VoidCallback onTap;
-  final MediaService? media;
+
+  /// Phase 2.3: shared thumbnail maps for the 128px grid slots,
+  /// plus the idempotent request callback (no per-slot fetching).
+  final RxMap<String, Uint8List> thumbnails;
+  final RxSet<String> failedThumbnails;
+  final void Function(String id) requestThumbnail;
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +77,9 @@ class SmartDeckGridCard extends StatelessWidget {
                           Expanded(
                             child: _GridSlot(
                               asset: previews.isNotEmpty ? previews[0] : null,
-                              media: media,
+                              thumbnails: thumbnails,
+                              failedThumbnails: failedThumbnails,
+                              requestThumbnail: requestThumbnail,
                               isVideo: deckId == SmartDeckId.videos,
                             ),
                           ),
@@ -78,7 +87,9 @@ class SmartDeckGridCard extends StatelessWidget {
                           Expanded(
                             child: _GridSlot(
                               asset: previews.length > 1 ? previews[1] : null,
-                              media: media,
+                              thumbnails: thumbnails,
+                              failedThumbnails: failedThumbnails,
+                              requestThumbnail: requestThumbnail,
                               isVideo: deckId == SmartDeckId.videos,
                               showVideoBadge: deckId == SmartDeckId.videos,
                             ),
@@ -94,7 +105,9 @@ class SmartDeckGridCard extends StatelessWidget {
                           Expanded(
                             child: _GridSlot(
                               asset: previews.length > 2 ? previews[2] : null,
-                              media: media,
+                              thumbnails: thumbnails,
+                              failedThumbnails: failedThumbnails,
+                              requestThumbnail: requestThumbnail,
                               isVideo: deckId == SmartDeckId.videos,
                             ),
                           ),
@@ -121,7 +134,9 @@ class SmartDeckGridCard extends StatelessWidget {
                                   )
                                 : _GridSlot(
                                     asset: assets.length > 3 ? assets[3] : null,
-                                    media: media,
+                                    thumbnails: thumbnails,
+                                    failedThumbnails: failedThumbnails,
+                                    requestThumbnail: requestThumbnail,
                                     isVideo: deckId == SmartDeckId.videos,
                                   ),
                           ),
@@ -160,112 +175,98 @@ class SmartDeckGridCard extends StatelessWidget {
   }
 }
 
-class _GridSlot extends StatefulWidget {
+/// Phase 2.3: stateless grid slot. Renders from the shared
+/// thumbnail maps; a missing, not-failed id warms the cache
+/// idempotently. Failure renders the same plain tile as loading
+/// (the pre-2.3 behaviour — no failed icon here).
+class _GridSlot extends StatelessWidget {
   const _GridSlot({
     required this.asset,
-    required this.media,
+    required this.thumbnails,
+    required this.failedThumbnails,
+    required this.requestThumbnail,
     required this.isVideo,
     this.showVideoBadge = false,
   });
 
   final MediaAsset? asset;
-  final MediaService? media;
+  final RxMap<String, Uint8List> thumbnails;
+  final RxSet<String> failedThumbnails;
+  final void Function(String id) requestThumbnail;
   final bool isVideo;
   final bool showVideoBadge;
 
   @override
-  State<_GridSlot> createState() => _GridSlotState();
-}
-
-class _GridSlotState extends State<_GridSlot> {
-  Uint8List? _bytes;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetch();
-  }
-
-  @override
-  void didUpdateWidget(covariant _GridSlot oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.asset?.id != widget.asset?.id) {
-      _bytes = null;
-      _fetch();
-    }
-  }
-
-  Future<void> _fetch() async {
-    final asset = widget.asset;
-    final media = widget.media;
-    if (asset == null || media == null) return;
-    final res = await media.getThumbnail(asset.id, 128);
-    if (!mounted) return;
-    res.fold(
-      onSuccess: (bytes) => setState(() => _bytes = bytes),
-      onFailure: (_) {},
-    );
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.palette.surfaceVariant,
-        borderRadius: BorderRadius.circular(context.sizes.radiusMd),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        fit: StackFit.expand,
-        children: <Widget>[
-          if (_bytes != null)
-            // Phase 1.6: decode at display size, never larger than
-            // the fetched thumbnail (see decode_size.dart). The
-            // slot fetches at 128px (see _fetch).
-            LayoutBuilder(
-              builder: (BuildContext context, BoxConstraints constraints) {
-                final int side = decodeSide(
-                  width: constraints.maxWidth,
-                  height: constraints.maxHeight,
-                  devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
-                  sourceSize: 128,
-                );
-                return Image.memory(
-                  _bytes!,
-                  fit: BoxFit.cover,
-                  cacheWidth: side,
-                  cacheHeight: side,
-                );
-              },
-            )
-          else
-            Container(color: context.palette.surfaceVariant),
-          // Video Pill Badge (top right of video slot)
-          if (widget.showVideoBadge)
-            Positioned(
-              top: context.sizes.xxs,
-              right: context.sizes.xxs,
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: context.sizes.xxs * 2,
-                  vertical: 2,
-                ),
-                decoration: BoxDecoration(
-                  color: context.palette.primary,
-                  borderRadius: BorderRadius.circular(context.sizes.xs),
-                ),
-                child: Text(
-                  AppStrings.tr(AppStrings.videoBadge),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 8,
-                    fontWeight: FontWeight.w800,
+    return Obx(() {
+      final MediaAsset? slotAsset = asset;
+      // Always read the map — even for an empty slot — so Obx has
+      // an observable to subscribe to (GetX throws on zero reads).
+      // '' is never a real asset id, so it always maps to null.
+      final Uint8List? bytes = thumbnails[slotAsset?.id ?? ''];
+      if (slotAsset != null &&
+          bytes == null &&
+          !failedThumbnails.contains(slotAsset.id)) {
+        requestThumbnail(slotAsset.id);
+      }
+      return Container(
+        decoration: BoxDecoration(
+          color: context.palette.surfaceVariant,
+          borderRadius: BorderRadius.circular(context.sizes.radiusMd),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            if (bytes != null)
+              // Phase 1.6: decode at display size, never larger than
+              // the fetched thumbnail (see decode_size.dart). The
+              // slot reads the 128px shared map.
+              LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints constraints) {
+                  final int side = decodeSide(
+                    width: constraints.maxWidth,
+                    height: constraints.maxHeight,
+                    devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                    sourceSize: 128,
+                  );
+                  return Image.memory(
+                    bytes,
+                    fit: BoxFit.cover,
+                    cacheWidth: side,
+                    cacheHeight: side,
+                  );
+                },
+              )
+            else
+              Container(color: context.palette.surfaceVariant),
+            // Video Pill Badge (top right of video slot)
+            if (showVideoBadge)
+              Positioned(
+                top: context.sizes.xxs,
+                right: context.sizes.xxs,
+                child: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: context.sizes.xxs * 2,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: context.palette.primary,
+                    borderRadius: BorderRadius.circular(context.sizes.xs),
+                  ),
+                  child: Text(
+                    AppStrings.tr(AppStrings.videoBadge),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ),
-            ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
+    });
   }
 }

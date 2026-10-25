@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_service.dart';
 import '../../../services/storage/storage_service.dart';
+import '../../../services/thumbnail/thumbnail_service.dart';
 import '../controller/decks_controller.dart';
 
 class DecksBinding extends Bindings {
@@ -20,6 +21,9 @@ class DecksBinding extends Bindings {
         // labelled library projection instead of device numbers.
         storage: Get.isRegistered<StorageService>()
             ? Get.find<StorageService>()
+            : null,
+        thumbnailService: Get.isRegistered<ThumbnailService>()
+            ? Get.find<ThumbnailService>()
             : null,
       ),
     );

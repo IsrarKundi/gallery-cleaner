@@ -11,6 +11,7 @@ import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/media/media_service.dart';
 import '../../../services/share/share_service.dart';
+import '../../../services/thumbnail/thumbnail_service.dart';
 import '../../../services/trash/trash_entry.dart';
 import '../../../services/trash/trash_service.dart';
 import '../../../services/warmup/deck_warm_up.dart';
@@ -48,7 +49,8 @@ class DeckController extends GetxController {
     required this.local,
     ShareService? share,
     this.warmUp,
-  }) : _preloader = ThumbnailPreloader(media: media),
+    ThumbnailService? thumbnailService,
+  }) : _preloader = ThumbnailPreloader(media: media, service: thumbnailService),
        retention = DeckRetention(local: local, share: share),
        access = DeckAccess(media: media),
        meterState = DeckMeter(trash: trash, local: local);

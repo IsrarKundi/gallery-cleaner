@@ -11,6 +11,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 import 'package:klara/core/strings/app_strings.dart';
 import 'package:klara/core/theme/app_theme.dart';
 import 'package:klara/core/utils/formatters.dart';
@@ -101,6 +102,9 @@ void main() {
         totalBytes: 3000,
         ready: true,
         onTap: () {},
+        thumbnails: <String, Uint8List>{}.obs,
+        failedThumbnails: <String>{}.obs,
+        requestThumbnail: (_) {},
       ),
     );
     final SemanticsHandle handle = tester.ensureSemantics();

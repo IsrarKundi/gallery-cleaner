@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_service.dart';
 import '../../../services/share/share_service.dart';
+import '../../../services/thumbnail/thumbnail_service.dart';
 import '../../../services/trash/trash_service.dart';
 import '../../../services/warmup/deck_warm_up.dart';
 import '../controller/deck_controller.dart';
@@ -19,6 +20,9 @@ class DeckBinding extends Bindings {
         trash: Get.find<TrashService>(),
         local: Get.find<LocalService>(),
         warmUp: Get.isRegistered<DeckWarmUp>() ? Get.find<DeckWarmUp>() : null,
+        thumbnailService: Get.isRegistered<ThumbnailService>()
+            ? Get.find<ThumbnailService>()
+            : null,
         // Optional: without a share backend the finished summary
         // simply shows no share button (never a dead action).
         share: Get.isRegistered<ShareService>()

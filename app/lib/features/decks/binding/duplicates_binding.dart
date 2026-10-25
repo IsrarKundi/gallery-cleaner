@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_service.dart';
+import '../../../services/thumbnail/thumbnail_service.dart';
 import '../controller/duplicates_controller.dart';
 
 class DuplicatesBinding extends Bindings {
@@ -14,6 +15,9 @@ class DuplicatesBinding extends Bindings {
       () => DuplicatesController(
         media: Get.find<MediaService>(),
         local: Get.find<LocalService>(),
+        thumbnailService: Get.isRegistered<ThumbnailService>()
+            ? Get.find<ThumbnailService>()
+            : null,
       ),
     );
   }

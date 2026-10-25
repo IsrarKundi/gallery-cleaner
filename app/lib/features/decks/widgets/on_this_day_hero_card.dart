@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 
 import '../../../core/theme/theme_ext.dart';
@@ -8,7 +9,6 @@ import '../../../core/utils/decode_size.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_skeleton.dart';
 import '../../../services/media/media_asset.dart';
-import '../../../services/media/media_service.dart';
 
 /// Hero banner card for "ON THIS DAY" with fanned preview cards (matching screenshot).
 class OnThisDayHeroCard extends StatelessWidget {
@@ -16,12 +16,19 @@ class OnThisDayHeroCard extends StatelessWidget {
     super.key,
     required this.assets,
     required this.onTap,
-    this.media,
+    required this.thumbnails,
+    required this.failedThumbnails,
+    required this.requestThumbnail,
   });
 
   final List<MediaAsset> assets;
   final VoidCallback onTap;
-  final MediaService? media;
+
+  /// Phase 2.3: shared thumbnail maps for the 128px fanned cards,
+  /// plus the idempotent request callback (no per-card fetching).
+  final RxMap<String, Uint8List> thumbnails;
+  final RxSet<String> failedThumbnails;
+  final void Function(String id) requestThumbnail;
 
   static const List<Color> _fallbackPastels = <Color>[
     Color(0xFFFBCFE8), // soft pink
@@ -97,7 +104,9 @@ class OnThisDayHeroCard extends StatelessWidget {
                             asset: i < assets.length ? assets[i] : null,
                             fallbackColor:
                                 _fallbackPastels[i % _fallbackPastels.length],
-                            media: media,
+                            thumbnails: thumbnails,
+                            failedThumbnails: failedThumbnails,
+                            requestThumbnail: requestThumbnail,
                           ),
                       ],
                     ),
@@ -112,96 +121,89 @@ class OnThisDayHeroCard extends StatelessWidget {
   }
 }
 
-class _FannedCard extends StatefulWidget {
+/// Phase 2.3: stateless fanned card. Renders from the shared
+/// thumbnail maps; a missing, not-failed id warms the cache
+/// idempotently. Failure keeps the pastel fallback (the pre-2.3
+/// behaviour — no failed icon here).
+class _FannedCard extends StatelessWidget {
   const _FannedCard({
     required this.index,
     required this.asset,
     required this.fallbackColor,
-    required this.media,
+    required this.thumbnails,
+    required this.failedThumbnails,
+    required this.requestThumbnail,
   });
 
   final int index;
   final MediaAsset? asset;
   final Color fallbackColor;
-  final MediaService? media;
-
-  @override
-  State<_FannedCard> createState() => _FannedCardState();
-}
-
-class _FannedCardState extends State<_FannedCard> {
-  Uint8List? _bytes;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetch();
-  }
-
-  Future<void> _fetch() async {
-    final asset = widget.asset;
-    final media = widget.media;
-    if (asset == null || media == null) return;
-    final res = await media.getThumbnail(asset.id, 128);
-    if (!mounted) return;
-    res.fold(
-      onSuccess: (bytes) => setState(() => _bytes = bytes),
-      onFailure: (_) {},
-    );
-  }
+  final RxMap<String, Uint8List> thumbnails;
+  final RxSet<String> failedThumbnails;
+  final void Function(String id) requestThumbnail;
 
   @override
   Widget build(BuildContext context) {
-    const double cardWidth = 58;
-    const double cardHeight = 84;
-    // Phase 1.6: decode at display size, never larger than the
-    // fetched thumbnail (see decode_size.dart). The card fetches
-    // at 128px (see _fetch).
-    final int decode = decodeSide(
-      width: cardWidth,
-      height: cardHeight,
-      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
-      sourceSize: 128,
-    );
-    final double angle = widget.index * 0.08;
-    final double xOffset = widget.index * 26.0;
-    final double yOffset = (widget.index.abs()) * 3.5;
+    return Obx(() {
+      final MediaAsset? cardAsset = asset;
+      // Always read the map — even for a missing fan card — so Obx
+      // has an observable to subscribe to (GetX throws on zero reads).
+      final Uint8List? bytes = thumbnails[cardAsset?.id ?? ''];
+      if (cardAsset != null &&
+          bytes == null &&
+          !failedThumbnails.contains(cardAsset.id)) {
+        requestThumbnail(cardAsset.id);
+      }
+      const double cardWidth = 58;
+      const double cardHeight = 84;
+      // Phase 1.6: decode at display size, never larger than the
+      // fetched thumbnail (see decode_size.dart). The card reads
+      // the 128px shared map.
+      final int decode = decodeSide(
+        width: cardWidth,
+        height: cardHeight,
+        devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+        sourceSize: 128,
+      );
+      final double angle = index * 0.08;
+      final double xOffset = index * 26.0;
+      final double yOffset = (index.abs()) * 3.5;
 
-    return Transform.translate(
-      offset: Offset(xOffset, yOffset),
-      child: Transform.rotate(
-        angle: angle,
-        child: Container(
-          width: cardWidth,
-          height: cardHeight,
-          decoration: BoxDecoration(
-            color: widget.fallbackColor,
-            borderRadius: BorderRadius.circular(context.sizes.radiusMd),
-            border: Border.all(color: Colors.white, width: 2),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.12),
-                blurRadius: 6,
-                offset: const Offset(0, 3),
-              ),
-            ],
+      return Transform.translate(
+        offset: Offset(xOffset, yOffset),
+        child: Transform.rotate(
+          angle: angle,
+          child: Container(
+            width: cardWidth,
+            height: cardHeight,
+            decoration: BoxDecoration(
+              color: fallbackColor,
+              borderRadius: BorderRadius.circular(context.sizes.radiusMd),
+              border: Border.all(color: Colors.white, width: 2),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 6,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: bytes != null
+                ? Image.memory(
+                    bytes,
+                    fit: BoxFit.cover,
+                    cacheWidth: decode,
+                    cacheHeight: decode,
+                  )
+                : null,
           ),
-          clipBehavior: Clip.antiAlias,
-          child: _bytes != null
-              ? Image.memory(
-                  _bytes!,
-                  fit: BoxFit.cover,
-                  cacheWidth: decode,
-                  cacheHeight: decode,
-                )
-              : null,
         ),
-      ),
-    );
+      );
+    });
   }
 }
 
-/// Shimmer loading skeleton for the Hero Card.
 class HeroCardSkeleton extends StatelessWidget {
   const HeroCardSkeleton({super.key});
 

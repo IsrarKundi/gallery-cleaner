@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 import '../../../core/constants/app_icons.dart';
 import '../../../core/strings/app_strings.dart';
@@ -9,7 +10,6 @@ import '../../../core/utils/decode_size.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../services/detection/smart_decks.dart';
 import '../../../services/media/media_asset.dart';
-import '../../../services/media/media_service.dart';
 import '../model/smart_deck_meta.dart';
 
 /// Minimalist smart deck card (matching the reference design):
@@ -23,8 +23,10 @@ class DeckRow extends StatelessWidget {
     required this.totalBytes,
     required this.ready,
     required this.onTap,
+    required this.thumbnails,
+    required this.failedThumbnails,
+    required this.requestThumbnail,
     this.assets = const <MediaAsset>[],
-    this.media,
   });
 
   final SmartDeckId deckId;
@@ -33,7 +35,12 @@ class DeckRow extends StatelessWidget {
   final bool ready;
   final VoidCallback? onTap;
   final List<MediaAsset> assets;
-  final MediaService? media;
+
+  /// Phase 2.3: shared thumbnail maps for the 128px preview strip,
+  /// plus the idempotent request callback (no per-tile fetching).
+  final RxMap<String, Uint8List> thumbnails;
+  final RxSet<String> failedThumbnails;
+  final void Function(String id) requestThumbnail;
 
   String _buildSubtitle() {
     if (!ready) {
@@ -219,7 +226,9 @@ class DeckRow extends StatelessWidget {
                                     asset: previewAssets[i],
                                     width: tileWidth,
                                     height: tileHeight,
-                                    media: media,
+                                    thumbnails: thumbnails,
+                                    failedThumbnails: failedThumbnails,
+                                    requestThumbnail: requestThumbnail,
                                     isVideo: deckId == SmartDeckId.videos,
                                   ),
                                   SizedBox(width: spacing),
@@ -261,139 +270,115 @@ class DeckRow extends StatelessWidget {
   }
 }
 
-class _PreviewTile extends StatefulWidget {
+/// Phase 2.3: stateless preview tile. It renders from the shared
+/// thumbnail maps and warms the cache idempotently when bytes are
+/// missing and the id has not failed — no `initState` fetching, no
+/// per-tile state, no duplicate fetches across rebuilds.
+class _PreviewTile extends StatelessWidget {
   const _PreviewTile({
     required this.asset,
     required this.width,
     required this.height,
-    required this.media,
+    required this.thumbnails,
+    required this.failedThumbnails,
+    required this.requestThumbnail,
     required this.isVideo,
   });
 
   final MediaAsset asset;
   final double width;
   final double height;
-  final MediaService? media;
+  final RxMap<String, Uint8List> thumbnails;
+  final RxSet<String> failedThumbnails;
+  final void Function(String id) requestThumbnail;
   final bool isVideo;
 
-  @override
-  State<_PreviewTile> createState() => _PreviewTileState();
-}
-
-class _PreviewTileState extends State<_PreviewTile> {
-  Uint8List? _bytes;
-  bool _failed = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetch();
-  }
-
-  @override
-  void didUpdateWidget(covariant _PreviewTile oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.asset.id != widget.asset.id) {
-      _bytes = null;
-      _failed = false;
-      _fetch();
-    }
-  }
-
-  Future<void> _fetch() async {
-    final MediaService? media = widget.media;
-    if (media == null) {
-      return;
-    }
-    final result = await media.getThumbnail(widget.asset.id, 128);
-    if (!mounted) {
-      return;
-    }
-    result.fold(
-      onSuccess: (Uint8List bytes) => setState(() => _bytes = bytes),
-      onFailure: (_) => setState(() => _failed = true),
-    );
-  }
-
   String _badgeLabel() {
-    return Formatters.formatBytes(widget.asset.sizeBytes);
+    return Formatters.formatBytes(asset.sizeBytes);
   }
 
   @override
   Widget build(BuildContext context) {
-    // Phase 1.6: decode at display size, never larger than the
-    // fetched thumbnail (see decode_size.dart). The tile fetches
-    // at 128px (see _fetch).
-    final int decode = decodeSide(
-      width: widget.width,
-      height: widget.height,
-      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
-      sourceSize: 128,
-    );
-    return Container(
-      width: widget.width,
-      height: widget.height,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: context.palette.surfaceVariant,
-        borderRadius: BorderRadius.circular(context.sizes.radiusMd),
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: <Widget>[
-          if (_bytes != null)
-            Image.memory(
-              _bytes!,
-              fit: BoxFit.cover,
-              cacheWidth: decode,
-              cacheHeight: decode,
-            )
-          else if (_failed)
-            Center(
-              child: Icon(
-                AppIcons.photos,
-                size: context.sizes.iconSm,
-                color: context.palette.textTertiary,
+    return Obx(() {
+      final Uint8List? bytes = thumbnails[asset.id];
+      final bool failed = failedThumbnails.contains(asset.id);
+      if (bytes == null && !failed) {
+        requestThumbnail(asset.id);
+      }
+      // Phase 1.6: decode at display size, never larger than the
+      // fetched thumbnail (see decode_size.dart). The tile reads
+      // the 128px shared map.
+      final int decode = decodeSide(
+        width: width,
+        height: height,
+        devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+        sourceSize: 128,
+      );
+      return Container(
+        width: width,
+        height: height,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: context.palette.surfaceVariant,
+          borderRadius: BorderRadius.circular(context.sizes.radiusMd),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            if (bytes != null)
+              Image.memory(
+                bytes,
+                fit: BoxFit.cover,
+                cacheWidth: decode,
+                cacheHeight: decode,
+              )
+            else if (failed)
+              Center(
+                child: Icon(
+                  AppIcons.photos,
+                  size: context.sizes.iconSm,
+                  color: context.palette.textTertiary,
+                ),
+              )
+            else
+              Center(
+                child: SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      context.palette.primary.withValues(alpha: 0.35),
+                    ),
+                  ),
+                ),
               ),
-            )
-          else
-            Center(
-              child: SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.5,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    context.palette.primary.withValues(alpha: 0.35),
+            // Subtle size pill at bottom left
+            Positioned(
+              left: context.sizes.xs,
+              bottom: context.sizes.xs,
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: context.sizes.xs,
+                  vertical: context.sizes.xxs,
+                ),
+                decoration: BoxDecoration(
+                  color: context.palette.scrim.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(context.sizes.xs),
+                ),
+                child: Text(
+                  _badgeLabel(),
+                  style: context.textStyles.labelSmall.copyWith(
+                    color: context.palette.onPrimary,
+                    fontSize: 10,
+                    height: 1.1,
                   ),
                 ),
               ),
             ),
-          // Subtle size pill at bottom left
-          Positioned(
-            left: context.sizes.xs,
-            bottom: context.sizes.xs,
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: context.sizes.xs,
-                vertical: context.sizes.xxs,
-              ),
-              decoration: BoxDecoration(
-                color: context.palette.scrim.withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(context.sizes.xs),
-              ),
-              child: Text(
-                _badgeLabel(),
-                style: context.textStyles.labelSmall.copyWith(
-                  color: context.palette.onPrimary,
-                  fontSize: 10,
-                  height: 1.1,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
+    });
   }
 }

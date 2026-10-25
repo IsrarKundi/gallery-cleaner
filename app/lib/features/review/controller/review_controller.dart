@@ -10,6 +10,8 @@ import '../../../services/detection/document_guard.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/media/media_service.dart';
+import '../../../services/thumbnail/thumbnail_service.dart';
+import '../../../services/thumbnail/thumbnail_service_impl.dart';
 import '../../../services/trash/trash_service.dart';
 import 'review_blur.dart';
 import 'review_session.dart';
@@ -40,7 +42,8 @@ class ReviewController extends GetxController {
     required this.local,
     this.initialAssets,
     this.filterKeyOverride,
-  });
+    ThumbnailService? thumbnailService,
+  }) : _thumbnails = thumbnailService ?? ThumbnailServiceImpl(media: media);
 
   final MediaService media;
   final TrashService trash;
@@ -49,13 +52,20 @@ class ReviewController extends GetxController {
   /// Thumbnail edge in pixels, matching the deck's preload size.
   static const int thumbnailSize = 512;
 
+  /// Phase 2.3: bytes live in the shared thumbnail service; the
+  /// view observes these same reactive objects through the getters.
+  final ThumbnailService _thumbnails;
+
   final List<MediaAsset>? initialAssets;
   final String? filterKeyOverride;
 
   /// The review set. Shrinks as items are unmarked or trashed.
   final RxList<MediaAsset> items = <MediaAsset>[].obs;
-  final RxMap<String, Uint8List> thumbnails = <String, Uint8List>{}.obs;
-  final RxSet<String> failedThumbnails = <String>{}.obs;
+
+  /// Service-owned bytes / failures for the review size.
+  RxMap<String, Uint8List> get thumbnails =>
+      _thumbnails.thumbnailsFor(thumbnailSize);
+  RxSet<String> get failedThumbnails => _thumbnails.failedFor(thumbnailSize);
   final RxBool isLoading = false.obs;
   final RxBool isDeleting = false.obs;
   final RxString errorKey = ''.obs;
@@ -207,14 +217,10 @@ class ReviewController extends GetxController {
 
   Future<void> _loadThumbnails() async {
     for (final MediaAsset asset in items) {
-      final Result<Uint8List> result = await media.getThumbnail(
-        asset.id,
-        thumbnailSize,
-      );
-      result.fold(
-        onSuccess: (Uint8List bytes) => thumbnails[asset.id] = bytes,
-        onFailure: (_) => failedThumbnails.add(asset.id),
-      );
+      // The service publishes bytes/failures to its shared maps;
+      // the loop only paces the loads (sequential here — Phase 3.3
+      // adds bounded concurrency).
+      await _thumbnails.getThumbnail(asset.id, thumbnailSize);
     }
   }
 

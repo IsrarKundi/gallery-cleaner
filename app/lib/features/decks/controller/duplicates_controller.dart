@@ -30,13 +30,21 @@ import '../../../services/local/protection.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/media/media_service.dart';
 import '../model/decks_status.dart';
-import '../model/thumbnail_cache.dart';
+import '../../../services/thumbnail/thumbnail_service.dart';
+import '../../../services/thumbnail/thumbnail_service_impl.dart';
 
 class DuplicatesController extends GetxController {
-  DuplicatesController({required this.media, required this.local});
+  DuplicatesController({
+    required this.media,
+    required this.local,
+    ThumbnailService? thumbnailService,
+  }) : _thumbnails = thumbnailService ?? ThumbnailServiceImpl(media: media);
 
   final MediaService media;
   final LocalService local;
+
+  /// Phase 2.3: bytes live in the shared thumbnail service.
+  final ThumbnailService _thumbnails;
 
   /// Similarity slider: Hamming distance range 0-10, default 5.
   /// Default 5 is the middle of the range: tight enough that groups
@@ -57,11 +65,11 @@ class DuplicatesController extends GetxController {
   final RxInt threshold = defaultThreshold.obs;
   final RxList<DuplicateGroup> groups = <DuplicateGroup>[].obs;
 
-  /// Phase 1.8: bounded cache (64 entries / 16 MiB, FIFO) replacing
-  /// the unbounded maps. Views read through these getters unchanged.
-  final BoundedThumbnailCache _cache = BoundedThumbnailCache();
-  RxMap<String, Uint8List> get thumbnails => _cache.thumbnails;
-  RxSet<String> get failedThumbnails => _cache.failedThumbnails;
+  /// Phase 2.3: service-owned bytes / failures for the grid size.
+  /// Views read through these getters unchanged.
+  RxMap<String, Uint8List> get thumbnails =>
+      _thumbnails.thumbnailsFor(thumbnailSize);
+  RxSet<String> get failedThumbnails => _thumbnails.failedFor(thumbnailSize);
 
   /// Phase 3A: favourited non-keepers kept out of a delete-marking
   /// run (count shown as a banner in the view, never silent).
@@ -249,24 +257,12 @@ class DuplicatesController extends GetxController {
         threshold: threshold.value,
       ),
     );
-    for (final DuplicateGroup group in groups) {
-      for (final MediaAsset asset in group.assets) {
-        _loadThumbnail(asset.id);
-      }
-    }
-  }
-
-  Future<void> _loadThumbnail(String id) async {
-    if (_cache.contains(id)) {
-      return;
-    }
-    final Result<Uint8List> result = await media.getThumbnail(
-      id,
-      thumbnailSize,
-    );
-    result.fold(
-      onSuccess: (Uint8List bytes) => _cache.put(id, bytes),
-      onFailure: (_) => _cache.markFailed(id),
-    );
+    // One prefetch for all member tiles: deduped, and failed tiles
+    // retry only when the member list changes (slider regroup).
+    final List<String> ids = <String>[
+      for (final DuplicateGroup group in groups)
+        for (final MediaAsset asset in group.assets) asset.id,
+    ];
+    _thumbnails.prefetch(ids, thumbnailSize);
   }
 }

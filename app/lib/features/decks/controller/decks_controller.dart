@@ -23,6 +23,8 @@
 // incrementally per page, so a page costs O(page) and a hub rebuild
 // costs O(user marks), not O(library).
 
+import 'dart:typed_data';
+
 import 'package:get/get.dart';
 
 import '../../../core/routes/app_routes.dart';
@@ -36,6 +38,8 @@ import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/media/media_service.dart';
 import '../../../services/storage/storage_service.dart';
+import '../../../services/thumbnail/thumbnail_service.dart';
+import '../../../services/thumbnail/thumbnail_service_impl.dart';
 import '../../../services/trash/trash_entry.dart';
 import '../../deck/model/retention.dart';
 import '../model/decks_status.dart';
@@ -44,10 +48,29 @@ import '../model/maybe_pile_item.dart';
 import '../model/smart_deck_launch.dart';
 
 class DecksController extends GetxController {
-  DecksController({required this.media, required this.local, this.storage});
+  DecksController({
+    required this.media,
+    required this.local,
+    this.storage,
+    ThumbnailService? thumbnailService,
+  }) : _thumbnails = thumbnailService ?? ThumbnailServiceImpl(media: media);
 
   final MediaService media;
   final LocalService local;
+
+  /// Phase 2.3: hub previews read through the shared thumbnail
+  /// service instead of fetching per widget in `initState`.
+  final ThumbnailService _thumbnails;
+
+  /// Service-owned bytes / failures for one hub size (128 for
+  /// preview strips, 256 for month covers).
+  RxMap<String, Uint8List> thumbnailsFor(int size) =>
+      _thumbnails.thumbnailsFor(size);
+  RxSet<String> failedFor(int size) => _thumbnails.failedFor(size);
+
+  /// Idempotent hub preview request, for one hub size.
+  void requestThumbnail(String id, int size) =>
+      _thumbnails.requestThumbnail(id, size);
 
   /// Device-storage backend (Phase 2B projection). Null in tests
   /// that construct the controller without one — the hub then
