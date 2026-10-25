@@ -17,4 +17,14 @@ class AppRoutes {
 
   /// Deletion history.
   static const String history = '/history';
+
+  /// Smart-deck hub (Phase 2A).
+  static const String decks = '/decks';
+
+  /// Duplicate / similar groups with the similarity slider (Phase 2A).
+  static const String duplicates = '/duplicates';
+
+  /// One smart deck as a swipe deck (Phase 2A). The deck's assets
+  /// travel as route arguments (see SmartDeckLaunch).
+  static const String smartDeck = '/smart-deck';
 }

@@ -7,6 +7,7 @@
 // JSON files in the app documents directory.
 
 import '../../core/utils/result.dart';
+import '../detection/photo_analysis.dart';
 import '../trash/trash_entry.dart';
 
 /// One swipe mark. Matches the locked gesture mapping
@@ -143,4 +144,13 @@ abstract class LocalService {
 
   /// Marks the first-run swipe tutorial as shown (or resets it).
   Future<Result<void>> setTutorialSeen(bool seen);
+
+  /// Merges [analyses] into the on-device hash cache, keyed by
+  /// asset id. Cached hashes/scores make regrouping instant and
+  /// re-scans cheap: only uncached assets need a thumbnail.
+  Future<Result<void>> saveAnalyses(List<PhotoAnalysis> analyses);
+
+  /// The whole hash cache (asset id -> analysis), or empty when
+  /// nothing has been scanned yet.
+  Future<Result<Map<String, PhotoAnalysis>>> loadAnalyses();
 }

@@ -19,6 +19,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../core/strings/app_strings.dart';
 import '../../core/utils/result.dart';
+import '../detection/photo_analysis.dart';
 import '../trash/trash_entry.dart';
 import 'local_service.dart';
 
@@ -36,6 +37,7 @@ class LocalServiceImpl implements LocalService {
   static const String _trashFile = 'klara_trash.json';
   static const String _historyFile = 'klara_history.json';
   static const String _settingsFile = 'klara_settings.json';
+  static const String _analysesFile = 'klara_analyses.json';
 
   Future<Directory> _dir() async {
     final Directory dir = await _directoryResolver();
@@ -210,6 +212,36 @@ class LocalServiceImpl implements LocalService {
       return Success<List<HistoryRecord>>(records);
     } catch (_) {
       return Failure<List<HistoryRecord>>(_failure);
+    }
+  }
+
+  @override
+  Future<Result<void>> saveAnalyses(List<PhotoAnalysis> analyses) async {
+    try {
+      final Map<String, dynamic> all = await _readMap(_analysesFile);
+      for (final PhotoAnalysis analysis in analyses) {
+        all[analysis.assetId] = analysis.toJson();
+      }
+      await _write(_analysesFile, all);
+      return const Success<void>(null);
+    } catch (_) {
+      return Failure<void>(_failure);
+    }
+  }
+
+  @override
+  Future<Result<Map<String, PhotoAnalysis>>> loadAnalyses() async {
+    try {
+      final Map<String, dynamic> all = await _readMap(_analysesFile);
+      final Map<String, PhotoAnalysis> analyses = <String, PhotoAnalysis>{};
+      for (final MapEntry<String, dynamic> entry in all.entries) {
+        analyses[entry.key] = PhotoAnalysis.fromJson(
+          entry.value as Map<String, dynamic>,
+        );
+      }
+      return Success<Map<String, PhotoAnalysis>>(analyses);
+    } catch (_) {
+      return Failure<Map<String, PhotoAnalysis>>(_failure);
     }
   }
 

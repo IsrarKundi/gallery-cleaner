@@ -15,6 +15,7 @@ import 'package:klara/core/utils/result.dart';
 import 'package:klara/features/deck/controller/deck_controller.dart';
 import 'package:klara/features/deck/model/deck_filter.dart';
 import 'package:klara/features/deck/model/deck_status.dart';
+import 'package:klara/services/detection/photo_analysis.dart';
 import 'package:klara/services/local/local_service.dart';
 import 'package:klara/services/media/media_asset.dart';
 import 'package:klara/services/media/media_service.dart';
@@ -220,6 +221,22 @@ class FakeLocal implements LocalService {
   @override
   Future<Result<bool>> isTutorialSeen() async {
     return Success<bool>(tutorialSeen);
+  }
+
+  final Map<String, PhotoAnalysis> _analyses = <String, PhotoAnalysis>{};
+  @override
+  Future<Result<void>> saveAnalyses(List<PhotoAnalysis> analyses) async {
+    for (final PhotoAnalysis a in analyses) {
+      _analyses[a.assetId] = a;
+    }
+    return const Success<void>(null);
+  }
+
+  @override
+  Future<Result<Map<String, PhotoAnalysis>>> loadAnalyses() async {
+    return Success<Map<String, PhotoAnalysis>>(
+      Map<String, PhotoAnalysis>.of(_analyses),
+    );
   }
 
   @override

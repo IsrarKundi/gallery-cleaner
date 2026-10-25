@@ -66,6 +66,10 @@ class AppSizes {
   // its own duration).
   Duration get snackBarDuration => const Duration(seconds: 4);
 
+  // Duplicates grid tile edge (Phase 2A): large enough to judge a
+  // keeper at a glance, small enough for 3-up rows on a phone.
+  double get duplicateThumb => 96;
+
   // Splash (design.md §13): logo width on the splash screen, and the
   // hold-timer fallback. The Lottie itself is ~1.67s, so the timer only
   // fires if Lottie playback fails; it is cancelled on Lottie finish.

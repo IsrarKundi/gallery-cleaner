@@ -1,4 +1,5 @@
-/// Every user-visible Phase 1 string for Klara (design.md §10).
+/// Every user-visible string for Klara (design.md §10).
+/// Phase 1 + Phase 2A (smart decks, duplicates) only.
 ///
 /// Views and widgets use keys only, via [tr]; the English map is the v1
 /// locale. Later locales are added here without touching views.
@@ -20,6 +21,9 @@ class AppStrings {
   static const String screenReview = 'screenReview';
   static const String screenTrash = 'screenTrash';
   static const String screenHistory = 'screenHistory';
+  static const String screenDecks = 'screenDecks';
+  static const String screenDuplicates = 'screenDuplicates';
+  static const String screenSmartDeck = 'screenSmartDeck';
 
   // Deck edge labels (requirements §3: LOCKED mapping, always visible).
   static const String edgeKeep = 'edgeKeep';
@@ -129,6 +133,44 @@ class AppStrings {
   static const String meterInTrashEmpty = 'meterInTrashEmpty';
   static const String splashSkipLabel = 'splashSkipLabel';
 
+  // Phase 2A smart decks (requirements §7): hub rows, scanning,
+  // duplicates grouping, keeper choice and the similarity slider.
+  // No Phase 2B strings (snooze, goals, streaks, On This Day,
+  // summary/share, projection) and no Phase 3/4 strings.
+  static const String decksTitle = 'decksTitle';
+  static const String decksSubtitle = 'decksSubtitle';
+  static const String decksScanning = 'decksScanning';
+  static const String decksScanningCount = 'decksScanningCount';
+  static const String decksEmpty = 'decksEmpty';
+  static const String decksEmptyMessage = 'decksEmptyMessage';
+  static const String decksRowCount = 'decksRowCount';
+  static const String decksRowScanning = 'decksRowScanning';
+  static const String deckScreenshots = 'deckScreenshots';
+  static const String deckWhatsapp = 'deckWhatsapp';
+  static const String deckDownloads = 'deckDownloads';
+  static const String deckVideos = 'deckVideos';
+  static const String deckLarge = 'deckLarge';
+  static const String deckOld = 'deckOld';
+  static const String deckBursts = 'deckBursts';
+  static const String deckBlurry = 'deckBlurry';
+  static const String deckDark = 'deckDark';
+  static const String deckDuplicates = 'deckDuplicates';
+  static const String duplicatesTitle = 'duplicatesTitle';
+  static const String duplicatesEmptyTitle = 'duplicatesEmptyTitle';
+  static const String duplicatesEmptyMessage = 'duplicatesEmptyMessage';
+  static const String duplicatesGroupCount = 'duplicatesGroupCount';
+  static const String duplicatesKeeper = 'duplicatesKeeper';
+  static const String duplicatesTapToKeep = 'duplicatesTapToKeep';
+  static const String duplicatesMarkNonKeepers = 'duplicatesMarkNonKeepers';
+  static const String duplicatesSliderLabel = 'duplicatesSliderLabel';
+  static const String duplicatesSliderValue = 'duplicatesSliderValue';
+  static const String duplicatesSliderHint = 'duplicatesSliderHint';
+  static const String smartDeckProgress = 'smartDeckProgress';
+  static const String smartDeckFinishedTitle = 'smartDeckFinishedTitle';
+  static const String smartDeckFinishedMessage = 'smartDeckFinishedMessage';
+  static const String smartDeckEmptyTitle = 'smartDeckEmptyTitle';
+  static const String smartDeckEmptyMessage = 'smartDeckEmptyMessage';
+
   // First-run tutorial (requirements §3: mandatory, because the mapping
   // is the opposite of the usual convention).
   static const String tutorialTitle = 'tutorialTitle';
@@ -154,6 +196,45 @@ class AppStrings {
     screenReview: 'Review',
     screenTrash: 'Trash',
     screenHistory: 'History',
+    screenDecks: 'Smart decks',
+    screenDuplicates: 'Duplicates',
+    screenSmartDeck: 'Smart deck',
+    decksTitle: 'Smart decks',
+    decksSubtitle:
+        'Groups Klara found in your library. Open one to swipe through it.',
+    decksScanning: 'Scanning your library…',
+    decksScanningCount: 'Scanned {count} photos…',
+    decksEmpty: 'Nothing found yet',
+    decksEmptyMessage:
+        'No smart deck has any photos yet. Scan again after adding photos.',
+    decksRowCount: '{count} photos · {size}',
+    decksRowScanning: 'Still scanning…',
+    deckScreenshots: 'Screenshots',
+    deckWhatsapp: 'WhatsApp',
+    deckDownloads: 'Downloads',
+    deckVideos: 'Videos',
+    deckLarge: 'Large photos',
+    deckOld: 'Old photos',
+    deckBursts: 'Bursts',
+    deckBlurry: 'Blurry photos',
+    deckDark: 'Dark photos',
+    deckDuplicates: 'Duplicates',
+    duplicatesTitle: 'Duplicates',
+    duplicatesEmptyTitle: 'No duplicates found',
+    duplicatesEmptyMessage:
+        'No photos look alike at this similarity level. Try moving the slider.',
+    duplicatesGroupCount: '{count} similar photos',
+    duplicatesKeeper: 'Keeper',
+    duplicatesTapToKeep: 'Tap a photo to make it the keeper.',
+    duplicatesMarkNonKeepers: 'Mark others for deletion',
+    duplicatesSliderLabel: 'Similarity',
+    duplicatesSliderValue: 'Distance {value}',
+    duplicatesSliderHint: 'Higher values group photos that look less alike. Groups update instantly.',
+    smartDeckProgress: '{index} of {count} decided',
+    smartDeckFinishedTitle: 'All decided',
+    smartDeckFinishedMessage: 'Every photo in this deck has a mark. Review your choices before anything is removed.',
+    smartDeckEmptyTitle: 'This deck is empty',
+    smartDeckEmptyMessage: 'There are no photos in this deck right now.',
     edgeKeep: 'KEEP',
     edgeDelete: 'DELETE',
     edgeMaybe: 'MAYBE',

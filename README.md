@@ -41,7 +41,9 @@ flutter test integration_test/   # golden path on a device (needs one connected)
 - Package name in `pubspec.yaml`: `klara` (version `1.0.0+1`).
 - Entry: `app/lib/main.dart` — a `GetMaterialApp` with the light
   theme only (dark mode is Phase 3), initial route `/splash`.
-  Routes: `/splash`, `/` (deck), `/review`, `/trash`, `/history`.
+  Routes: `/splash`, `/` (deck), `/review`, `/trash`, `/history`,
+  plus Phase 2A: `/decks` (smart-deck hub), `/duplicates`,
+  `/smart-deck` (one smart deck as a swipe deck).
 
 ## Permissions — and why
 
@@ -90,9 +92,59 @@ not appear here, and Klara's record is metadata only (id, size,
 dates) — Trash rows show no thumbnails, by design, since thumbnail
 loads for trashed assets would fail.
 
+## Phase 2A status (smart decks + duplicates, 25 Oct 2026)
+
+Host checks pass (`flutter analyze` clean, full `flutter test`
+suite green, 168 tests). On-device verification is still the
+owner's job, as in Phase 1.
+
+- **Detection (on-device, thumbnail heuristics — not exact
+  measurements):** 8×8 average hash from the thumbnail; duplicates
+  = same hash AND same dimensions; similar = Hamming distance at
+  or under the slider threshold; blur = Laplacian variance on a
+  64×64 grayscale thumbnail, blurry at or under 100.0; dark =
+  mean luminance under 40.0. Hashes/scores are cached per asset
+  id in LocalService (`klara_analyses.json`) so regrouping is
+  instant and re-scans skip thumbnails for analysed assets.
+  New dependency: pure-Dart `image` 4.12.0 (decoding only, used
+  in service-layer code, never in feature code).
+- **Duplicates screen:** greedy clustering around the first
+  group's representative hash; keeper suggestion = sharpest,
+  tie-broken by largest size (unscored assets rank last); tap
+  any thumbnail to change the keeper. Similarity slider 0–10,
+  default 5, regroups live from cached hashes. "Mark others for
+  deletion" writes delete marks for non-keepers (keeper marked
+  keep) into the `duplicates` session and navigates to `/review`
+  — it never deletes directly and never bypasses review +
+  native confirmation.
+- **Smart-deck hub (`/decks`, also reachable from the deck
+  AppBar):** Screenshots / WhatsApp / Downloads (album name
+  contains, case-insensitive), Videos, Large (≥ 10 MB), Old
+  (90+ days), Bursts (3+ photos, consecutive gaps ≤ 5 s),
+  Blurry, Dark (the detection surface), plus a Duplicates row.
+  Scanning is paged with a determinate progress bar (scanned
+  count + % against the largest-album estimate); rows fill in
+  per page, while Bursts/Duplicates stay "still scanning" until
+  the scan completes. Videos are never blurry/dark-flagged
+  (a video thumbnail frame is not the video).
+- **Smart-deck swiping reuses the deck's own `SwipeCard` and
+  `DeckActionBar`** (the bar is now callback-based so both
+  controllers can use it) with the locked gesture mapping;
+  marks write to the same LocalService session mechanism under
+  `smart:<deck>` keys, so resume works and delete marks flow
+  to `/review` exactly like main-deck marks.
+- **Honest limitation:** the scan holds the full asset list in
+  memory and decodes one thumbnail per uncached image on the
+  UI isolate; first scan on a very large library takes a while,
+  later scans are cheap via the cache. 50,000+ tuning is
+  Phase 3 and was not attempted here.
+- **Not in this increment:** Phase 2B (Maybe snooze, goals,
+  streaks, On This Day, summary/share, projection bar),
+  Phase 3/4 items, and any monetization code (still deferred).
+
 ## Tests
 
-- Unit + widget tests live in `app/test/` (126 pre-gate tests plus
+- Unit + widget tests live in `app/test/` (167 tests plus
   the golden path below).
 - **Golden path** (`app/test/golden_path_test.dart`, host-runnable
   twin of `app/integration_test/golden_path_test.dart`): splash →

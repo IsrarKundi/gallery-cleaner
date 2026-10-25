@@ -2,6 +2,12 @@ import 'package:get/get.dart';
 
 import '../../core/routes/app_routes.dart';
 import '../../features/deck/binding/deck_binding.dart';
+import '../../features/decks/binding/decks_binding.dart';
+import '../../features/decks/binding/duplicates_binding.dart';
+import '../../features/decks/binding/smart_deck_binding.dart';
+import '../../features/decks/view/decks_view.dart';
+import '../../features/decks/view/duplicates_view.dart';
+import '../../features/decks/view/smart_deck_view.dart';
 import '../../features/history/binding/history_binding.dart';
 import '../../features/history/view/history_view.dart';
 import '../../features/review/binding/review_binding.dart';
@@ -48,6 +54,21 @@ class AppPages {
       name: AppRoutes.history,
       page: HistoryView.new,
       binding: HistoryBinding(),
+    ),
+    GetPage<dynamic>(
+      name: AppRoutes.decks,
+      page: DecksView.new,
+      binding: DecksBinding(),
+    ),
+    GetPage<dynamic>(
+      name: AppRoutes.duplicates,
+      page: DuplicatesView.new,
+      binding: DuplicatesBinding(),
+    ),
+    GetPage<dynamic>(
+      name: AppRoutes.smartDeck,
+      page: SmartDeckView.new,
+      binding: SmartDeckBinding(),
     ),
   ];
 }

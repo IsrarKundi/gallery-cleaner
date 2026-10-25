@@ -58,6 +58,11 @@ class DeckView extends GetView<DeckController> {
           // and History for past cleaning runs. Both reset the
           // stack back to the deck (their own navigation contract).
           IconButton(
+            icon: Icon(AppIcons.decks, size: context.sizes.iconMd),
+            tooltip: AppStrings.tr(AppStrings.screenDecks),
+            onPressed: () => Get.toNamed<dynamic>(AppRoutes.decks),
+          ),
+          IconButton(
             icon: Icon(AppIcons.trash, size: context.sizes.iconMd),
             tooltip: AppStrings.tr(AppStrings.screenTrash),
             onPressed: () => Get.toNamed<dynamic>(AppRoutes.trash),
@@ -73,7 +78,14 @@ class DeckView extends GetView<DeckController> {
             onPressed: () => _openFilters(context),
           ),
         ],
-        bottomBar: showBar ? DeckActionBar(controller: controller) : null,
+        bottomBar: showBar
+            ? DeckActionBar(
+                onMark: controller.markCurrent,
+                onUndo: controller.undo,
+                canUndo: controller.canUndo,
+                onReview: controller.goToReview,
+              )
+            : null,
         body: Stack(
           children: <Widget>[
             _Body(controller: controller),

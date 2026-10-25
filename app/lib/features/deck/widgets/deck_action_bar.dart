@@ -4,16 +4,28 @@ import '../../../core/constants/app_icons.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../services/local/local_service.dart';
-import '../controller/deck_controller.dart';
 
 /// Bottom-anchored deck action bar (design.md §7): buttons for all
 /// four actions — no action depends on gestures alone — plus Undo
 /// (always visible, disabled only when the stack is empty) and Review
 /// navigation. Buttons only MARK; confirmation lives on review.
+///
+/// Callback-based (not controller-typed) so the smart-deck screen
+/// reuses this exact bar with its own controller: same buttons, same
+/// locked mapping, no duplicated action UI.
 class DeckActionBar extends StatelessWidget {
-  const DeckActionBar({super.key, required this.controller});
+  const DeckActionBar({
+    super.key,
+    required this.onMark,
+    required this.onUndo,
+    required this.canUndo,
+    required this.onReview,
+  });
 
-  final DeckController controller;
+  final ValueChanged<DeckMark> onMark;
+  final VoidCallback onUndo;
+  final bool canUndo;
+  final VoidCallback onReview;
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +49,7 @@ class DeckActionBar extends StatelessWidget {
                     icon: AppIcons.keep,
                     label: AppStrings.tr(AppStrings.actionKeep),
                     background: context.palette.successBg,
-                    onPressed: () => controller.markCurrent(DeckMark.keep),
+                    onPressed: () => onMark(DeckMark.keep),
                   ),
                 ),
                 SizedBox(width: context.sizes.sm),
@@ -46,7 +58,7 @@ class DeckActionBar extends StatelessWidget {
                     icon: AppIcons.delete,
                     label: AppStrings.tr(AppStrings.actionDelete),
                     background: context.palette.errorBg,
-                    onPressed: () => controller.markCurrent(DeckMark.delete),
+                    onPressed: () => onMark(DeckMark.delete),
                   ),
                 ),
                 SizedBox(width: context.sizes.sm),
@@ -55,7 +67,7 @@ class DeckActionBar extends StatelessWidget {
                     icon: AppIcons.maybe,
                     label: AppStrings.tr(AppStrings.actionMaybe),
                     background: context.palette.warningBg,
-                    onPressed: () => controller.markCurrent(DeckMark.maybe),
+                    onPressed: () => onMark(DeckMark.maybe),
                   ),
                 ),
                 SizedBox(width: context.sizes.sm),
@@ -64,7 +76,7 @@ class DeckActionBar extends StatelessWidget {
                     icon: AppIcons.favourite,
                     label: AppStrings.tr(AppStrings.actionFavourite),
                     background: context.palette.primaryContainer,
-                    onPressed: () => controller.markCurrent(DeckMark.favourite),
+                    onPressed: () => onMark(DeckMark.favourite),
                   ),
                 ),
               ],
@@ -76,7 +88,7 @@ class DeckActionBar extends StatelessWidget {
                   child: SizedBox(
                     height: context.sizes.hitArea,
                     child: OutlinedButton.icon(
-                      onPressed: controller.canUndo ? controller.undo : null,
+                      onPressed: canUndo ? onUndo : null,
                       icon: Icon(AppIcons.undo, size: context.sizes.iconSm),
                       label: Text(AppStrings.tr(AppStrings.actionUndo)),
                     ),
@@ -87,7 +99,7 @@ class DeckActionBar extends StatelessWidget {
                   child: SizedBox(
                     height: context.sizes.hitArea,
                     child: FilledButton.icon(
-                      onPressed: controller.goToReview,
+                      onPressed: onReview,
                       icon: Icon(AppIcons.review, size: context.sizes.iconSm),
                       label: Text(AppStrings.tr(AppStrings.actionReview)),
                     ),
