@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
+import '../../../core/utils/decode_size.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../services/detection/smart_decks.dart';
 import '../../../services/media/media_asset.dart';
@@ -218,7 +219,25 @@ class _GridSlotState extends State<_GridSlot> {
         fit: StackFit.expand,
         children: <Widget>[
           if (_bytes != null)
-            Image.memory(_bytes!, fit: BoxFit.cover)
+            // Phase 1.6: decode at display size, never larger than
+            // the fetched thumbnail (see decode_size.dart). The
+            // slot fetches at 128px (see _fetch).
+            LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                final int side = decodeSide(
+                  width: constraints.maxWidth,
+                  height: constraints.maxHeight,
+                  devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                  sourceSize: 128,
+                );
+                return Image.memory(
+                  _bytes!,
+                  fit: BoxFit.cover,
+                  cacheWidth: side,
+                  cacheHeight: side,
+                );
+              },
+            )
           else
             Container(color: context.palette.surfaceVariant),
           // Video Pill Badge (top right of video slot)

@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_icons.dart';
 import '../../../core/theme/theme_ext.dart';
+import '../../../core/utils/decode_size.dart';
 import '../../../services/local/local_service.dart';
 import '../model/swipe_direction.dart';
+import '../model/thumbnail_preloader.dart';
 
 /// Full-bleed photo card (design.md §7): 12–16dp corners, thumbnail
 /// with loading placeholder and failure state, and PERSISTENT edge
@@ -114,7 +116,27 @@ class _SwipeCardState extends State<SwipeCard> {
               fit: StackFit.expand,
               children: <Widget>[
                 if (thumbnail != null)
-                  Image.memory(thumbnail, fit: BoxFit.cover)
+                  // Phase 1.6: decode at display size, never larger
+                  // than the fetched thumbnail (see decode_size.dart).
+                  LayoutBuilder(
+                    builder:
+                        (BuildContext context, BoxConstraints constraints) {
+                          final int side = decodeSide(
+                            width: constraints.maxWidth,
+                            height: constraints.maxHeight,
+                            devicePixelRatio: MediaQuery.devicePixelRatioOf(
+                              context,
+                            ),
+                            sourceSize: ThumbnailPreloader.thumbnailSize,
+                          );
+                          return Image.memory(
+                            thumbnail,
+                            fit: BoxFit.cover,
+                            cacheWidth: side,
+                            cacheHeight: side,
+                          );
+                        },
+                  )
                 else if (widget.thumbnailFailed)
                   Container(
                     color: context.palette.surfaceVariant,

@@ -6,6 +6,7 @@ import 'package:skeletonizer/skeletonizer.dart';
 import '../../../core/constants/app_icons.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
+import '../../../core/utils/decode_size.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_skeleton.dart';
 import '../../../services/media/media_asset.dart';
@@ -318,8 +319,26 @@ class _MonthCardState extends State<_MonthCard> {
             fit: StackFit.expand,
             children: <Widget>[
               // Cover Photo
+              // Phase 1.6: decode at display size, never larger
+              // than the fetched thumbnail (see decode_size.dart).
+              // The card fetches at 256px (see _fetch).
               if (_bytes != null)
-                Image.memory(_bytes!, fit: BoxFit.cover)
+                LayoutBuilder(
+                  builder: (BuildContext context, BoxConstraints constraints) {
+                    final int side = decodeSide(
+                      width: constraints.maxWidth,
+                      height: constraints.maxHeight,
+                      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                      sourceSize: 256,
+                    );
+                    return Image.memory(
+                      _bytes!,
+                      fit: BoxFit.cover,
+                      cacheWidth: side,
+                      cacheHeight: side,
+                    );
+                  },
+                )
               else
                 Container(
                   color: context.palette.surfaceVariant,

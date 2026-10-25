@@ -8,6 +8,8 @@ import 'package:skeletonizer/skeletonizer.dart';
 import '../../../core/constants/app_icons.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
+import '../../../core/utils/decode_size.dart';
+import '../controller/review_controller.dart';
 import '../../../core/widgets/app_skeleton.dart';
 import '../../../services/media/media_asset.dart';
 
@@ -50,7 +52,24 @@ class ReviewGridTile extends StatelessWidget {
     final bool blurred = this.blurred;
     Widget image;
     if (thumbnail != null) {
-      image = Image.memory(thumbnail, fit: BoxFit.cover);
+      // Phase 1.6: decode at display size, never larger than the
+      // fetched thumbnail (see decode_size.dart).
+      image = LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final int side = decodeSide(
+            width: constraints.maxWidth,
+            height: constraints.maxHeight,
+            devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+            sourceSize: ReviewController.thumbnailSize,
+          );
+          return Image.memory(
+            thumbnail,
+            fit: BoxFit.cover,
+            cacheWidth: side,
+            cacheHeight: side,
+          );
+        },
+      );
     } else if (thumbnailFailed) {
       image = Container(
         color: context.palette.surfaceVariant,

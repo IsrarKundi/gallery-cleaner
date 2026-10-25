@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_icons.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
+import '../../../core/utils/decode_size.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../services/detection/smart_decks.dart';
 import '../../../services/media/media_asset.dart';
@@ -320,6 +321,15 @@ class _PreviewTileState extends State<_PreviewTile> {
 
   @override
   Widget build(BuildContext context) {
+    // Phase 1.6: decode at display size, never larger than the
+    // fetched thumbnail (see decode_size.dart). The tile fetches
+    // at 128px (see _fetch).
+    final int decode = decodeSide(
+      width: widget.width,
+      height: widget.height,
+      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+      sourceSize: 128,
+    );
     return Container(
       width: widget.width,
       height: widget.height,
@@ -332,7 +342,12 @@ class _PreviewTileState extends State<_PreviewTile> {
         fit: StackFit.expand,
         children: <Widget>[
           if (_bytes != null)
-            Image.memory(_bytes!, fit: BoxFit.cover)
+            Image.memory(
+              _bytes!,
+              fit: BoxFit.cover,
+              cacheWidth: decode,
+              cacheHeight: decode,
+            )
           else if (_failed)
             Center(
               child: Icon(

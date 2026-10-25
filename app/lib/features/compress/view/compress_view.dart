@@ -19,6 +19,7 @@ import '../../../core/constants/app_icons.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
+import '../../../core/utils/decode_size.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_scaffold.dart';
@@ -257,6 +258,14 @@ class _VideoList extends StatelessWidget {
             itemBuilder: (BuildContext context, int index) {
               final MediaAsset asset = controller.videos[index];
               final Uint8List? thumb = controller.thumbnails[asset.id];
+              // Phase 1.6: decode at display size, never larger
+              // than the fetched thumbnail (see decode_size.dart).
+              final int decode = decodeSide(
+                width: context.sizes.listRowMin,
+                height: context.sizes.listRowMin,
+                devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                sourceSize: CompressController.thumbnailSize,
+              );
               return ListTile(
                 leading: thumb == null
                     ? Icon(AppIcons.videos, size: context.sizes.iconMd)
@@ -269,6 +278,8 @@ class _VideoList extends StatelessWidget {
                           width: context.sizes.listRowMin,
                           height: context.sizes.listRowMin,
                           fit: BoxFit.cover,
+                          cacheWidth: decode,
+                          cacheHeight: decode,
                         ),
                       ),
                 title: Text(

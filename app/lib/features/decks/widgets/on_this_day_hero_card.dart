@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 
 import '../../../core/theme/theme_ext.dart';
+import '../../../core/utils/decode_size.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_skeleton.dart';
 import '../../../services/media/media_asset.dart';
@@ -153,6 +154,15 @@ class _FannedCardState extends State<_FannedCard> {
   Widget build(BuildContext context) {
     const double cardWidth = 58;
     const double cardHeight = 84;
+    // Phase 1.6: decode at display size, never larger than the
+    // fetched thumbnail (see decode_size.dart). The card fetches
+    // at 128px (see _fetch).
+    final int decode = decodeSide(
+      width: cardWidth,
+      height: cardHeight,
+      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+      sourceSize: 128,
+    );
     final double angle = widget.index * 0.08;
     final double xOffset = widget.index * 26.0;
     final double yOffset = (widget.index.abs()) * 3.5;
@@ -178,7 +188,12 @@ class _FannedCardState extends State<_FannedCard> {
           ),
           clipBehavior: Clip.antiAlias,
           child: _bytes != null
-              ? Image.memory(_bytes!, fit: BoxFit.cover)
+              ? Image.memory(
+                  _bytes!,
+                  fit: BoxFit.cover,
+                  cacheWidth: decode,
+                  cacheHeight: decode,
+                )
               : null,
         ),
       ),

@@ -13,7 +13,9 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_icons.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
+import '../../../core/utils/decode_size.dart';
 import '../../../core/utils/formatters.dart';
+import '../controller/duplicates_controller.dart';
 import '../../../services/detection/grouping.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../core/widgets/secondary_button.dart';
@@ -108,6 +110,14 @@ class _Thumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double size = context.sizes.duplicateThumb;
+    // Phase 1.6: decode at display size, never larger than the
+    // fetched thumbnail (see decode_size.dart).
+    final int decode = decodeSide(
+      width: size,
+      height: size,
+      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+      sourceSize: DuplicatesController.thumbnailSize,
+    );
     final Uint8List? thumbBytes = bytes;
     // Phase 3B accessibility (design.md §9): a thumbnail button
     // with no text gave TalkBack nothing to announce. The label
@@ -146,7 +156,12 @@ class _Thumb extends StatelessWidget {
               fit: StackFit.expand,
               children: <Widget>[
                 if (thumbBytes != null)
-                  Image.memory(thumbBytes, fit: BoxFit.cover)
+                  Image.memory(
+                    thumbBytes,
+                    fit: BoxFit.cover,
+                    cacheWidth: decode,
+                    cacheHeight: decode,
+                  )
                 else if (failed)
                   Container(
                     color: context.palette.surfaceVariant,
