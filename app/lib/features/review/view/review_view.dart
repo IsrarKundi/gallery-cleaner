@@ -13,7 +13,6 @@ import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/empty_view.dart';
 import '../../../core/widgets/error_banner.dart';
 import '../../../core/widgets/info_banner.dart';
-import '../../../services/detection/document_guard.dart';
 import '../controller/review_controller.dart';
 import '../widgets/review_bottom_bar.dart';
 import '../widgets/review_grid_tile.dart';
@@ -245,13 +244,15 @@ class ReviewView extends GetView<ReviewController> {
                     // document-like items sit in the grid, before
                     // any delete is attempted. The counted dialog
                     // at delete time is the override itself.
-                    if (documentLikeItems(controller.items).isNotEmpty)
+                    // Phase 3.3: the count is a controller aggregate
+                    // refreshed on items-change, not a title scan
+                    // per build.
+                    if (controller.documentLikeCount.value > 0)
                       InfoBanner(
                         message: AppStrings.tr(
                           AppStrings.documentGuardBanner,
                           <String, String>{
-                            'count':
-                                '${documentLikeItems(controller.items).length}',
+                            'count': '${controller.documentLikeCount.value}',
                           },
                         ),
                       ),
@@ -272,15 +273,27 @@ class ReviewView extends GetView<ReviewController> {
                         itemCount: controller.items.length,
                         itemBuilder: (BuildContext context, int index) {
                           final asset = controller.items[index];
-                          return ReviewGridTile(
-                            asset: asset,
-                            thumbnail: controller.thumbnails[asset.id],
-                            thumbnailFailed: controller.failedThumbnails
-                                .contains(asset.id),
-                            blurred: controller.isBlurred(asset),
-                            onReveal: () => controller.reveal(asset.id),
-                            onTap: () => controller.unmark(asset),
-                          );
+                          // Phase 3.3: per-tile observer. The tile
+                          // reads thumbnails/failures/blur inside
+                          // its own Obx, so a thumbnail arrival
+                          // rebuilds visible tiles only — never
+                          // the scaffold, header, or bottom bar.
+                          // (GetX RxMap granularity: every visible
+                          // tile's Obx fires per arrival; the
+                          // scaffold no longer does.)
+                          return Obx(() {
+                            return ReviewGridTile(
+                              asset: asset,
+                              thumbnail: controller.thumbnails[asset.id],
+                              thumbnailFailed: controller.failedThumbnails
+                                  .contains(asset.id),
+                              blurred: controller.isBlurred(asset),
+                              onReveal: () => controller.reveal(asset.id),
+                              onTap: () => controller.unmark(asset),
+                              onRetry: () =>
+                                  controller.retryThumbnail(asset.id),
+                            );
+                          });
                         },
                       ),
                     ),
@@ -314,13 +327,17 @@ class _Header extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
-              Text(
-                '${Formatters.formatCount(controller.items.length)} · '
-                '${Formatters.formatBytes(controller.totalBytes)}',
-                style: context.textStyles.titleLarge.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
+              // Phase 3.3: the count text observes items itself,
+              // so it never rides the scaffold's rebuilds.
+              Obx(() {
+                return Text(
+                  '${Formatters.formatCount(controller.items.length)} · '
+                  '${Formatters.formatBytes(controller.totalBytes)}',
+                  style: context.textStyles.titleLarge.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                );
+              }),
               Container(
                 padding: EdgeInsets.symmetric(
                   horizontal: context.sizes.sm,

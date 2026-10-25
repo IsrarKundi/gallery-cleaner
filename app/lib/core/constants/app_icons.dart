@@ -50,6 +50,7 @@ class AppIcons {
   static const IconData favourite = PhosphorIconsRegular.heart;
   static const IconData favouriteActive = PhosphorIconsFill.heart;
   static const IconData undo = PhosphorIconsRegular.arrowCounterClockwise;
+  static const IconData retry = PhosphorIconsRegular.arrowClockwise;
   static const IconData review = PhosphorIconsRegular.listChecks;
   static const IconData trash = PhosphorIconsRegular.trash;
   static const IconData history = PhosphorIconsRegular.clockCounterClockwise;

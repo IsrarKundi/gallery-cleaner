@@ -54,6 +54,11 @@ const Set<String> documentTitleTokens = <String>{
   'prescription',
 };
 
+/// Token splitter, hoisted to a single shared instance (Phase
+/// 3.3, F-37): the old code compiled a fresh RegExp per title
+/// on every view build.
+final RegExp _tokenSplitter = RegExp('[^a-z0-9]+');
+
 /// True when [asset] looks document-like by the on-device signals
 /// above. Images only; screenshots are matched by album, other
 /// photos only by a document token in the title.
@@ -67,7 +72,7 @@ bool isDocumentLike(MediaAsset asset) {
   }
   final Iterable<String> tokens = asset.title
       .toLowerCase()
-      .split(RegExp('[^a-z0-9]+'))
+      .split(_tokenSplitter)
       .where((String token) => token.isNotEmpty);
   return tokens.any(documentTitleTokens.contains);
 }

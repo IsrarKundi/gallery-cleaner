@@ -100,6 +100,10 @@ class ReviewController extends GetxController {
   /// trash). The view shows this count as a banner.
   final RxInt protectedExcludedCount = 0.obs;
 
+  /// Document-like count, computed once per items-change
+  /// (Phase 3.3: the view no longer scans titles on every build).
+  final RxInt documentLikeCount = 0.obs;
+
   /// Phase 3B mixed-outcome counts for the view's dialog/snackbar:
   /// how many of the last run were actually trashed, and how many
   /// failed to resolve at all. Denied count is [deniedIds].length.
@@ -131,8 +135,16 @@ class ReviewController extends GetxController {
       isLoading.value = true;
       _loadFromSession();
     }
+    // Phase 3.3: aggregates refresh on items-change only, so the
+    // view never recomputes them per build.
+    ever<List<MediaAsset>>(items, (_) => _refreshDocumentLikeCount());
+    _refreshDocumentLikeCount();
     _loadThumbnails();
     _loadBlurSetting();
+  }
+
+  void _refreshDocumentLikeCount() {
+    documentLikeCount.value = documentLikeItems(items).length;
   }
 
   Future<void> _loadFromSession() async {
@@ -219,12 +231,32 @@ class ReviewController extends GetxController {
   }
 
   Future<void> _loadThumbnails() async {
-    for (final MediaAsset asset in items) {
-      // The service publishes bytes/failures to its shared maps;
-      // the loop only paces the loads (sequential here — Phase 3.3
-      // adds bounded concurrency).
-      await _thumbnails.getThumbnail(asset.id, thumbnailSize);
+    // Phase 3.3: bounded concurrency (F-18). Tiles arrive in
+    // batches of 8 — one batch in flight at a time — instead of
+    // the old strictly-sequential loop or an unbounded prefetch
+    // of the whole set. Items are snapshotted so an unmark
+    // mid-load cannot shift the batch. The service publishes
+    // bytes/failures to its shared maps; the loop only paces
+    // the loads.
+    const int batchSize = 8;
+    final List<MediaAsset> assets = items.toList();
+    for (int start = 0; start < assets.length; start += batchSize) {
+      final int end = (start + batchSize) > assets.length
+          ? assets.length
+          : start + batchSize;
+      await Future.wait(<Future<void>>[
+        for (int i = start; i < end; i++)
+          _thumbnails.getThumbnail(assets[i].id, thumbnailSize),
+      ]);
     }
+  }
+
+  /// Retry a failed tile (Phase 3.3, brief 3.6): clears the failed
+  /// mark via the shared service and re-fetches, mirroring the
+  /// deck's retry. Tapping the tile itself still unmarks.
+  Future<void> retryThumbnail(String assetId) async {
+    _thumbnails.retry(assetId, thumbnailSize);
+    await _thumbnails.getThumbnail(assetId, thumbnailSize);
   }
 
   /// Unmarks one photo: its delete mark leaves the session (it
