@@ -112,7 +112,13 @@ class AppStrings {
   static const String scanningPhotos = 'scanningPhotos';
   static const String resumeSession = 'resumeSession';
 
-  // Splash (design.md §13): accessibility label for tap-to-skip.
+  // Deck filters and finished state (requirements §7, Phase 1 only:
+  // month, album/folder, plus All — no smart decks, those are Phase 2).
+  static const String filterTitle = 'filterTitle';
+  static const String filterAll = 'filterAll';
+  static const String deckFinishedTitle = 'deckFinishedTitle';
+  static const String deckFinishedMessage = 'deckFinishedMessage';
+  static const String meterInTrashEmpty = 'meterInTrashEmpty';
   static const String splashSkipLabel = 'splashSkipLabel';
 
   // First-run tutorial (requirements §3: mandatory, because the mapping
@@ -217,6 +223,13 @@ class AppStrings {
         'review it and confirm.',
     tutorialDone: 'Got it',
     splashSkipLabel: 'Skip splash',
+    filterTitle: 'Filters',
+    filterAll: 'All photos',
+    deckFinishedTitle: 'All decided',
+    deckFinishedMessage:
+        'Every photo in this filter has a mark. Review your choices '
+        'before anything is removed.',
+    meterInTrashEmpty: 'In trash',
     snackMovedToTrash: 'Moved to trash. You have 30 days to restore.',
     snackRestored: 'Photo restored',
     snackUndone: 'Action undone',

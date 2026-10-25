@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'core/bindings/initial_binding.dart';
+import 'core/routes/app_pages.dart';
+import 'core/routes/app_routes.dart';
 import 'core/strings/app_strings.dart';
 import 'core/theme/app_theme.dart';
 
-// Minimal entry ONLY (AGENTS.md): binding, theme, runApp. No UI and no
-// feature logic live here.
+// Minimal entry ONLY (AGENTS.md): binding, theme, routes, runApp. No
+// UI and no feature logic live here.
 void main() {
   runApp(const KlaraApp());
 }
@@ -22,6 +24,8 @@ class KlaraApp extends StatelessWidget {
       // Light theme only in Phase 1; dark mode is Phase 3.
       themeMode: ThemeMode.light,
       initialBinding: InitialBinding(),
+      initialRoute: AppRoutes.splash,
+      getPages: AppPages.pages,
       builder: (BuildContext context, Widget? child) {
         // System text scaling applies, clamped so layouts never break
         // (design.md §3).
@@ -32,10 +36,6 @@ class KlaraApp extends StatelessWidget {
           child: child!,
         );
       },
-      // Temporary home: bare scaffold, no buttons, no placeholder
-      // actions. Deck routing (AppRoutes.deck) replaces this in a
-      // later increment, once the deck view exists.
-      home: const Scaffold(body: SizedBox.shrink()),
     );
   }
 }

@@ -1,12 +1,12 @@
 /// Named route constants (AGENTS.md: named routes only, never
-/// Navigator.push). Wiring lives in app_pages.dart, which is NOT built
-/// in this increment: feature views do not exist yet, and placeholder
-/// pages with dead buttons are banned.
+/// Navigator.push). Wiring lives in app_pages.dart.
 class AppRoutes {
   AppRoutes._();
 
-  /// Deck (home). The deck view replaces the temporary home in
-  /// main.dart in a later increment.
+  /// Splash screen, the initial route (design.md §13).
+  static const String splash = '/splash';
+
+  /// Deck (home).
   static const String deck = '/';
 
   /// Review screen: editable grid of marked photos.
