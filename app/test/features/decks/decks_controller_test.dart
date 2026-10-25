@@ -3,6 +3,7 @@
 // Navigation itself is not asserted here (same convention as the
 // review controller tests); the hub widget test covers row taps.
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +13,7 @@ import 'package:klara/core/strings/app_strings.dart';
 import 'package:klara/core/utils/result.dart';
 import 'package:klara/features/decks/controller/decks_controller.dart';
 import 'package:klara/features/decks/model/decks_status.dart';
+import 'package:klara/services/detection/grouping.dart';
 import 'package:klara/services/detection/photo_analysis.dart';
 import 'package:klara/services/detection/smart_decks.dart';
 import 'package:klara/services/local/local_service.dart';
@@ -138,7 +140,11 @@ class _Media implements MediaService {
   }
 
   @override
-  Future<Result<Uint8List>> getThumbnail(String assetId, int size, {int quality = 85}) async {
+  Future<Result<Uint8List>> getThumbnail(
+    String assetId,
+    int size, {
+    int quality = 85,
+  }) async {
     return Success<Uint8List>(_darkPng());
   }
 
@@ -286,6 +292,16 @@ void main() {
       );
       await controller.init();
       expect(controller.status.value, DecksStatus.ready);
+      // Phase 5.2: list-level decks (bursts, duplicates) land
+      // off-isolate AFTER ready, so wait for them instead of
+      // asserting in the same microtask as init.
+      for (
+        int waits = 0;
+        controller.assetsFor(SmartDeckId.duplicates).length != 8 && waits < 250;
+        waits++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
       expect(controller.scanned.value, 9);
       expect(controller.assetsFor(SmartDeckId.screenshots).length, 1);
       expect(controller.assetsFor(SmartDeckId.whatsapp).length, 1);
@@ -321,6 +337,109 @@ void main() {
       );
       await controller.init();
       expect(controller.status.value, DecksStatus.denied);
+    });
+
+    test('phase 5.2: hub reaches ready before list decks land', () async {
+      final Completer<({List<DuplicateGroup> groups, Set<String> burstIds})>
+      gate = Completer<({List<DuplicateGroup> groups, Set<String> burstIds})>();
+      List<MediaAsset> capturedAssets = <MediaAsset>[];
+      Map<String, PhotoAnalysis> capturedAnalyses = <String, PhotoAnalysis>{};
+      int capturedThreshold = 5;
+      final DecksController controller = DecksController(
+        media: _Media(),
+        local: _Local(),
+        listDecksRunner:
+            (
+              List<MediaAsset> assets,
+              Map<String, PhotoAnalysis> analyses,
+              int threshold,
+            ) {
+              capturedAssets = assets;
+              capturedAnalyses = analyses;
+              capturedThreshold = threshold;
+              return gate.future;
+            },
+      );
+      await controller.init();
+      // Ready, per-page decks filled — but the gated list decks
+      // have not landed yet, and the hub must not wait for them.
+      expect(controller.status.value, DecksStatus.ready);
+      expect(controller.assetsFor(SmartDeckId.screenshots).length, 1);
+      expect(controller.assetsFor(SmartDeckId.duplicates), isEmpty);
+      expect(controller.assetsFor(SmartDeckId.bursts), isEmpty);
+      // Release the gate with the direct computation over the
+      // captured inputs: the list decks land progressively.
+      gate.complete((
+        groups: groupAssets(
+          assets: capturedAssets,
+          analyses: capturedAnalyses,
+          threshold: capturedThreshold,
+        ),
+        burstIds: burstAssetIds(capturedAssets),
+      ));
+      for (
+        int waits = 0;
+        controller.assetsFor(SmartDeckId.duplicates).length != 8 && waits < 250;
+        waits++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      expect(controller.assetsFor(SmartDeckId.duplicates).length, 8);
+      expect(controller.assetsFor(SmartDeckId.bursts).length, 3);
+    });
+
+    test('phase 5.2: stale list-deck result is dropped', () async {
+      final Completer<({List<DuplicateGroup> groups, Set<String> burstIds})>
+      gate = Completer<({List<DuplicateGroup> groups, Set<String> burstIds})>();
+      int calls = 0;
+      Future<({List<DuplicateGroup> groups, Set<String> burstIds})> runner(
+        List<MediaAsset> assets,
+        Map<String, PhotoAnalysis> analyses,
+        int threshold,
+      ) {
+        calls++;
+        if (calls == 1) {
+          return gate.future;
+        }
+        return Future<
+          ({List<DuplicateGroup> groups, Set<String> burstIds})
+        >.value((
+          groups: groupAssets(
+            assets: assets,
+            analyses: analyses,
+            threshold: threshold,
+          ),
+          burstIds: burstAssetIds(assets),
+        ));
+      }
+
+      final DecksController controller = DecksController(
+        media: _Media(),
+        local: _Local(),
+        listDecksRunner: runner,
+      );
+      await controller.init();
+      expect(controller.status.value, DecksStatus.ready);
+      expect(controller.assetsFor(SmartDeckId.duplicates), isEmpty);
+      // A second scan (memoised replay) launches a newer list-deck
+      // computation, which lands first.
+      await controller.init();
+      for (
+        int waits = 0;
+        controller.assetsFor(SmartDeckId.duplicates).length != 8 && waits < 250;
+        waits++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      expect(controller.assetsFor(SmartDeckId.duplicates).length, 8);
+      expect(controller.assetsFor(SmartDeckId.bursts).length, 3);
+      // The first computation finally resolves — with EMPTY
+      // decks. If it landed, the decks would be wiped; the guard
+      // must drop it.
+      gate.complete((groups: <DuplicateGroup>[], burstIds: <String>{}));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(controller.assetsFor(SmartDeckId.duplicates).length, 8);
+      expect(controller.assetsFor(SmartDeckId.bursts).length, 3);
     });
 
     test('failed first page with no assets shows error', () async {

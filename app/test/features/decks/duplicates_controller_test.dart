@@ -4,6 +4,7 @@
 // covered by the duplicates widget test (Get.toNamed needs a
 // GetMaterialApp, like the review controller convention).
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +12,7 @@ import 'package:get/get.dart';
 import 'package:klara/core/utils/result.dart';
 import 'package:klara/features/decks/controller/duplicates_controller.dart';
 import 'package:klara/features/decks/model/decks_status.dart';
+import 'package:klara/services/detection/grouping.dart';
 import 'package:klara/services/detection/photo_analysis.dart';
 import 'package:klara/services/local/local_service.dart';
 import 'package:klara/services/media/media_asset.dart';
@@ -271,10 +273,25 @@ void main() {
       );
       await controller.init();
       // 'c' is distance 6 from 'a': outside 5, inside 6.
+      // Phase 5.2: regroups land off-isolate, so wait for each.
       controller.setThreshold(6);
+      for (
+        int waits = 0;
+        controller.groups.first.assets.length != 3 && waits < 250;
+        waits++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
       expect(controller.groups.length, 1);
       expect(controller.groups.first.assets.length, 3);
       controller.setThreshold(0);
+      for (
+        int waits = 0;
+        controller.groups.first.assets.length != 2 && waits < 250;
+        waits++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
       expect(controller.groups.first.assets.length, 2);
       expect(media.analysisThumbnailCalls, 0);
     });
@@ -303,9 +320,17 @@ void main() {
         expect(media.tileThumbnailCalls, afterInit);
 
         // Release regroups exactly once: 'c' (distance 6) joins, and
-        // its tile is the only new fetch.
+        // its tile is the only new fetch. Phase 5.2: the regroup
+        // lands off-isolate, so wait for it (1 ms no longer
+        // covers an isolate hop).
         controller.commitThreshold();
-        await Future<void>.delayed(const Duration(milliseconds: 1));
+        for (
+          int waits = 0;
+          controller.groups.first.assets.length != 3 && waits < 250;
+          waits++
+        ) {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        }
         expect(controller.groups.first.assets.length, 3);
         expect(media.tileThumbnailCalls, afterInit + 1);
 
@@ -316,6 +341,13 @@ void main() {
         );
         await direct.init();
         direct.setThreshold(6);
+        for (
+          int waits = 0;
+          direct.groups.first.assets.length != 3 && waits < 250;
+          waits++
+        ) {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        }
         expect(
           controller.groups.first.assets.map((MediaAsset a) => a.id).toList(),
           direct.groups.first.assets.map((MediaAsset a) => a.id).toList(),
@@ -380,6 +412,127 @@ void main() {
       );
       await controller.init();
       expect(controller.status.value, DecksStatus.denied);
+    });
+
+    test('phase 5.2: stale regroup result is dropped', () async {
+      // Cached analyses: a/b share hash 0, c has hash 63
+      // (distance 6 from 0). At threshold 5 the group is [a, b];
+      // at threshold 10 all three merge into one group.
+      final Completer<List<DuplicateGroup>> gate =
+          Completer<List<DuplicateGroup>>();
+      int calls = 0;
+      Future<List<DuplicateGroup>> runner(
+        List<MediaAsset> assets,
+        Map<String, PhotoAnalysis> analyses,
+        int threshold,
+      ) {
+        calls++;
+        if (calls == 2) {
+          return gate.future;
+        }
+        return Future<List<DuplicateGroup>>.value(
+          groupAssets(assets: assets, analyses: analyses, threshold: threshold),
+        );
+      }
+
+      final DuplicatesController controller = DuplicatesController(
+        media: _Media(),
+        local: _Local(),
+        groupingRunner: runner,
+      );
+      await controller.init();
+      expect(controller.groups.length, 1);
+      expect(
+        controller.groups.first.assets.map((MediaAsset a) => a.id).toList(),
+        <String>['a', 'b'],
+      );
+      // Second regroup gates; a third regroup for the original
+      // threshold lands first.
+      controller.setThreshold(10);
+      controller.setThreshold(5);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(
+        controller.groups.first.assets.map((MediaAsset a) => a.id).toList(),
+        <String>['a', 'b'],
+      );
+      // The gated threshold-10 result finally resolves. If it
+      // landed, c would join the group; the guard must drop it.
+      gate.complete(
+        groupAssets(
+          assets: <MediaAsset>[_asset('a'), _asset('b'), _asset('c')],
+          analyses: <String, PhotoAnalysis>{
+            'a': _analysis('a', 0, 900),
+            'b': _analysis('b', 0, 10),
+            'c': _analysis('c', 63, 500),
+          },
+          threshold: 10,
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(controller.groups.length, 1);
+      expect(
+        controller.groups.first.assets.map((MediaAsset a) => a.id).toList(),
+        <String>['a', 'b'],
+      );
+    });
+
+    test('phase 5.2: releasing back to the applied threshold drops '
+        'the in-flight regroup', () async {
+      final Completer<List<DuplicateGroup>> gate =
+          Completer<List<DuplicateGroup>>();
+      int calls = 0;
+      Future<List<DuplicateGroup>> runner(
+        List<MediaAsset> assets,
+        Map<String, PhotoAnalysis> analyses,
+        int threshold,
+      ) {
+        calls++;
+        if (calls == 2) {
+          return gate.future;
+        }
+        return Future<List<DuplicateGroup>>.value(
+          groupAssets(assets: assets, analyses: analyses, threshold: threshold),
+        );
+      }
+
+      final DuplicatesController controller = DuplicatesController(
+        media: _Media(),
+        local: _Local(),
+        groupingRunner: runner,
+      );
+      await controller.init();
+      expect(controller.groups.length, 1);
+      // Drag to 10 and release: regroup gates in flight.
+      controller.previewThreshold(10);
+      controller.commitThreshold();
+      // Drag back to the applied 5 and release: no plain
+      // threshold comparison fires (5 == grouped 5), but the
+      // pending 10-regroup must be superseded, not left to land
+      // under the wrong slider position.
+      controller.previewThreshold(5);
+      controller.commitThreshold();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(
+        controller.groups.first.assets.map((MediaAsset a) => a.id).toList(),
+        <String>['a', 'b'],
+      );
+      gate.complete(
+        groupAssets(
+          assets: <MediaAsset>[_asset('a'), _asset('b'), _asset('c')],
+          analyses: <String, PhotoAnalysis>{
+            'a': _analysis('a', 0, 900),
+            'b': _analysis('b', 0, 10),
+            'c': _analysis('c', 63, 500),
+          },
+          threshold: 10,
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(controller.groups.length, 1);
+      expect(
+        controller.groups.first.assets.map((MediaAsset a) => a.id).toList(),
+        <String>['a', 'b'],
+      );
     });
   });
 }

@@ -21,12 +21,18 @@
 //   existing representative — O(n * g) where g is the group count,
 //   degrading to O(n^2) on a library of mostly-distinct photos
 //   (50k distinct photos = ~1.25 billion Hamming comparisons).
-// - AFTER, threshold 0 (exact hashes): hash-bucket pre-grouping.
-//   One Map pass buckets assets by hash, O(n) total, and the
-//   output is IDENTICAL to the old greedy run at threshold 0
-//   (same-hash assets always shared the first cluster's
-//   representative, and bucket order preserves scan order, so
-//   groups and keeper suggestions are unchanged).
+// - AFTER, threshold 0 (exact duplicates): hash-bucket
+//   pre-grouping. One Map pass buckets assets by (hash, width,
+//   height), O(n) total. Phase 5.2 reconciled this with
+//   [PhotoAnalysis.isExactDuplicateOf] (hash AND dimensions):
+//   before, buckets keyed on hash alone, so two photos sharing a
+//   hash but not dimensions grouped as "exact" — they no longer
+//   do at threshold 0. They can still group at threshold > 0 as
+//   similar (similarity is distance alone, by definition), and
+//   the keeper rule below is unchanged. This is the one
+//   intentional behaviour change in 5.2, proven by the
+//   threshold-0 trust-flow test (same hash, different
+//   dimensions, must NOT group at 0).
 // - AFTER, threshold > 0 (similar photos): the greedy scan is
 //   kept, but representative comparisons per asset are capped at
 //   [maxRepresentativeComparisons]. Worst case is O(n * 512)
@@ -48,9 +54,20 @@
 // are deterministic). An asset with no analysis scores below every
 // analysed asset — unknown sharpness never beats measured sharpness.
 // When NO asset in a group has a score, largest sizeBytes wins.
+//
+// Phase 5.2: grouping runs off the UI isolate ([groupAssetsOnIsolate]
+// and [computeListDecksOnIsolate]). The functions are pure and
+// their inputs are plain sendable data, so the isolate call is a
+// direct [Isolate.run] of the same function the UI thread used to
+// run — outputs are identical for identical inputs (proven by the
+// determinism fixture test). A result landing after the caller
+// moved on is dropped by the caller's AsyncGuard, never applied.
+
+import 'dart:isolate';
 
 import '../media/media_asset.dart';
 import 'photo_analysis.dart';
+import 'smart_decks.dart';
 
 /// One duplicate / similar group: 2+ assets within threshold of the
 /// representative hash, with a suggested keeper the user may change.
@@ -103,21 +120,28 @@ List<DuplicateGroup> groupAssets({
 /// trade-off this cap buys.
 const int maxRepresentativeComparisons = 512;
 
-/// Exact-hash grouping, O(n): one Map pass buckets analysed assets
-/// by hash (scan order preserved inside each bucket), then buckets
-/// of 2+ become groups with the usual keeper suggestion. Output is
-/// identical to the old greedy scan at threshold 0.
+/// Exact-duplicate grouping, O(n): one Map pass buckets analysed
+/// assets by (hash, width, height) — the [PhotoAnalysis]
+/// .isExactDuplicateOf rule (solutions 5.2) — with scan order
+/// preserved inside each bucket, then buckets of 2+ become groups
+/// with the usual keeper suggestion.
 List<DuplicateGroup> groupExactHashes({
   required List<MediaAsset> assets,
   required Map<String, PhotoAnalysis> analyses,
 }) {
-  final Map<int, List<MediaAsset>> buckets = <int, List<MediaAsset>>{};
+  final Map<(int, int, int), List<MediaAsset>> buckets =
+      <(int, int, int), List<MediaAsset>>{};
   for (final MediaAsset asset in assets) {
     final PhotoAnalysis? analysis = analyses[asset.id];
     if (analysis == null) {
       continue;
     }
-    (buckets[analysis.hash] ??= <MediaAsset>[]).add(asset);
+    final (int, int, int) key = (
+      analysis.hash,
+      analysis.width,
+      analysis.height,
+    );
+    (buckets[key] ??= <MediaAsset>[]).add(asset);
   }
   final List<DuplicateGroup> groups = <DuplicateGroup>[];
   for (final List<MediaAsset> members in buckets.values) {
@@ -226,4 +250,57 @@ class _Cluster {
 
   final String representativeId;
   final List<MediaAsset> members;
+}
+
+/// Runs a grouping off the UI isolate. A function of this shape,
+/// so callers can inject a gated runner in tests to prove
+/// ready-before-grouping and stale-result drops.
+typedef GroupingRunner = Future<List<DuplicateGroup>> Function(
+  List<MediaAsset> assets,
+  Map<String, PhotoAnalysis> analyses,
+  int threshold,
+);
+
+/// Runs the hub's list-level decks (duplicates groups + burst ids)
+/// off the UI isolate. Same injectable shape as [GroupingRunner]:
+/// callers prove progressive landing with a gated runner.
+typedef ListDecksRunner =
+    Future<({List<DuplicateGroup> groups, Set<String> burstIds})> Function(
+      List<MediaAsset> assets,
+      Map<String, PhotoAnalysis> analyses,
+      int threshold,
+    );
+
+/// The production grouping runner: the same [groupAssets] the UI
+/// thread used to run, on a worker isolate. Inputs are plain
+/// sendable data (ids, ints, doubles, dates), so the isolate call
+/// needs no serialization layer — and outputs are identical for
+/// identical inputs by construction.
+Future<List<DuplicateGroup>> groupAssetsOnIsolate(
+  List<MediaAsset> assets,
+  Map<String, PhotoAnalysis> analyses,
+  int threshold,
+) {
+  return Isolate.run(
+    () => groupAssets(assets: assets, analyses: analyses, threshold: threshold),
+  );
+}
+
+/// The production list-decks runner: grouping + burst sort in one
+/// worker call, so the hub pays one isolate hop for both
+/// list-level decks instead of two.
+Future<({List<DuplicateGroup> groups, Set<String> burstIds})>
+computeListDecksOnIsolate(
+  List<MediaAsset> assets,
+  Map<String, PhotoAnalysis> analyses,
+  int threshold,
+) {
+  return Isolate.run(() {
+    final List<DuplicateGroup> groups = groupAssets(
+      assets: assets,
+      analyses: analyses,
+      threshold: threshold,
+    );
+    return (groups: groups, burstIds: burstAssetIds(assets));
+  });
 }

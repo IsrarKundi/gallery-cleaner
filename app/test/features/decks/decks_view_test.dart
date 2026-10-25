@@ -358,6 +358,19 @@ void main() {
           ],
         ),
       );
+      // Phase 5.2: Duplicates init regroups off-isolate, and
+      // isolate replies starve under testWidgets' fake-async
+      // pumps — same remedy as the hub test above: wait for
+      // ready in real async (bounded), then settle outside it.
+      await tester.runAsync(() async {
+        final DuplicatesController controller =
+            Get.find<DuplicatesController>();
+        int waits = 0;
+        while (controller.status.value != DecksStatus.ready && waits < 500) {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          waits++;
+        }
+      });
       await tester.pumpAndSettle();
     }
 
