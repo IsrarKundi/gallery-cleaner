@@ -166,6 +166,37 @@ Future<LocalServiceImpl> _tempLocal() async {
   return LocalServiceImpl(directoryResolver: () async => dir);
 }
 
+/// Phase 2.5: same settle rule as the deck unit tests — a mark on
+/// a not-yet-visible card is refused, so tests wait for the current
+/// card's thumbnail before marking.
+Future<void> _settleThumbnails(DeckController controller) async {
+  final DateTime deadline = DateTime.now().add(const Duration(seconds: 2));
+  while (true) {
+    final String? id = controller.currentAsset?.id;
+    if (id == null || controller.thumbnails.containsKey(id)) {
+      return;
+    }
+    if (DateTime.now().isAfter(deadline)) {
+      fail('Timed out waiting for the current thumbnail');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+}
+
+Future<void> _settleSmartThumbnails(SmartDeckController controller) async {
+  final DateTime deadline = DateTime.now().add(const Duration(seconds: 2));
+  while (true) {
+    final String? id = controller.currentAsset?.id;
+    if (id == null || controller.thumbnails.containsKey(id)) {
+      return;
+    }
+    if (DateTime.now().isAfter(deadline)) {
+      fail('Timed out waiting for the current thumbnail');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+}
+
 void main() {
   setUp(() {
     Get.testMode = true;
@@ -200,14 +231,18 @@ void main() {
           local: local,
         );
         await controller.init();
+        await _settleThumbnails(controller);
         await controller.markCurrent(DeckMark.delete);
         expect(controller.marks['plain'], DeckMark.delete);
+        await _settleThumbnails(controller);
         await controller.markCurrent(DeckMark.delete);
         expect(controller.marks.containsKey('fav'), isFalse);
         expect(controller.currentAsset?.id, 'fav');
         expect(controller.protection.blockedKey.value, isNotEmpty);
+        await _settleThumbnails(controller);
         controller.markCurrent(DeckMark.keep);
         expect(controller.protection.blockedKey.value, isEmpty);
+        await _settleThumbnails(controller);
         await controller.markCurrent(DeckMark.delete);
         expect(controller.marks.containsKey('sys'), isFalse);
         expect(controller.protection.blockedKey.value, isNotEmpty);
@@ -222,6 +257,7 @@ void main() {
         local: local,
       );
       await controller.init();
+      await _settleThumbnails(controller);
       await controller.markCurrent(DeckMark.delete);
       expect(controller.marks['fav'], DeckMark.delete);
     });
@@ -244,6 +280,7 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 10));
       }
       expect(controller.ready.value, isTrue);
+      await _settleSmartThumbnails(controller);
       controller.markCurrent(DeckMark.delete);
       expect(controller.marks.containsKey('sys'), isFalse);
       expect(controller.protection.blockedKey.value, isNotEmpty);

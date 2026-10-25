@@ -215,6 +215,25 @@ DeckController _controller({
   );
 }
 
+/// Phase 2.5: unit-test helper. The controller refuses marks on a
+/// card whose thumbnail has not arrived yet, so tests must wait
+/// for the current card to become visible before marking —
+/// otherwise the mark is refused and the test asserts against a
+/// state it never produced.
+Future<void> _settleThumbnails(DeckController controller) async {
+  final DateTime deadline = DateTime.now().add(const Duration(seconds: 2));
+  while (true) {
+    final String? id = controller.currentAsset?.id;
+    if (id == null || controller.thumbnails.containsKey(id)) {
+      return;
+    }
+    if (DateTime.now().isAfter(deadline)) {
+      fail('Timed out waiting for the current thumbnail');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+}
+
 void main() {
   group('staged ready-gate', () {
     test('init reaches ready without albums; meter refreshes after', () async {
@@ -298,6 +317,7 @@ void main() {
       expect(controller.status.value, DeckStatus.ready);
 
       // The delete waits: nothing recorded while the load is pending.
+      await _settleThumbnails(controller);
       final Future<void> pendingDelete = controller.markCurrent(
         DeckMark.delete,
       );
@@ -327,6 +347,7 @@ void main() {
 
       // The keep returns while the protection load is still pending:
       // if it waited, this await would hang on the uncompleted gate.
+      await _settleThumbnails(controller);
       await controller.markCurrent(DeckMark.keep);
       expect(controller.marks['a1'], DeckMark.keep);
       expect(local.settingsGate!.isCompleted, isFalse);
@@ -351,6 +372,7 @@ void main() {
         trash: _FakeTrash(),
       );
       await controller.init();
+      await _settleThumbnails(controller);
       await controller.markCurrent(DeckMark.delete);
       expect(controller.marks.containsKey('a1'), isFalse);
       expect(controller.protection.blockedKey.value, isNotEmpty);

@@ -160,6 +160,12 @@ class SmartDeckController extends GetxController {
     if (asset == null || !ready.value) {
       return;
     }
+    // Phase 2.5, same rule as the main deck: never mark a card
+    // whose thumbnail is not visible (still loading or failed).
+    if (!thumbnails.containsKey(asset.id) ||
+        failedThumbnails.contains(asset.id)) {
+      return;
+    }
     // Phase 3A: protected photos can never be marked delete here
     // either — same block + explanation as the main deck.
     if (protection.blocksDelete(mark, asset, favouriteIds)) {
@@ -180,6 +186,18 @@ class SmartDeckController extends GetxController {
     if (isFinished) {
       retention.recordCompletion();
     }
+  }
+
+  /// Phase 2.5 explicit retry for a failed current card: clears
+  /// the failed mark and re-fetches the window (same contract as
+  /// the main deck's retry).
+  void retryCurrentThumbnail() {
+    final MediaAsset? asset = currentAsset;
+    if (asset == null) {
+      return;
+    }
+    _thumbnails.retry(asset.id, thumbnailSize);
+    _preloadAround(currentIndex.value);
   }
 
   void undo() {

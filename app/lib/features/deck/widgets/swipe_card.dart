@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/strings/app_strings.dart';
 import '../../../core/constants/app_icons.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../core/utils/decode_size.dart';
@@ -20,12 +21,21 @@ import '../model/thumbnail_preloader.dart';
 /// Reduced motion skips the exit animation and marks immediately.
 /// The card itself holds no deck logic: it reports the mark and the
 /// controller advances the queue.
+///
+/// Phase 2.5 readiness rule: the card is interactive ONLY when its
+/// thumbnail is visible. Behind a spinner (still loading) or a
+/// failure state the pan handlers are null, so no mark gesture can
+/// land on a photo the user cannot see. A failed card is a dead
+/// end without retry, so [onRetry] (when provided) makes the failure
+/// state tappable; the controller clears the failed mark and
+/// re-fetches the window.
 class SwipeCard extends StatefulWidget {
   const SwipeCard({
     super.key,
     required this.thumbnail,
     required this.thumbnailFailed,
     required this.onSwiped,
+    this.onRetry,
   });
 
   /// Thumbnail bytes, or null while still loading.
@@ -36,6 +46,10 @@ class SwipeCard extends StatefulWidget {
 
   /// Called once, after the exit animation, with the swipe's mark.
   final ValueChanged<DeckMark> onSwiped;
+
+  /// Tap-to-retry for the failure state. Null means the failure
+  /// state is inert (no dead-end promise without a handler).
+  final VoidCallback? onRetry;
 
   @override
   State<SwipeCard> createState() => _SwipeCardState();
@@ -93,6 +107,10 @@ class _SwipeCardState extends State<SwipeCard> {
   Widget build(BuildContext context) {
     final bool exiting = _exiting != null;
     final Uint8List? thumbnail = widget.thumbnail;
+    // Phase 2.5: only a visible photo is swipeable. A null
+    // thumbnail (spinner or failure) disables the pan handlers,
+    // so no mark can land on an unseen card.
+    final bool visible = thumbnail != null;
     return AnimatedContainer(
       duration: exiting ? context.sizes.motionSlow : context.sizes.motionNormal,
       curve: context.sizes.easeOut,
@@ -108,8 +126,8 @@ class _SwipeCardState extends State<SwipeCard> {
         opacity: exiting ? 0 : 1,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onPanUpdate: _onPanUpdate,
-          onPanEnd: _onPanEnd,
+          onPanUpdate: visible ? _onPanUpdate : null,
+          onPanEnd: visible ? _onPanEnd : null,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(context.sizes.radiusLg),
             child: Stack(
@@ -138,14 +156,7 @@ class _SwipeCardState extends State<SwipeCard> {
                         },
                   )
                 else if (widget.thumbnailFailed)
-                  Container(
-                    color: context.palette.surfaceVariant,
-                    child: Icon(
-                      AppIcons.error,
-                      size: context.sizes.iconLg,
-                      color: context.palette.error,
-                    ),
-                  )
+                  _FailureBody(onRetry: widget.onRetry)
                 else
                   Container(
                     color: context.palette.surfaceVariant,
@@ -156,6 +167,50 @@ class _SwipeCardState extends State<SwipeCard> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Failure state (Phase 2.5): error icon + a retry label. Tappable
+/// only when [onRetry] is provided — a failure card without a retry
+/// handler must not promise one.
+class _FailureBody extends StatelessWidget {
+  const _FailureBody({this.onRetry});
+
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget body = Container(
+      color: context.palette.surfaceVariant,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              AppIcons.error,
+              size: context.sizes.iconLg,
+              color: context.palette.error,
+            ),
+            SizedBox(height: context.sizes.sm),
+            Text(
+              AppStrings.tr(AppStrings.errorRetry),
+              style: context.textStyles.bodySmall.copyWith(
+                color: context.palette.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    final VoidCallback? retry = onRetry;
+    if (retry == null) {
+      return body;
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: retry,
+      child: body,
     );
   }
 }

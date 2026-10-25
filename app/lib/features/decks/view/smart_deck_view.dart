@@ -142,6 +142,7 @@ class _Body extends StatelessWidget {
                   current.id,
                 ),
                 onSwiped: controller.markCurrent,
+                onRetry: controller.retryCurrentThumbnail,
               ),
             ),
           ),

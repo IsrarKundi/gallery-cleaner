@@ -392,9 +392,19 @@ class DeckController extends GetxController {
   /// no current card (empty or finished deck). Async because a
   /// delete mark awaits the parallel protection load first (2.2);
   /// every other mark skips that wait.
+  ///
+  /// Phase 2.5: refuses when the current card has no visible
+  /// thumbnail (still loading or failed). The action bar is shown
+  /// as soon as the deck is ready, so buttons alone cannot gate
+  /// this — a mark on an unseen photo is never recorded, and no
+  /// banner, haptic or advance happens for it.
   Future<void> markCurrent(DeckMark mark) async {
     final MediaAsset? asset = currentAsset;
     if (asset == null || status.value != DeckStatus.ready) {
+      return;
+    }
+    if (!thumbnails.containsKey(asset.id) ||
+        failedThumbnails.contains(asset.id)) {
       return;
     }
     // Phase 3A: a protected delete mark is blocked, not recorded.
@@ -425,6 +435,19 @@ class DeckController extends GetxController {
     if (isFinished) {
       retention.recordCompletion();
     }
+  }
+
+  /// Phase 2.5 explicit retry for a failed current card: clears
+  /// the failed mark and re-fetches the window, so the card
+  /// becomes visible (or fails again) instead of staying a dead
+  /// end. No-op with no current card.
+  void retryCurrentThumbnail() {
+    final MediaAsset? asset = currentAsset;
+    if (asset == null) {
+      return;
+    }
+    _preloader.retry(asset.id);
+    _preloader.preloadAround(queue, currentIndex.value);
   }
 
   /// Pops the last decision and returns to that card. Disabled (a

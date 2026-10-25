@@ -32,7 +32,7 @@ import '../../../services/thumbnail/thumbnail_service_impl.dart';
 /// thumbnail preloading for large libraries).
 class ThumbnailPreloader {
   ThumbnailPreloader({required this.media, ThumbnailService? service})
-      : _service = service ?? ThumbnailServiceImpl(media: media);
+    : _service = service ?? ThumbnailServiceImpl(media: media);
 
   final MediaService media;
   final ThumbnailService _service;
@@ -63,9 +63,16 @@ class ThumbnailPreloader {
     ];
     _service.prefetch(ids, thumbnailSize);
     _service.cancelOutside(<ThumbnailKey>{
-      for (final String id in ids)
-        (id: id, size: thumbnailSize, quality: 85),
+      for (final String id in ids) (id: id, size: thumbnailSize, quality: 85),
     });
+  }
+
+  /// Explicit retry for one failed card (2.5): clears the failed
+  /// mark so the next [preloadAround] re-fetches it. Callers must
+  /// re-run [preloadAround] after this — clearing alone fetches
+  /// nothing.
+  void retry(String id) {
+    _service.retry(id, thumbnailSize);
   }
 
   /// Cancels in-flight deck fetches (filter change). Cached bytes

@@ -322,6 +322,25 @@ DeckController makeController({
   );
 }
 
+/// Phase 2.5: unit-test helper. The controller refuses marks on a
+/// card whose thumbnail has not arrived yet, so tests must wait
+/// for the current card to become visible before marking —
+/// otherwise the mark is refused and the test asserts against a
+/// state it never produced.
+Future<void> _settleThumbnails(DeckController controller) async {
+  final DateTime deadline = DateTime.now().add(const Duration(seconds: 2));
+  while (true) {
+    final String? id = controller.currentAsset?.id;
+    if (id == null || controller.thumbnails.containsKey(id)) {
+      return;
+    }
+    if (DateTime.now().isAfter(deadline)) {
+      fail('Timed out waiting for the current thumbnail');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+}
+
 void main() {
   group('permission states', () {
     test('denied renders denied state with an empty queue', () async {
@@ -370,9 +389,13 @@ void main() {
     test('all four mark directions record and advance', () async {
       final DeckController controller = makeController();
       await controller.init();
+      await _settleThumbnails(controller);
       controller.markCurrent(DeckMark.keep);
+      await _settleThumbnails(controller);
       await controller.markCurrent(DeckMark.delete);
+      await _settleThumbnails(controller);
       controller.markCurrent(DeckMark.maybe);
+      await _settleThumbnails(controller);
       controller.markCurrent(DeckMark.favourite);
       expect(controller.marks, <String, DeckMark>{
         'a1': DeckMark.keep,
@@ -388,7 +411,9 @@ void main() {
     test('multi-step undo returns to each card in order', () async {
       final DeckController controller = makeController();
       await controller.init();
+      await _settleThumbnails(controller);
       controller.markCurrent(DeckMark.keep);
+      await _settleThumbnails(controller);
       await controller.markCurrent(DeckMark.delete);
       controller.undo();
       expect(controller.currentAsset?.id, 'a2');
@@ -428,7 +453,9 @@ void main() {
         local: local,
       );
       await controller.init();
+      await _settleThumbnails(controller);
       await controller.markCurrent(DeckMark.delete);
+      await _settleThumbnails(controller);
       await controller.markCurrent(DeckMark.delete);
       final meter = controller.meter;
       expect(meter.markedBytes, 3000000);
@@ -440,8 +467,11 @@ void main() {
     test('clearDeleteMarks rewinds denied ids back onto the deck', () async {
       final DeckController controller = makeController();
       await controller.init();
+      await _settleThumbnails(controller);
       controller.markCurrent(DeckMark.keep);
+      await _settleThumbnails(controller);
       await controller.markCurrent(DeckMark.delete);
+      await _settleThumbnails(controller);
       controller.markCurrent(DeckMark.keep);
       controller.clearDeleteMarks(<String>['a2']);
       expect(controller.marks.containsKey('a2'), isFalse);
@@ -454,6 +484,7 @@ void main() {
       final FakeLocal local = FakeLocal();
       final DeckController controller = makeController(local: local);
       await controller.init();
+      await _settleThumbnails(controller);
       controller.markCurrent(DeckMark.keep);
       await controller.setFilter(const DeckFilter.album('cam'));
       expect(controller.filter.value.filterKey, 'album:cam');
@@ -507,6 +538,7 @@ void main() {
       final FakeLocal local = FakeLocal();
       final DeckController controller = makeController(local: local);
       await controller.init();
+      await _settleThumbnails(controller);
       await controller.markCurrent(DeckMark.delete);
       expect(local.sessions['all']?.marks['a1'], DeckMark.delete);
       expect(local.sessions['all']?.currentIndex, 1);
@@ -544,6 +576,7 @@ void main() {
       await controller.init();
       expect(controller.queue.length, 50);
       for (int i = 0; i < 41; i++) {
+        await _settleThumbnails(controller);
         controller.markCurrent(DeckMark.keep);
       }
       for (int i = 0; i < 50 && controller.queue.length < 100; i++) {

@@ -322,6 +322,7 @@ class _ReadyBody extends StatelessWidget {
                   current.id,
                 ),
                 onSwiped: controller.markCurrent,
+                onRetry: controller.retryCurrentThumbnail,
               ),
             ),
           ),
