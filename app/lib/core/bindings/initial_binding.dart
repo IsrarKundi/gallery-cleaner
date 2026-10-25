@@ -21,11 +21,17 @@ import '../../services/trash/trash_service_impl.dart';
 
 /// The ONLY place global Get.put lives (AGENTS.md).
 ///
-/// Phase 1 services, registered permanent behind their interfaces so
-/// controllers depend on abstractions, never implementations.
-/// Order matters: [TrashServiceImpl] takes [LocalService], so the
-/// local service is registered first. Phase 3A adds the
-/// notification + app-info services and the permanent
+/// Services registered behind their interfaces so controllers depend
+/// on abstractions, never implementations. Order matters:
+/// [TrashServiceImpl] takes [LocalService], so the local service is
+/// registered first. Phase 1.7: only Local, Media, Trash and the
+/// [SettingsController] are eager permanent. Video, Storage, Share,
+/// Notification and AppInfo are lazy (fenix: re-created if ever
+/// removed) so launch does not construct plugin objects the first
+/// screen never touches; each is created on its first find (video at
+/// the compress screen, storage at the hub, share at the deck,
+/// notification on the first nudge toggle, app-info on the first
+/// settings-screen version read). Phase 3A adds the permanent
 /// [SettingsController], whose onInit applies the persisted theme,
 /// haptics and (via main.dart's builder) reduced-motion at launch.
 class InitialBinding extends Bindings {
@@ -33,14 +39,14 @@ class InitialBinding extends Bindings {
   void dependencies() {
     Get.put<LocalService>(LocalServiceImpl(), permanent: true);
     Get.put<MediaService>(MediaServiceImpl(), permanent: true);
-    Get.put<StorageService>(StorageServiceImpl(), permanent: true);
-    Get.put<ShareService>(ShareServiceImpl(), permanent: true);
-    Get.put<NotificationService>(NotificationServiceImpl(), permanent: true);
-    Get.put<AppInfoService>(AppInfoServiceImpl(), permanent: true);
-    Get.put<VideoCompressionService>(
-      VideoCompressionServiceImpl(),
-      permanent: true,
+    Get.lazyPut<VideoCompressionService>(
+      VideoCompressionServiceImpl.new,
+      fenix: true,
     );
+    Get.lazyPut<StorageService>(StorageServiceImpl.new, fenix: true);
+    Get.lazyPut<ShareService>(ShareServiceImpl.new, fenix: true);
+    Get.lazyPut<NotificationService>(NotificationServiceImpl.new, fenix: true);
+    Get.lazyPut<AppInfoService>(AppInfoServiceImpl.new, fenix: true);
     Get.put<TrashService>(
       TrashServiceImpl(
         gateway: TrashGatewayImpl(),
@@ -48,12 +54,14 @@ class InitialBinding extends Bindings {
       ),
       permanent: true,
     );
+    // Built WITHOUT the notification and app-info services on
+    // purpose: finding them here would create them at launch and
+    // defeat the lazy registrations above. The controller resolves
+    // them lazily on first use instead (see SettingsController
+    // ._notifications / ._appInfo). The /settings binding reuses
+    // this instance (it does not create a second controller).
     Get.put<SettingsController>(
-      SettingsController(
-        local: Get.find<LocalService>(),
-        notifications: Get.find<NotificationService>(),
-        appInfo: Get.find<AppInfoService>(),
-      ),
+      SettingsController(local: Get.find<LocalService>()),
       permanent: true,
     );
   }

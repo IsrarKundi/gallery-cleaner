@@ -44,13 +44,46 @@ class SettingsController extends GetxController {
 
   /// Null in tests that only check persistence: toggling the nudge
   /// then only persists, it never schedules.
+  ///
+  /// Phase 1.7: in production this is null too — InitialBinding
+  /// deliberately does NOT resolve the service at launch (that would
+  /// defeat its lazy registration). [_notifications] resolves it on
+  /// first use instead, so the plugin object is created on the first
+  /// nudge toggle, not at startup.
   final NotificationService? notifications;
 
   /// Null in tests: the version then reads as "unknown".
+  ///
+  /// Phase 1.7: in production this is null too, for the same reason
+  /// as [notifications]. [_appInfo] resolves it on the first version
+  /// read, which happens on the settings screen, not at startup.
   final AppInfoService? appInfo;
 
   /// Defaults to [Get.changeThemeMode]; tests inject a recorder.
   final void Function(ThemeMode mode)? themeApplier;
+
+  /// Phase 1.7: the settings load started in [onInit]. The splash
+  /// gate (see SplashController.beforeComplete) awaits this so the
+  /// persisted theme applies before the splash leaves — no flash of
+  /// the wrong theme. Falls back to starting the load if [onInit]
+  /// never ran (directly constructed controllers in tests).
+  Future<void> get settingsReady => _initFuture ??= init();
+
+  Future<void>? _initFuture;
+
+  /// Lazily resolved service, preferring the constructor-injected
+  /// instance (tests) and falling back to the lazy registration
+  /// (production, first use only).
+  NotificationService? get _notifications =>
+      notifications ??
+      (Get.isRegistered<NotificationService>()
+          ? Get.find<NotificationService>()
+          : null);
+
+  /// See [_notifications].
+  AppInfoService? get _appInfo =>
+      appInfo ??
+      (Get.isRegistered<AppInfoService>() ? Get.find<AppInfoService>() : null);
 
   final Rx<AppSettings> settings = const AppSettings().obs;
   final RxString errorKey = ''.obs;
@@ -67,11 +100,15 @@ class SettingsController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    init();
+    _initFuture = init();
   }
 
-  /// Loads the persisted record (defaults for a fresh install),
-  /// applies theme + haptics immediately, and reads the version.
+  /// Loads the persisted record (defaults for a fresh install) and
+  /// applies theme + haptics immediately. Phase 1.7: the version
+  /// read is NOT here any more — PackageInfo.fromPlatform is a
+  /// pointless platform call on every cold start, and the version is
+  /// only shown on the settings screen, so [loadVersion] reads it
+  /// when that screen opens.
   Future<void> init() async {
     final Result<AppSettings> result = await local.loadSettings();
     result.fold(
@@ -82,11 +119,23 @@ class SettingsController extends GetxController {
       },
       onFailure: (_) {},
     );
+  }
+
+  /// Reads the version (idempotent) for the settings screen. Called
+  /// by SettingsBinding on every settings visit; a second call is a
+  /// no-op so repeat visits do not repeat the platform call.
+  Future<void> loadVersion() async {
+    if (_versionLoaded) {
+      return;
+    }
+    _versionLoaded = true;
     version.value = await _readVersion();
   }
 
+  bool _versionLoaded = false;
+
   Future<String> _readVersion() async {
-    final String version = await appInfo?.appVersion() ?? '';
+    final String version = await _appInfo?.appVersion() ?? '';
     if (version.isEmpty) {
       return AppStrings.tr(AppStrings.settingsVersionUnknown);
     }
@@ -158,14 +207,14 @@ class SettingsController extends GetxController {
     }
     if (value) {
       final Result<void> scheduled =
-          await notifications?.scheduleWeeklyNudge() ??
+          await _notifications?.scheduleWeeklyNudge() ??
           const Success<void>(null);
       if (scheduled.isFailure) {
         errorKey.value = (scheduled as Failure<void>).failure.messageKey;
         return;
       }
     } else {
-      await notifications?.cancelWeeklyNudge();
+      await _notifications?.cancelWeeklyNudge();
     }
     if (await _persist(settings.value.copyWith(weeklyNudge: value))) {
       AppHaptics.mark();

@@ -17,11 +17,16 @@ import '../controller/settings_controller.dart';
 class SettingsBinding extends Bindings {
   @override
   void dependencies() {
+    // Phase 1.7: the early return is gone on purpose. The version
+    // read now lives on the settings screen (see
+    // SettingsController.loadVersion), so every visit must trigger
+    // it — including visits that reuse the InitialBinding instance
+    // (the normal case), not just first-time creations.
+    final SettingsController controller;
     if (Get.isRegistered<SettingsController>()) {
-      return;
-    }
-    Get.put<SettingsController>(
-      SettingsController(
+      controller = Get.find<SettingsController>();
+    } else {
+      controller = SettingsController(
         local: Get.find<LocalService>(),
         notifications: Get.isRegistered<NotificationService>()
             ? Get.find<NotificationService>()
@@ -29,7 +34,9 @@ class SettingsBinding extends Bindings {
         appInfo: Get.isRegistered<AppInfoService>()
             ? Get.find<AppInfoService>()
             : null,
-      ),
-    );
+      );
+      Get.put<SettingsController>(controller);
+    }
+    controller.loadVersion();
   }
 }

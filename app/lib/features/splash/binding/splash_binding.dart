@@ -8,15 +8,21 @@ import '../controller/splash_controller.dart';
 ///
 /// [onComplete] is wired by app_pages.dart to the deck route; it stays
 /// optional so the controller can still be used standalone in tests.
+/// [beforeComplete] (Phase 1.7) is the settings-load gate, also wired
+/// by app_pages; null in tests, where completion stays synchronous.
 class SplashBinding extends Bindings {
-  SplashBinding({this.onComplete});
+  SplashBinding({this.onComplete, this.beforeComplete});
 
   final VoidCallback? onComplete;
+  final Future<void> Function()? beforeComplete;
 
   @override
   void dependencies() {
     Get.lazyPut<SplashController>(
-      () => SplashController(onComplete: onComplete),
+      () => SplashController(
+        onComplete: onComplete,
+        beforeComplete: beforeComplete,
+      ),
     );
   }
 }

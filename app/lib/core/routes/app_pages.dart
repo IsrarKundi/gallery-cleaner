@@ -13,6 +13,7 @@ import '../../features/history/view/history_view.dart';
 import '../../features/review/binding/review_binding.dart';
 import '../../features/review/view/review_view.dart';
 import '../../features/settings/binding/settings_binding.dart';
+import '../../features/settings/controller/settings_controller.dart';
 import '../../features/settings/view/settings_view.dart';
 import '../../features/splash/binding/splash_binding.dart';
 import '../../features/splash/view/splash_view.dart';
@@ -37,6 +38,10 @@ class AppPages {
       page: SplashView.new,
       binding: SplashBinding(
         onComplete: () => Get.offAllNamed<dynamic>(AppRoutes.deck),
+        // Phase 1.7: the persisted theme applies before the splash
+        // leaves, so there is no flash of the wrong theme. The
+        // settings load is a small local read that always completes.
+        beforeComplete: () => Get.find<SettingsController>().settingsReady,
       ),
     ),
     GetPage<dynamic>(

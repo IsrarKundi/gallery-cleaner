@@ -55,8 +55,13 @@ class _AppInfo implements AppInfoService {
 
   final String version;
 
+  int calls = 0;
+
   @override
-  Future<String> appVersion() async => version;
+  Future<String> appVersion() async {
+    calls++;
+    return version;
+  }
 }
 
 Future<LocalServiceImpl> _tempLocal() async {
@@ -318,17 +323,45 @@ void main() {
       expect(notifications.scheduled, 0);
     });
 
+    test(
+      'init does not call the platform version; loadVersion does, once',
+      () async {
+        // Phase 1.7 acceptance: the PackageInfo platform call is gone
+        // from the cold-start path and happens only on the settings
+        // screen, once per controller lifetime.
+        final LocalServiceImpl local = await _tempLocal();
+        final _AppInfo appInfo = _AppInfo('9.9.9');
+        final SettingsController controller = SettingsController(
+          local: local,
+          appInfo: appInfo,
+        );
+        await controller.init();
+        expect(appInfo.calls, 0);
+        expect(controller.version.value, isEmpty);
+        await controller.loadVersion();
+        expect(appInfo.calls, 1);
+        expect(controller.version.value, contains('9.9.9'));
+        await controller.loadVersion();
+        expect(appInfo.calls, 1);
+      },
+    );
+
     test('version comes from the app-info service, never hard-coded', () async {
+      // Phase 1.7: the version is read on the settings screen, not
+      // at init — so the test loads it explicitly, as SettingsBinding
+      // does on every settings visit.
       final LocalServiceImpl local = await _tempLocal();
       final SettingsController controller = await make(
         local: local,
         appVersion: '9.9.9',
       );
+      await controller.loadVersion();
       expect(controller.version.value, contains('9.9.9'));
       final SettingsController unknown = await make(
         local: local,
         appVersion: '',
       );
+      await unknown.loadVersion();
       expect(unknown.version.value, isNot(contains('9.9.9')));
     });
   });

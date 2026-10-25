@@ -19,11 +19,20 @@ import '../../../core/constants/app_sizes.dart';
 /// app_pages.dart wires it to the deck route. Splash IS the initial
 /// route (main.dart) and all five Phase 1 routes are wired.
 class SplashController extends GetxController {
-  SplashController({this.onComplete, Duration? holdDuration})
-    : holdDuration = holdDuration ?? const AppSizes().splashHold;
+  SplashController({
+    this.onComplete,
+    this.beforeComplete,
+    Duration? holdDuration,
+  }) : holdDuration = holdDuration ?? const AppSizes().splashHold;
 
   /// Called exactly once when the splash completes, however it ends.
   final VoidCallback? onComplete;
+
+  /// Phase 1.7: awaited before [onComplete] fires, if provided.
+  /// app_pages wires this to the settings load so the persisted
+  /// theme applies before the splash leaves (no flash of the wrong
+  /// theme). Null in tests, where completion stays synchronous.
+  final Future<void> Function()? beforeComplete;
 
   /// Fallback duration; see the class doc.
   final Duration holdDuration;
@@ -68,11 +77,19 @@ class SplashController extends GetxController {
     _holdTimer = null;
   }
 
-  void _complete() {
+  Future<void> _complete() async {
     if (_completed) {
       return;
     }
     _completed = true;
+    // Set before awaiting so a second trigger during the wait is
+    // still exactly-once. With no gate the body runs synchronously
+    // (no await is reached), so un-gated completion timing is
+    // unchanged; with a gate, navigation waits for it.
+    final Future<void> Function()? gate = beforeComplete;
+    if (gate != null) {
+      await gate();
+    }
     cancelHoldTimer();
     onComplete?.call();
   }
