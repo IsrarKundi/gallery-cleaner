@@ -161,7 +161,7 @@ void main() {
   });
 
   group('On This Day', () {
-    test('same month/day from a previous year matches', () {
+    test('same month from a previous year matches regardless of day', () {
       expect(
         isOnThisDay(
           _asset('a', date: DateTime(2023, 10, 25)),
@@ -169,40 +169,37 @@ void main() {
         ),
         isTrue,
       );
+      expect(
+        isOnThisDay(
+          _asset('b', date: DateTime(2024, 10, 10)),
+          DateTime(2026, 10, 25),
+        ),
+        isTrue,
+      );
     });
 
-    test('current-year photos are excluded even on the same day', () {
+    test('today photos match, but other days in the current year do not', () {
       expect(
         isOnThisDay(
           _asset('a', date: DateTime(2026, 10, 25)),
           DateTime(2026, 10, 25),
         ),
-        isFalse,
+        isTrue,
       );
-    });
-
-    test('a different day never matches', () {
       expect(
         isOnThisDay(
-          _asset('a', date: DateTime(2024, 10, 24)),
+          _asset('b', date: DateTime(2026, 10, 1)),
           DateTime(2026, 10, 25),
         ),
         isFalse,
       );
     });
 
-    test('leap day matches only in leap years', () {
+    test('a different month never matches', () {
       expect(
         isOnThisDay(
-          _asset('a', date: DateTime(2024, 2, 29)),
-          DateTime(2028, 2, 29),
-        ),
-        isTrue,
-      );
-      expect(
-        isOnThisDay(
-          _asset('a', date: DateTime(2024, 2, 29)),
-          DateTime(2026, 2, 28),
+          _asset('a', date: DateTime(2024, 9, 24)),
+          DateTime(2026, 10, 25),
         ),
         isFalse,
       );

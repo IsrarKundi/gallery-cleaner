@@ -12,7 +12,7 @@ import 'storage_service.dart';
 
 class StorageServiceImpl implements StorageService {
   StorageServiceImpl([DiskSpacePlus? plugin])
-      : _plugin = plugin ?? DiskSpacePlus();
+    : _plugin = plugin ?? DiskSpacePlus();
 
   final DiskSpacePlus _plugin;
 

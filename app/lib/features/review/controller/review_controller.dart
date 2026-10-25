@@ -29,30 +29,10 @@ enum ReviewDeleteOutcome {
   documentGuard,
 }
 
-/// Review screen state (requirements §4): the editable grid of
-/// delete-marked photos the deck passed via route arguments.
-///
-/// Navigation contract: after any action that changes session marks,
-/// the view resets the stack with [Get.offAllNamed] to the destination
-/// screen, never [Get.back] into the deck's stale controller, whose
-/// in-memory marks only reload from the session on creation. The same
-/// rule covers [goToDeck] and the view's trash navigation.
-///
-/// Session contract: the deck passes only the asset list as arguments,
-/// so the filter key travels as a route parameter (`filterKey`).
-/// It defaults to `all` when absent. Session writes (see
-/// review_session.dart) preserve the stored index and favourites.
-///
-/// Outcome priority when the native sheet splits a run: denied wins
-/// over failed (the denied dialog returns the user to the deck, and
-/// failed ids keep their delete marks so they reappear there for
-/// another review). A pure trashed run navigates to Trash; a run with
-/// trashed + failed ids stays on screen with the failed items and an
-/// error state. Phase 3B: the winning outcome no longer hides the
-/// rest — [lastTrashedCount]/[lastFailedCount]/[deniedIds] let the
-/// view explain every part of a mixed run. Trashed MB is never
-/// reported as freed: the history record carries it as trashed with
-/// freed 0 (requirements §4).
+/// Review screen state (requirements §4): editable grid of delete-marked photos.
+/// Navigation: stack reset with Get.offAllNamed (never Get.back into stale controller).
+/// Session: filterKey travels as route param, preserving stored index and favourites.
+/// Priority: denied wins over failed; pure trashed goes to Trash; mixed stays with errors.
 class ReviewController extends GetxController {
   ReviewController({
     required this.media,
@@ -72,11 +52,11 @@ class ReviewController extends GetxController {
   final List<MediaAsset>? initialAssets;
   final String? filterKeyOverride;
 
-  /// The review set. Shrinks as items are unmarked or trashed; an
-  /// empty set renders the empty state (never a disabled Delete).
+  /// The review set. Shrinks as items are unmarked or trashed.
   final RxList<MediaAsset> items = <MediaAsset>[].obs;
   final RxMap<String, Uint8List> thumbnails = <String, Uint8List>{}.obs;
   final RxSet<String> failedThumbnails = <String>{}.obs;
+  final RxBool isLoading = false.obs;
   final RxBool isDeleting = false.obs;
   final RxString errorKey = ''.obs;
   final Rx<ReviewDeleteOutcome?> lastOutcome = Rx<ReviewDeleteOutcome?>(null);
@@ -123,11 +103,8 @@ class ReviewController extends GetxController {
   String _filterKey = 'all';
 
   /// Total size of the current review set, live as items leave it.
-  int get totalBytes {
-    return items.fold<int>(0, (int sum, MediaAsset asset) {
-      return sum + asset.sizeBytes;
-    });
-  }
+  int get totalBytes =>
+      items.fold<int>(0, (int sum, MediaAsset a) => sum + a.sizeBytes);
 
   @override
   void onInit() {
@@ -137,8 +114,28 @@ class ReviewController extends GetxController {
       items.assignAll(fromArgs);
     }
     _filterKey = filterKeyOverride ?? _routeFilterKey();
+    if (items.isEmpty) {
+      isLoading.value = true;
+      _loadFromSession();
+    }
     _loadThumbnails();
     _loadBlurSetting();
+  }
+
+  Future<void> _loadFromSession() async {
+    try {
+      final List<MediaAsset> loaded = await loadDeleteMarkedAssets(
+        local: local,
+        media: media,
+        filterKey: _filterKey,
+      );
+      if (loaded.isNotEmpty && items.isEmpty) {
+        items.assignAll(loaded);
+        _loadThumbnails();
+      }
+    } finally {
+      isLoading.value = false;
+    }
   }
 
   /// Reads the persisted blur setting (defaults OFF).

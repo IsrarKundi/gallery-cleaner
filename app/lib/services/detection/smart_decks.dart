@@ -41,6 +41,7 @@ enum SmartDeckId {
   dark,
   duplicates,
   onThisDay,
+  camera,
 }
 
 /// Size at or over which a photo counts as "large".
@@ -64,19 +65,30 @@ Set<SmartDeckId> decksForAsset(
 ) {
   final Set<SmartDeckId> decks = <SmartDeckId>{};
   final String album = asset.albumName.toLowerCase();
-  if (album.contains('screenshot')) {
+  final String title = asset.title.toLowerCase();
+
+  if (album.contains('screenshot') || title.contains('screenshot')) {
     decks.add(SmartDeckId.screenshots);
   }
-  if (album.contains('whatsapp')) {
+  if (album.contains('whatsapp') ||
+      title.contains('-wa') ||
+      title.contains('whatsapp')) {
     decks.add(SmartDeckId.whatsapp);
   }
-  if (album.contains('download')) {
+  if (album.contains('camera') ||
+      album == 'dcim' ||
+      title.startsWith('img_') ||
+      title.startsWith('pxl_')) {
+    decks.add(SmartDeckId.camera);
+  }
+  if (album.contains('download') || title.contains('download')) {
     decks.add(SmartDeckId.downloads);
   }
   if (asset.type == MediaAssetType.video) {
     decks.add(SmartDeckId.videos);
   }
-  if (asset.sizeBytes >= largePhotoThresholdBytes) {
+  if (asset.type == MediaAssetType.image &&
+      asset.sizeBytes >= largePhotoThresholdBytes) {
     decks.add(SmartDeckId.large);
   }
   if (now.difference(asset.createDate) > oldPhotoAge) {
@@ -93,12 +105,15 @@ Set<SmartDeckId> decksForAsset(
       }
     }
   }
-  // On This Day (Phase 2B): same month + day as today, previous
-  // years only, so today's just-taken photos never dominate.
-  // Feb 29 assets match only in leap years (see retention.dart).
-  if (asset.createDate.month == now.month &&
-      asset.createDate.day == now.day &&
-      asset.createDate.year != now.year) {
+  // On This Day / Memories (Phase 2B): same month as today from past
+  // years, or photos taken today.
+  final bool isSameMonthPreviousYear =
+      asset.createDate.month == now.month && asset.createDate.year != now.year;
+  final bool isToday =
+      asset.createDate.year == now.year &&
+      asset.createDate.month == now.month &&
+      asset.createDate.day == now.day;
+  if (isSameMonthPreviousYear || isToday) {
     decks.add(SmartDeckId.onThisDay);
   }
   return decks;

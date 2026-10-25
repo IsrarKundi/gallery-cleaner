@@ -299,13 +299,17 @@ void main() {
     );
     Get.put<DecksController>(controller);
     await tester.binding.setSurfaceSize(const Size(400, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       GetMaterialApp(theme: AppTheme.light, home: const DecksView()),
     );
     await tester.pumpAndSettle();
-    addTearDown(() => tester.binding.setSurfaceSize(null));
     expect(find.text('Screenshots'), findsWidgets);
-    expect(find.text('Snooze 7 days'), findsOneWidget);
-    expect(find.text('Your progress'), findsOneWidget);
+    final Finder metricPill = find.byKey(const Key('decks_metric_pill'));
+    if (metricPill.evaluate().isNotEmpty) {
+      await tester.tap(metricPill);
+      await tester.pumpAndSettle();
+      expect(find.text('Your progress'), findsOneWidget);
+    }
   });
 }

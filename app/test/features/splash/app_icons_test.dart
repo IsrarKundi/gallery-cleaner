@@ -5,8 +5,8 @@ import 'package:klara/core/constants/app_icons.dart';
 void main() {
   group('AppIcons', () {
     test('every constant is a valid IconData', () {
-      // Phase 3A adds settings + eye + eyeSlash (30 -> 33).
-      expect(AppIcons.all.length, 34);
+      // Phase 3A adds settings + eye + eyeSlash (30 -> 33) + compress (34) + clean (35) + addToAlbum (36) + forward (37) + camera (38).
+      expect(AppIcons.all.length, 38);
       for (final IconData icon in AppIcons.all) {
         expect(icon.codePoint, greaterThan(0));
         expect(icon.fontFamily, isNotNull);

@@ -20,12 +20,22 @@ class DeckActionBar extends StatelessWidget {
     required this.onUndo,
     required this.canUndo,
     required this.onReview,
+    this.isCleanScreen = true,
+    this.onFavorite,
+    this.onAddToAlbum,
+    this.onShare,
+    this.isFavourite = false,
   });
 
   final ValueChanged<DeckMark> onMark;
   final VoidCallback onUndo;
   final bool canUndo;
   final VoidCallback onReview;
+  final bool isCleanScreen;
+  final VoidCallback? onFavorite;
+  final VoidCallback? onAddToAlbum;
+  final VoidCallback? onShare;
+  final bool isFavourite;
 
   @override
   Widget build(BuildContext context) {
@@ -39,84 +49,152 @@ class DeckActionBar extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: _ActionButton(
-                    icon: AppIcons.keep,
-                    label: AppStrings.tr(AppStrings.actionKeep),
-                    background: context.palette.successBg,
-                    onPressed: () => onMark(DeckMark.keep),
+        child: isCleanScreen
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: <Widget>[
+                      _CircleActionButton(
+                        icon: AppIcons.undo,
+                        tooltip: AppStrings.tr(AppStrings.actionUndo),
+                        onPressed: canUndo ? onUndo : null,
+                        iconColor: Colors.black,
+                      ),
+                      _CircleActionButton(
+                        icon: isFavourite
+                            ? AppIcons.favouriteActive
+                            : AppIcons.favourite,
+                        tooltip: AppStrings.tr(AppStrings.actionFavourite),
+                        iconColor: isFavourite ? context.palette.error : null,
+                        onPressed:
+                            onFavorite ?? () => onMark(DeckMark.favourite),
+                      ),
+                      _CircleActionButton(
+                        icon: AppIcons.addToAlbum,
+                        tooltip: AppStrings.tr(AppStrings.actionAddToAlbum),
+                        onPressed: onAddToAlbum,
+                      ),
+                      _CircleActionButton(
+                        icon: AppIcons.share,
+                        tooltip: AppStrings.tr(AppStrings.actionShare),
+                        onPressed: onShare,
+                      ),
+                    ],
                   ),
-                ),
-                SizedBox(width: context.sizes.sm),
-                Expanded(
-                  child: _ActionButton(
-                    icon: AppIcons.delete,
-                    label: AppStrings.tr(AppStrings.actionDelete),
-                    background: context.palette.errorBg,
-                    onPressed: () => onMark(DeckMark.delete),
+                  // Review and undo row commented out per request on clean screen:
+                  // SizedBox(height: context.sizes.sm),
+                  // Row(
+                  //   children: <Widget>[
+                  //     Expanded(
+                  //       child: SizedBox(
+                  //         height: context.sizes.hitArea,
+                  //         child: OutlinedButton.icon(
+                  //           onPressed: canUndo ? onUndo : null,
+                  //           icon: Icon(AppIcons.undo, size: context.sizes.iconSm),
+                  //           label: Text(AppStrings.tr(AppStrings.actionUndo)),
+                  //         ),
+                  //       ),
+                  //     ),
+                  //     SizedBox(width: context.sizes.sm),
+                  //     Expanded(
+                  //       child: SizedBox(
+                  //         height: context.sizes.hitArea,
+                  //         child: FilledButton.icon(
+                  //           onPressed: onReview,
+                  //           icon: Icon(AppIcons.review, size: context.sizes.iconSm),
+                  //           label: Text(AppStrings.tr(AppStrings.actionReview)),
+                  //         ),
+                  //       ),
+                  //     ),
+                  //   ],
+                  // ),
+                ],
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: _ActionButton(
+                          icon: AppIcons.keep,
+                          label: AppStrings.tr(AppStrings.actionKeep),
+                          background: context.palette.successBg,
+                          onPressed: () => onMark(DeckMark.keep),
+                        ),
+                      ),
+                      SizedBox(width: context.sizes.sm),
+                      Expanded(
+                        child: _ActionButton(
+                          icon: AppIcons.delete,
+                          label: AppStrings.tr(AppStrings.actionDelete),
+                          background: context.palette.errorBg,
+                          onPressed: () => onMark(DeckMark.delete),
+                        ),
+                      ),
+                      SizedBox(width: context.sizes.sm),
+                      Expanded(
+                        child: _ActionButton(
+                          icon: AppIcons.maybe,
+                          label: AppStrings.tr(AppStrings.actionMaybe),
+                          background: context.palette.warningBg,
+                          onPressed: () => onMark(DeckMark.maybe),
+                        ),
+                      ),
+                      SizedBox(width: context.sizes.sm),
+                      Expanded(
+                        child: _ActionButton(
+                          icon: AppIcons.favourite,
+                          label: AppStrings.tr(AppStrings.actionFavourite),
+                          background: context.palette.primaryContainer,
+                          onPressed: () => onMark(DeckMark.favourite),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                SizedBox(width: context.sizes.sm),
-                Expanded(
-                  child: _ActionButton(
-                    icon: AppIcons.maybe,
-                    label: AppStrings.tr(AppStrings.actionMaybe),
-                    background: context.palette.warningBg,
-                    onPressed: () => onMark(DeckMark.maybe),
+                  SizedBox(height: context.sizes.sm),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: SizedBox(
+                          height: context.sizes.hitArea,
+                          child: OutlinedButton.icon(
+                            onPressed: canUndo ? onUndo : null,
+                            icon: Icon(
+                              AppIcons.undo,
+                              size: context.sizes.iconSm,
+                            ),
+                            label: Text(AppStrings.tr(AppStrings.actionUndo)),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: context.sizes.sm),
+                      Expanded(
+                        child: SizedBox(
+                          height: context.sizes.hitArea,
+                          child: FilledButton.icon(
+                            onPressed: onReview,
+                            icon: Icon(
+                              AppIcons.review,
+                              size: context.sizes.iconSm,
+                            ),
+                            label: Text(AppStrings.tr(AppStrings.actionReview)),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                SizedBox(width: context.sizes.sm),
-                Expanded(
-                  child: _ActionButton(
-                    icon: AppIcons.favourite,
-                    label: AppStrings.tr(AppStrings.actionFavourite),
-                    background: context.palette.primaryContainer,
-                    onPressed: () => onMark(DeckMark.favourite),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: context.sizes.sm),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: SizedBox(
-                    height: context.sizes.hitArea,
-                    child: OutlinedButton.icon(
-                      onPressed: canUndo ? onUndo : null,
-                      icon: Icon(AppIcons.undo, size: context.sizes.iconSm),
-                      label: Text(AppStrings.tr(AppStrings.actionUndo)),
-                    ),
-                  ),
-                ),
-                SizedBox(width: context.sizes.sm),
-                Expanded(
-                  child: SizedBox(
-                    height: context.sizes.hitArea,
-                    child: FilledButton.icon(
-                      onPressed: onReview,
-                      icon: Icon(AppIcons.review, size: context.sizes.iconSm),
-                      label: Text(AppStrings.tr(AppStrings.actionReview)),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+                ],
+              ),
       ),
     );
   }
 }
 
-/// One semantic action button: tint background with dark text plus
-/// icon + label, so meaning is never carried by colour alone
-/// (design.md §9). 48dp+ hit area via the 52dp button height.
+/// One semantic action button (Keep, Delete, Maybe, Favourite):
+/// tint background with dark text plus icon + label.
 class _ActionButton extends StatelessWidget {
   const _ActionButton({
     required this.icon,
@@ -147,6 +225,53 @@ class _ActionButton extends StatelessWidget {
               SizedBox(height: context.sizes.xs),
               Text(label, style: context.textStyles.labelMedium),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Circular action button (Undo, Favorite, Add to Album, Share).
+/// Uses 52dp hit area matching [AppSizes.buttonPrimary] and
+/// dark circle styling.
+class _CircleActionButton extends StatelessWidget {
+  const _CircleActionButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    this.iconColor,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+  final Color? iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isEnabled = onPressed != null;
+    return Tooltip(
+      message: tooltip,
+      child: SizedBox(
+        width: context.sizes.buttonPrimary,
+        height: context.sizes.buttonPrimary,
+        child: Material(
+          color: context.palette.surfaceVariant,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onPressed,
+            child: Center(
+              child: Opacity(
+                opacity: isEnabled ? 1.0 : context.sizes.disabledOpacity,
+                child: Icon(
+                  icon,
+                  size: context.sizes.iconMd,
+                  color: iconColor ?? context.palette.textPrimary,
+                ),
+              ),
+            ),
           ),
         ),
       ),

@@ -33,6 +33,8 @@ String smartDeckTitleKey(SmartDeckId id) {
       return AppStrings.deckDuplicates;
     case SmartDeckId.onThisDay:
       return AppStrings.deckOnThisDay;
+    case SmartDeckId.camera:
+      return AppStrings.deckCamera;
   }
 }
 
@@ -61,8 +63,23 @@ IconData smartDeckIcon(SmartDeckId id) {
       return AppIcons.duplicates;
     case SmartDeckId.onThisDay:
       return AppIcons.onThisDay;
+    case SmartDeckId.camera:
+      return AppIcons.camera;
   }
 }
 
-/// Hub display order (same as the SmartDeckId declaration order).
-const List<SmartDeckId> smartDeckOrder = SmartDeckId.values;
+/// Hub display order (user priority: videos, large photos, screenshots, whatsapp, camera first).
+const List<SmartDeckId> smartDeckOrder = <SmartDeckId>[
+  SmartDeckId.videos,
+  SmartDeckId.large,
+  SmartDeckId.screenshots,
+  SmartDeckId.whatsapp,
+  SmartDeckId.camera,
+  SmartDeckId.downloads,
+  SmartDeckId.duplicates,
+  SmartDeckId.old,
+  SmartDeckId.bursts,
+  SmartDeckId.blurry,
+  SmartDeckId.dark,
+  SmartDeckId.onThisDay,
+];

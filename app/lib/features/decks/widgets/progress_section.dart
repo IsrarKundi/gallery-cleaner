@@ -207,3 +207,187 @@ class ProjectionBar extends StatelessWidget {
     );
   }
 }
+
+/// Clean, breathable progress card for the redesigned Smart Decks hub (matching reference design).
+class CompactProgressCard extends StatelessWidget {
+  const CompactProgressCard({
+    super.key,
+    required this.goalTargetMb,
+    required this.weekFreedMb,
+    required this.goalProgress,
+    required this.streakCurrent,
+    required this.streakBest,
+    this.readyDecksCount = 0,
+    this.readyBytes = 0,
+    this.freeMb,
+    this.inTrashMb = 0,
+    this.isScanning = false,
+  });
+
+  final double goalTargetMb;
+  final double weekFreedMb;
+  final double goalProgress;
+  final int streakCurrent;
+  final int streakBest;
+  final int readyDecksCount;
+  final int readyBytes;
+  final double? freeMb;
+  final double inTrashMb;
+  final bool isScanning;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool reached = goalProgress >= 1;
+    final String targetStr = AppStrings.tr(
+      AppStrings.retentionGoalPreset,
+      <String, String>{
+        'target': Formatters.formatBytes((goalTargetMb * 1048576).round()),
+      },
+    );
+    final double clampedProgress = goalProgress.clamp(0.0, 1.0);
+
+    return Container(
+      padding: EdgeInsets.all(context.sizes.lg),
+      decoration: BoxDecoration(
+        color: context.palette.surface,
+        borderRadius: BorderRadius.circular(context.sizes.radiusLg),
+        border: Border.all(color: context.palette.border, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          // Header: Icon + Title on left, streak on right.
+          Row(
+            children: <Widget>[
+              Icon(
+                AppIcons.goal,
+                size: context.sizes.iconMd,
+                color: context.palette.primary,
+              ),
+              SizedBox(width: context.sizes.sm),
+              Text(
+                AppStrings.tr(AppStrings.retentionProgressTitle),
+                style: context.textStyles.titleMedium,
+              ),
+              const Spacer(),
+              if (streakCurrent > 0)
+                Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: context.sizes.sm,
+                    vertical: context.sizes.xxs,
+                  ),
+                  decoration: BoxDecoration(
+                    color: context.palette.surfaceVariant,
+                    borderRadius: BorderRadius.circular(context.sizes.pill),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Icon(
+                        AppIcons.streak,
+                        size: context.sizes.iconSm,
+                        color: context.palette.primary,
+                      ),
+                      SizedBox(width: context.sizes.xxs),
+                      Text(
+                        '$streakCurrent d',
+                        style: context.textStyles.labelSmall.copyWith(
+                          color: context.palette.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          SizedBox(height: context.sizes.md),
+          if (readyBytes > 0)
+            // Hero metric: e.g. "3.2 GB ready to review across 2 decks"
+            RichText(
+              text: TextSpan(
+                children: <TextSpan>[
+                  TextSpan(
+                    text: Formatters.formatBytes(readyBytes),
+                    style: context.textStyles.titleLarge.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: context.palette.textPrimary,
+                    ),
+                  ),
+                  TextSpan(
+                    text:
+                        ' ready to review across $readyDecksCount ${readyDecksCount == 1 ? 'deck' : 'decks'}',
+                    style: context.textStyles.bodyMedium.copyWith(
+                      color: context.palette.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (isScanning)
+            Text(
+              'Calculating space to review…',
+              style: context.textStyles.titleMedium.copyWith(
+                color: context.palette.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          else
+            Text(
+              'All decks clean · No clutter found',
+              style: context.textStyles.titleMedium.copyWith(
+                color: context.palette.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          SizedBox(height: context.sizes.md),
+          // Goal line + %
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              Text(
+                reached
+                    ? AppStrings.tr(AppStrings.retentionGoalReached)
+                    : '${Formatters.formatMb(weekFreedMb)} · $targetStr',
+                style: context.textStyles.bodySmall.copyWith(
+                  color: context.palette.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              Text(
+                '${(clampedProgress * 100).toInt()}%',
+                style: context.textStyles.labelSmall.copyWith(
+                  color: context.palette.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: context.sizes.xs),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(context.sizes.pill),
+            child: LinearProgressIndicator(
+              value: clampedProgress,
+              minHeight: 4,
+              backgroundColor: context.palette.border,
+            ),
+          ),
+          // Storage footer info
+          if (freeMb != null || inTrashMb > 0) ...<Widget>[
+            SizedBox(height: context.sizes.sm),
+            Text(
+              [
+                if (freeMb != null)
+                  '${Formatters.formatBytes((freeMb! * 1048576).round())} free on device',
+                if (inTrashMb > 0)
+                  '${Formatters.formatBytes((inTrashMb * 1048576).round())} in 30-day trash',
+              ].join(' · '),
+              style: context.textStyles.bodySmall.copyWith(
+                color: context.palette.textTertiary,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}

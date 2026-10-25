@@ -61,7 +61,8 @@ bool isDocumentLike(MediaAsset asset) {
   if (asset.type != MediaAssetType.image) {
     return false;
   }
-  if (asset.albumName.toLowerCase().contains('screenshot')) {
+  if (asset.albumName.toLowerCase().contains('screenshot') ||
+      asset.title.toLowerCase().contains('screenshot')) {
     return true;
   }
   final Iterable<String> tokens = asset.title

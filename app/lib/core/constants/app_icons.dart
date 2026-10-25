@@ -58,6 +58,7 @@ class AppIcons {
   static const IconData check = PhosphorIconsRegular.check;
   static const IconData filter = PhosphorIconsRegular.funnelSimple;
   static const IconData photos = PhosphorIconsRegular.image;
+  static const IconData clean = PhosphorIconsRegular.broom;
   static const IconData back = PhosphorIconsRegular.arrowLeft;
   static const IconData decks = PhosphorIconsRegular.squaresFour;
   static const IconData duplicates = PhosphorIconsRegular.copySimple;
@@ -73,7 +74,8 @@ class AppIcons {
   static const IconData onThisDay = PhosphorIconsRegular.calendarHeart;
   static const IconData goal = PhosphorIconsRegular.target;
   static const IconData streak = PhosphorIconsRegular.trophy;
-  static const IconData share = PhosphorIconsRegular.shareNetwork;
+  static const IconData share = PhosphorIconsRegular.paperPlaneTilt;
+  static const IconData addToAlbum = PhosphorIconsRegular.archiveBox;
   static const IconData settings = PhosphorIconsRegular.gear;
   static const IconData eye = PhosphorIconsRegular.eye;
   static const IconData eyeSlash = PhosphorIconsRegular.eyeSlash;
@@ -81,6 +83,8 @@ class AppIcons {
   // Videos deck (a different semantic constant, like keep/check
   // and delete/trash) — no new glyph family is introduced.
   static const IconData compress = PhosphorIconsRegular.filmStrip;
+  static const IconData forward = PhosphorIconsRegular.caretRight;
+  static const IconData camera = PhosphorIconsRegular.camera;
 
   /// Every constant, for tests that assert each one is a valid glyph.
   static const List<IconData> all = <IconData>[
@@ -98,6 +102,7 @@ class AppIcons {
     check,
     filter,
     photos,
+    clean,
     back,
     decks,
     duplicates,
@@ -114,9 +119,12 @@ class AppIcons {
     goal,
     streak,
     share,
+    addToAlbum,
     settings,
     eye,
     eyeSlash,
     compress,
+    forward,
+    camera,
   ];
 }

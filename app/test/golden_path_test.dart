@@ -19,9 +19,11 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:klara/core/constants/app_icons.dart';
 import 'package:klara/core/routes/app_routes.dart';
 import 'package:klara/core/strings/app_strings.dart';
 import 'package:klara/core/utils/result.dart';
+import 'package:klara/features/deck/widgets/swipe_card.dart';
 import 'package:klara/features/splash/view/splash_view.dart';
 import 'package:klara/main.dart';
 import 'package:klara/services/detection/photo_analysis.dart';
@@ -332,16 +334,16 @@ void main() {
     await tester.tap(find.byType(SplashView));
     await tester.pumpAndSettle();
 
-    // Deck loads the fake assets; edge labels are persistent.
-    expect(find.text('DELETE'), findsOneWidget);
-    expect(find.text('Keep'), findsOneWidget);
+    // Deck loads the fake assets; SwipeCard and actions are present.
+    expect(find.byType(SwipeCard), findsOneWidget);
+    expect(find.byIcon(AppIcons.undo), findsOneWidget);
 
-    // Mark one asset delete via the button path (not a gesture).
-    await tester.tap(find.text('Delete'));
+    // Mark one asset delete via swipe right (gesture path).
+    await tester.drag(find.byType(SwipeCard), const Offset(200, 0));
     await tester.pumpAndSettle();
 
-    // Review shows the one marked photo with its delete action.
-    await tester.tap(find.text('Review'));
+    // Review tab (Trash) in bottom nav opens the review screen.
+    await tester.tap(find.text('Trash'));
     await tester.pumpAndSettle();
     expect(find.text('Delete 1 photos'), findsOneWidget);
 

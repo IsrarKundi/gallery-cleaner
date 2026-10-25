@@ -22,22 +22,58 @@ class InfoBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final VoidCallback? onDismiss = this.onDismiss;
-    return Container(
-      color: context.palette.warningBg,
+    return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: context.sizes.screenPadding,
-        vertical: context.sizes.sm,
+        vertical: context.sizes.xs,
       ),
-      child: Row(
-        children: <Widget>[
-          Expanded(child: Text(message, style: context.textStyles.bodyMedium)),
-          if (onDismiss != null)
-            IconButton(
-              icon: Icon(AppIcons.close, size: context.sizes.iconSm),
-              tooltip: AppStrings.tr(AppStrings.actionClose),
-              onPressed: onDismiss,
+      child: Container(
+        padding: EdgeInsets.all(context.sizes.md),
+        decoration: BoxDecoration(
+          color: context.palette.warningBg,
+          borderRadius: BorderRadius.circular(context.sizes.radiusMd),
+          border: Border.all(
+            color: context.palette.warning.withValues(alpha: 0.35),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Container(
+              padding: EdgeInsets.all(context.sizes.xs),
+              decoration: BoxDecoration(
+                color: context.palette.warning.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                AppIcons.error,
+                size: context.sizes.iconSm,
+                color: context.palette.warning,
+              ),
             ),
-        ],
+            SizedBox(width: context.sizes.sm),
+            Expanded(
+              child: Text(
+                message,
+                style: context.textStyles.bodySmall.copyWith(
+                  color: context.palette.textPrimary,
+                  height: 1.4,
+                ),
+              ),
+            ),
+            if (onDismiss != null) ...<Widget>[
+              SizedBox(width: context.sizes.xs),
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: Icon(AppIcons.close, size: context.sizes.iconSm),
+                tooltip: AppStrings.tr(AppStrings.actionClose),
+                onPressed: onDismiss,
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

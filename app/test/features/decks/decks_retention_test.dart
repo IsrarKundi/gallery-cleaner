@@ -63,6 +63,10 @@ class _Media implements MediaService {
     return <MediaAsset>[
       _asset('maybe1', date: now.subtract(const Duration(days: 10))),
       _asset('onthisday', date: DateTime(now.year - 1, now.month, now.day)),
+      _asset(
+        'pastMonthDiffDay',
+        date: DateTime(now.year - 2, now.month, now.day == 1 ? 2 : 1),
+      ),
       _asset('today', date: now),
       _asset(
         'shot',
@@ -374,14 +378,19 @@ void main() {
       expect(controller.inTrashMb, greaterThan(0));
     });
 
-    test('On This Day holds previous-year matches, not today photos', () async {
-      final DecksController controller = await _readyController(_Local());
-      final List<String> ids = controller
-          .assetsFor(SmartDeckId.onThisDay)
-          .map((MediaAsset a) => a.id)
-          .toList();
-      expect(ids, contains('onthisday'));
-      expect(ids, isNot(contains('today')));
-    });
+    test(
+      'On This Day holds previous-year same-month matches and today photos',
+      () async {
+        final DecksController controller = await _readyController(_Local());
+        final List<String> ids = controller
+            .assetsFor(SmartDeckId.onThisDay)
+            .map((MediaAsset a) => a.id)
+            .toList();
+        expect(ids, contains('onthisday'));
+        expect(ids, contains('pastMonthDiffDay'));
+        expect(ids, contains('today'));
+        expect(ids, isNot(contains('maybe1')));
+      },
+    );
   });
 }

@@ -163,12 +163,16 @@ List<String> expiredSnoozeIds(Map<String, DateTime> snoozes, DateTime now) {
   return (marks: updated, clearedIds: cleared);
 }
 
-/// On This Day predicate: same month + day as [now], previous
-/// years only. Feb 29 matches only when [now] is Feb 29.
+/// On This Day / Memories predicate: same month from any previous year,
+/// or photos taken today.
 bool isOnThisDay(MediaAsset asset, DateTime now) {
-  return asset.createDate.month == now.month &&
-      asset.createDate.day == now.day &&
-      asset.createDate.year != now.year;
+  final bool isSameMonthPreviousYear =
+      asset.createDate.month == now.month && asset.createDate.year != now.year;
+  final bool isToday =
+      asset.createDate.year == now.year &&
+      asset.createDate.month == now.month &&
+      asset.createDate.day == now.day;
+  return isSameMonthPreviousYear || isToday;
 }
 
 /// Goal presets in MB (Phase 2B): 500 MB, 1 GB, 2 GB.

@@ -125,6 +125,7 @@ class MediaServiceImpl implements MediaService {
           // the review meter treats it as unknown (0) for that asset.
           sizeBytes = 0;
         }
+        final String album = _resolveAlbumName(entity.relativePath, path.name);
         assets.add(
           MediaAsset(
             id: entity.id,
@@ -134,7 +135,7 @@ class MediaServiceImpl implements MediaService {
             sizeBytes: sizeBytes,
             createDate: entity.createDateTime,
             title: entity.title ?? '',
-            albumName: path.name,
+            albumName: album,
             isSystemFavourite: entity.isFavorite,
           ),
         );
@@ -190,6 +191,20 @@ class MediaServiceImpl implements MediaService {
         AppFailure(messageKey: AppStrings.errorMediaLoad),
       );
     }
+  }
+
+  static String _resolveAlbumName(String? relativePath, String fallback) {
+    if (relativePath != null && relativePath.trim().isNotEmpty) {
+      final String trimmed = relativePath.trim();
+      final List<String> segments = trimmed
+          .split(RegExp(r'[/\\]'))
+          .where((String s) => s.isNotEmpty)
+          .toList();
+      if (segments.isNotEmpty) {
+        return segments.last;
+      }
+    }
+    return fallback;
   }
 }
 

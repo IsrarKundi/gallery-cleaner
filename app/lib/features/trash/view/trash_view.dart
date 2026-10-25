@@ -5,6 +5,7 @@ import '../../../core/constants/app_icons.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/app_bottom_nav.dart';
 import '../../../core/widgets/app_dialog.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
@@ -13,6 +14,7 @@ import '../../../core/widgets/error_banner.dart';
 import '../../../core/widgets/error_view.dart';
 import '../controller/trash_controller.dart';
 import '../widgets/trash_bottom_bar.dart';
+import '../widgets/trash_loading_skeleton.dart';
 import '../widgets/trash_row.dart';
 
 /// Trash screen (requirements §4): the recorded Trash list, restore
@@ -126,11 +128,19 @@ class TrashView extends GetView<TrashController> {
 
   @override
   Widget build(BuildContext context) {
+    void onBack() {
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      } else {
+        controller.goToDeck();
+      }
+    }
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (bool didPop, Object? result) {
         if (!didPop) {
-          controller.goToDeck();
+          onBack();
         }
       },
       child: Obx(() {
@@ -141,7 +151,7 @@ class TrashView extends GetView<TrashController> {
           leading: IconButton(
             icon: Icon(AppIcons.back, size: context.sizes.iconMd),
             tooltip: AppStrings.tr(AppStrings.actionBackToDeck),
-            onPressed: controller.goToDeck,
+            onPressed: onBack,
           ),
           // Phase 3A quick eye toggle: same global private-blur
           // setting as Review/Settings. Trash rows carry no
@@ -171,6 +181,7 @@ class TrashView extends GetView<TrashController> {
                   ),
                   onEmptyTrash: () => _emptyTrash(context),
                 ),
+          bottomNav: const AppBottomNav(currentIndex: 2),
           body: _ArrivalSnack(
             controller: controller,
             child: _AutoEmptyPrompt(
@@ -197,7 +208,7 @@ class _Body extends StatelessWidget {
   Widget build(BuildContext context) {
     return Obx(() {
       if (controller.isLoading.value && controller.entries.isEmpty) {
-        return const Center(child: CircularProgressIndicator());
+        return const TrashLoadingSkeleton();
       }
       if (controller.errorKey.value.isNotEmpty && controller.entries.isEmpty) {
         return ErrorView(

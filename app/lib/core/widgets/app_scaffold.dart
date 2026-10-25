@@ -13,6 +13,7 @@ class AppScaffold extends StatelessWidget {
     this.leading,
     this.actions,
     this.bottomBar,
+    this.bottomNav,
     this.floatingActionButton,
   });
 
@@ -25,18 +26,33 @@ class AppScaffold extends StatelessWidget {
   final Widget? leading;
   final List<Widget>? actions;
   final Widget? bottomBar;
+  final Widget? bottomNav;
   final Widget? floatingActionButton;
 
   @override
   Widget build(BuildContext context) {
     final String? title = this.title;
+    final Widget? nav = (bottomBar != null || bottomNav != null)
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              if (bottomBar != null)
+                MediaQuery.removePadding(
+                  context: context,
+                  removeBottom: bottomNav != null,
+                  child: bottomBar!,
+                ),
+              ?bottomNav,
+            ],
+          )
+        : null;
     return Scaffold(
       backgroundColor: context.palette.background,
       appBar: title == null
           ? null
           : AppBar(title: Text(title), leading: leading, actions: actions),
       body: body,
-      bottomNavigationBar: bottomBar,
+      bottomNavigationBar: nav,
       floatingActionButton: floatingActionButton,
     );
   }

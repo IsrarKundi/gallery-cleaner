@@ -20,6 +20,7 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/empty_view.dart';
 import '../../../core/widgets/info_banner.dart';
 import '../../../features/deck/widgets/deck_action_bar.dart';
+import '../../../features/deck/widgets/deck_home_skeleton.dart';
 import '../../../features/deck/widgets/session_summary_card.dart';
 import '../../../features/deck/widgets/swipe_card.dart';
 import '../../../services/detection/smart_decks.dart';
@@ -35,16 +36,39 @@ class SmartDeckView extends GetView<SmartDeckController> {
       final bool showBar =
           controller.ready.value && controller.currentAsset != null;
       final SmartDeckId? deckId = controller.deckId;
+      final int decided = controller.marks.length;
+      final int total = controller.queue.length;
+
       return AppScaffold(
         title: deckId == null
             ? AppStrings.tr(AppStrings.screenSmartDeck)
             : AppStrings.tr(smartDeckTitleKey(deckId)),
+        actions: <Widget>[
+          if (showBar && total > 0)
+            Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: context.sizes.screenPadding,
+                ),
+                child: Text(
+                  AppStrings.tr(AppStrings.smartDeckProgress, <String, String>{
+                    'index': decided.toString(),
+                    'count': total.toString(),
+                  }),
+                  style: context.textStyles.bodySmall.copyWith(
+                    color: context.palette.textSecondary,
+                  ),
+                ),
+              ),
+            ),
+        ],
         bottomBar: showBar
             ? DeckActionBar(
                 onMark: controller.markCurrent,
                 onUndo: controller.undo,
                 canUndo: controller.canUndo,
                 onReview: controller.goToReview,
+                isCleanScreen: true,
               )
             : null,
         body: _Body(controller: controller),
@@ -62,7 +86,7 @@ class _Body extends StatelessWidget {
   Widget build(BuildContext context) {
     return Obx(() {
       if (!controller.ready.value) {
-        return const Center(child: CircularProgressIndicator());
+        return const DeckHomeSkeleton();
       }
       if (controller.queue.isEmpty) {
         return EmptyView(
@@ -99,7 +123,6 @@ class _Body extends StatelessWidget {
           '${Formatters.formatDate(current.createDate)} · '
           '${Formatters.formatBytes(current.sizeBytes)} · '
           '${current.albumName}';
-      final int decided = controller.marks.length;
       return Column(
         children: <Widget>[
           if (controller.protection.blockedKey.value.isNotEmpty)
@@ -107,18 +130,6 @@ class _Body extends StatelessWidget {
               message: AppStrings.tr(controller.protection.blockedKey.value),
               onDismiss: controller.protection.clearNotice,
             ),
-          Padding(
-            padding: EdgeInsets.all(context.sizes.screenPadding),
-            child: Text(
-              AppStrings.tr(AppStrings.smartDeckProgress, <String, String>{
-                'index': decided.toString(),
-                'count': controller.queue.length.toString(),
-              }),
-              style: context.textStyles.bodySmall.copyWith(
-                color: context.palette.textSecondary,
-              ),
-            ),
-          ),
           Expanded(
             child: Padding(
               padding: EdgeInsets.symmetric(
@@ -135,7 +146,10 @@ class _Body extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: EdgeInsets.all(context.sizes.screenPadding),
+            padding: EdgeInsets.symmetric(
+              horizontal: context.sizes.screenPadding,
+              vertical: context.sizes.sm,
+            ),
             child: Text(
               caption,
               style: context.textStyles.bodySmall.copyWith(

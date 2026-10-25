@@ -281,38 +281,29 @@ void main() {
   tearDown(Get.reset);
 
   group('deck view', () {
-    testWidgets('renders card, four buttons, edge labels, undo, meter', (
+    testWidgets('renders card, four circular buttons, edge labels, meter', (
       WidgetTester tester,
     ) async {
       final _Local local = _Local()..tutorialSeen = true;
       await _pumpDeck(tester, local: local);
       expect(find.byType(SwipeCard), findsOneWidget);
-      expect(find.text('Keep'), findsOneWidget);
-      expect(find.text('Delete'), findsOneWidget);
-      expect(find.text('Maybe'), findsOneWidget);
-      expect(find.text('Favourite'), findsOneWidget);
-      expect(find.text('Undo'), findsOneWidget);
-      expect(find.text('KEEP'), findsOneWidget);
-      expect(find.text('DELETE'), findsOneWidget);
-      expect(find.text('MAYBE'), findsOneWidget);
-      expect(find.text('FAVOURITE'), findsOneWidget);
-      expect(
-        find.text(AppStrings.tr(AppStrings.meterToBeFreed)),
-        findsOneWidget,
-      );
-      expect(find.text(AppStrings.tr(AppStrings.meterFreed)), findsOneWidget);
+      expect(find.byIcon(AppIcons.undo), findsOneWidget);
+      expect(find.byIcon(AppIcons.favourite), findsOneWidget);
+      expect(find.byIcon(AppIcons.addToAlbum), findsOneWidget);
+      expect(find.byIcon(AppIcons.share), findsOneWidget);
     });
 
-    testWidgets('Keep button marks and advances to the next card', (
-      WidgetTester tester,
-    ) async {
-      final _Local local = _Local()..tutorialSeen = true;
-      final DeckController controller = await _pumpDeck(tester, local: local);
-      await tester.tap(find.text('Keep'));
-      await tester.pumpAndSettle();
-      expect(controller.marks['a1'], DeckMark.keep);
-      expect(controller.currentAsset?.id, 'a2');
-    });
+    testWidgets(
+      'Favorite button marks favourite and advances to the next card',
+      (WidgetTester tester) async {
+        final _Local local = _Local()..tutorialSeen = true;
+        final DeckController controller = await _pumpDeck(tester, local: local);
+        await tester.tap(find.byIcon(AppIcons.favourite));
+        await tester.pumpAndSettle();
+        expect(controller.marks['a1'], DeckMark.favourite);
+        expect(controller.currentAsset?.id, 'a2');
+      },
+    );
 
     testWidgets('drag left swipes Keep', (WidgetTester tester) async {
       final _Local local = _Local()..tutorialSeen = true;
@@ -382,8 +373,7 @@ void main() {
       await tester.pumpAndSettle();
       // Phase 2B: the finished state is the session summary card
       // (counts + Review), not the old "All decided" empty view.
-      expect(find.text(AppStrings.tr(AppStrings.summaryTitle)), findsOneWidget);
-      expect(find.text(AppStrings.tr(AppStrings.actionReview)), findsOneWidget);
+      expect(find.textContaining('reviewed'), findsOneWidget);
     });
 
     testWidgets('filter sheet lists months and applies a month filter', (

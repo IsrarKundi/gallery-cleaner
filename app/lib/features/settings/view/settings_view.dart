@@ -17,6 +17,7 @@ import 'package:get/get.dart';
 
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
+import '../../../core/widgets/app_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/error_banner.dart';
 import '../../../core/widgets/section_header.dart';
@@ -31,6 +32,7 @@ class SettingsView extends GetView<SettingsController> {
     return Obx(() {
       return AppScaffold(
         title: AppStrings.tr(AppStrings.screenSettings),
+        bottomNav: const AppBottomNav(currentIndex: 3),
         body: ListView(
           padding: EdgeInsets.all(context.sizes.screenPadding),
           children: <Widget>[

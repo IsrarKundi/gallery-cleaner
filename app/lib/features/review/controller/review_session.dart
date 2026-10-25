@@ -10,6 +10,40 @@
 
 import '../../../core/utils/result.dart';
 import '../../../services/local/local_service.dart';
+import '../../../services/media/media_asset.dart';
+import '../../../services/media/media_service.dart';
+
+/// Loads delete-marked assets from the saved session for [filterKey]
+/// and looks up their [MediaAsset] records. Used when the review screen
+/// is opened from the bottom navigation bar without route arguments.
+Future<List<MediaAsset>> loadDeleteMarkedAssets({
+  required LocalService local,
+  required MediaService media,
+  required String filterKey,
+}) async {
+  final Result<DeckSession?> loaded = await local.loadSession(filterKey);
+  final DeckSession? session = loaded.fold(
+    onSuccess: (DeckSession? value) => value,
+    onFailure: (_) => null,
+  );
+  if (session == null || session.marks.isEmpty) {
+    return <MediaAsset>[];
+  }
+  final Set<String> deleteIds = session.marks.entries
+      .where((MapEntry<String, DeckMark> e) => e.value == DeckMark.delete)
+      .map((MapEntry<String, DeckMark> e) => e.key)
+      .toSet();
+  if (deleteIds.isEmpty) {
+    return <MediaAsset>[];
+  }
+  final Result<List<MediaAsset>> assetsResult = await media.getAssets();
+  return assetsResult.fold(
+    onSuccess: (List<MediaAsset> assets) {
+      return assets.where((MediaAsset a) => deleteIds.contains(a.id)).toList();
+    },
+    onFailure: (_) => <MediaAsset>[],
+  );
+}
 
 Future<bool> updateSessionMarks({
   required LocalService local,

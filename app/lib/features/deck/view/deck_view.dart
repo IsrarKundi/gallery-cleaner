@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -6,16 +8,22 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/app_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/empty_view.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/info_banner.dart';
+import '../../../services/local/local_service.dart';
+import '../../../services/media/media_asset.dart';
 import '../controller/deck_controller.dart';
 import '../model/deck_status.dart';
+import '../widgets/album_picker_sheet.dart';
 import '../widgets/deck_action_bar.dart';
+import '../widgets/deck_home_skeleton.dart';
 import '../widgets/filter_sheet.dart';
 import '../widgets/session_summary_card.dart';
-import '../widgets/space_meter_bar.dart';
+// import '../widgets/space_meter_bar.dart';
 import '../widgets/swipe_card.dart';
 import '../widgets/tutorial_overlay.dart';
 
@@ -50,47 +58,59 @@ class DeckView extends GetView<DeckController> {
     );
   }
 
+  void _shareCurrentAsset() {
+    final MediaAsset? asset = controller.currentAsset;
+    if (asset == null) {
+      return;
+    }
+    final Uint8List? thumb = controller.thumbnails[asset.id];
+    controller.retention.share?.shareSummary(
+      text:
+          '${asset.title.isEmpty ? 'Photo' : asset.title} · ${Formatters.formatBytes(asset.sizeBytes)}',
+      imagePng: thumb,
+    );
+  }
+
+  void _openAlbumPicker(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(context.sizes.radiusSheet),
+        ),
+      ),
+      builder: (BuildContext sheetContext) {
+        return AlbumPickerSheet(
+          albums: controller.albums,
+          onAlbumSelected: (MediaAlbum album) {
+            Navigator.of(sheetContext).pop();
+            AppSnackbar.show(
+              context,
+              message:
+                  '${AppStrings.tr(AppStrings.actionAddToAlbum)}: ${album.name}',
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Obx(() {
       final bool showBar =
           controller.status.value == DeckStatus.ready &&
           controller.currentAsset != null;
+      final MediaAsset? current = controller.currentAsset;
+      final bool isFav =
+          current != null && controller.favouriteIds.contains(current.id);
       return AppScaffold(
         title: AppStrings.tr(AppStrings.screenDeck),
         actions: <Widget>[
-          // Phase 1 screens are reachable from the deck, not only
-          // via the review-delete flow: Trash for restore/emptying
-          // and History for past cleaning runs. Both reset the
-          // stack back to the deck (their own navigation contract).
-          IconButton(
-            icon: Icon(AppIcons.decks, size: context.sizes.iconMd),
-            tooltip: AppStrings.tr(AppStrings.screenDecks),
-            onPressed: () => Get.toNamed<dynamic>(AppRoutes.decks),
-          ),
-          IconButton(
-            icon: Icon(AppIcons.trash, size: context.sizes.iconMd),
-            tooltip: AppStrings.tr(AppStrings.screenTrash),
-            onPressed: () => Get.toNamed<dynamic>(AppRoutes.trash),
-          ),
           IconButton(
             icon: Icon(AppIcons.history, size: context.sizes.iconMd),
             tooltip: AppStrings.tr(AppStrings.screenHistory),
             onPressed: () => Get.toNamed<dynamic>(AppRoutes.history),
-          ),
-          IconButton(
-            icon: Icon(AppIcons.settings, size: context.sizes.iconMd),
-            tooltip: AppStrings.tr(AppStrings.screenSettings),
-            onPressed: () => Get.toNamed<dynamic>(AppRoutes.settings),
-          ),
-          // Phase 4: explicit, one-video-at-a-time compression.
-          // Reached from here so it is discoverable without
-          // touching the swipe flow; the screen itself never
-          // compresses anything unasked.
-          IconButton(
-            icon: Icon(AppIcons.compress, size: context.sizes.iconMd),
-            tooltip: AppStrings.tr(AppStrings.screenCompress),
-            onPressed: () => Get.toNamed<dynamic>(AppRoutes.compress),
           ),
           IconButton(
             icon: Icon(AppIcons.filter, size: context.sizes.iconMd),
@@ -104,8 +124,13 @@ class DeckView extends GetView<DeckController> {
                 onUndo: controller.undo,
                 canUndo: controller.canUndo,
                 onReview: controller.goToReview,
+                isFavourite: isFav,
+                onFavorite: () => controller.markCurrent(DeckMark.favourite),
+                onAddToAlbum: () => _openAlbumPicker(context),
+                onShare: _shareCurrentAsset,
               )
             : null,
+        bottomNav: const AppBottomNav(currentIndex: 0),
         body: Stack(
           children: <Widget>[
             _Body(controller: controller),
@@ -128,7 +153,7 @@ class _Body extends StatelessWidget {
     return Obx(() {
       switch (controller.status.value) {
         case DeckStatus.loading:
-          return const Center(child: CircularProgressIndicator());
+          return const DeckHomeSkeleton();
         case DeckStatus.denied:
           return EmptyView(
             icon: AppIcons.photos,
@@ -226,16 +251,16 @@ class _ReadyBody extends StatelessWidget {
                     ),
                   ),
                 ),
-              SizedBox(height: context.sizes.xl),
-              SizedBox(
-                width: double.infinity,
-                height: context.sizes.buttonPrimary,
-                child: FilledButton.icon(
-                  onPressed: controller.goToReview,
-                  icon: Icon(AppIcons.review, size: context.sizes.iconSm),
-                  label: Text(AppStrings.tr(AppStrings.actionReview)),
-                ),
-              ),
+              // SizedBox(height: context.sizes.xl),
+              // SizedBox(
+              //   width: double.infinity,
+              //   height: context.sizes.buttonPrimary,
+              //   child: FilledButton.icon(
+              //     onPressed: controller.goToReview,
+              //     icon: Icon(AppIcons.review, size: context.sizes.iconSm),
+              //     label: Text(AppStrings.tr(AppStrings.actionReview)),
+              //   ),
+              // ),
             ],
           ),
         );
@@ -267,7 +292,7 @@ class _ReadyBody extends StatelessWidget {
             }
             return Column(children: banners);
           }),
-          Obx(() => SpaceMeterBar(totals: controller.meter)),
+          // Obx(() => SpaceMeterBar(totals: controller.meter)),
           Expanded(
             child: Padding(
               padding: EdgeInsets.symmetric(
@@ -284,7 +309,10 @@ class _ReadyBody extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: EdgeInsets.all(context.sizes.screenPadding),
+            padding: EdgeInsets.symmetric(
+              horizontal: context.sizes.screenPadding,
+              vertical: context.sizes.sm,
+            ),
             child: Text(
               caption,
               style: context.textStyles.bodySmall.copyWith(

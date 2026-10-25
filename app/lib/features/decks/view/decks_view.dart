@@ -1,10 +1,11 @@
-// Smart-deck hub (requirements §7, Phase 2). Layout + Obx only:
-// scanning, per-deck counts and navigation live in DecksController.
+// Smart-deck hub (requirements §7, Phase 2).
+// Layout + Obx only: scanning, per-deck counts and navigation live in DecksController.
 //
-// The hub never blocks on the scan: rows appear and fill in as
-// pages arrive, with a determinate progress bar (count + %) on top
-// while scanning. Rows with zero photos are not tappable — tapping
-// an empty deck would open an empty swipe screen with no action.
+// Screen structure (matches redesigned mock):
+// - Top Bar: App title ("Klara") + storage/streak badge pill + circular settings button.
+// - On This Day hero banner card with 5 fanned-out preview stack.
+// - Timeline: header with total size, sort button + year chips, horizontal month cards.
+// - Smart decks: header with 'See all (N) ›', horizontal 2x2 thumbnail grid cards in user priority order.
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -12,31 +13,31 @@ import 'package:get/get.dart';
 import '../../../core/constants/app_icons.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
-import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/app_bottom_nav.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_skeleton.dart';
 import '../../../core/widgets/empty_view.dart';
 import '../../../core/widgets/error_view.dart';
-import '../../../core/widgets/section_header.dart';
 import '../../../services/detection/smart_decks.dart';
+import '../../../services/media/media_asset.dart';
 import '../controller/decks_controller.dart';
 import '../model/decks_status.dart';
-import '../model/maybe_pile_item.dart';
 import '../model/smart_deck_meta.dart';
-import '../widgets/deck_row.dart';
-import '../widgets/maybe_pile_row.dart';
-import '../widgets/progress_section.dart';
+import '../widgets/decks_loading_skeleton.dart';
+// import '../widgets/decks_scanning_banner.dart';
+// import '../widgets/decks_top_header.dart';
+import '../widgets/on_this_day_hero_card.dart';
+import '../widgets/smart_deck_grid_card.dart';
+import '../widgets/timeline_section.dart';
 
 class DecksView extends GetView<DecksController> {
   const DecksView({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // No Obx here: _Body owns the only Obx, and an Obx whose builder
-    // reads no observable is an improper GetX use (it throws when
-    // any observable notifies). The scaffold frame never changes.
     return AppScaffold(
-      title: AppStrings.tr(AppStrings.screenDecks),
-      body: _Body(controller: controller),
+      bottomNav: const AppBottomNav(currentIndex: 1),
+      body: SafeArea(child: _Body(controller: controller)),
     );
   }
 }
@@ -51,7 +52,7 @@ class _Body extends StatelessWidget {
     return Obx(() {
       switch (controller.status.value) {
         case DecksStatus.loading:
-          return const Center(child: CircularProgressIndicator());
+          return const DecksLoadingSkeleton();
         case DecksStatus.denied:
           return EmptyView(
             icon: AppIcons.photos,
@@ -88,11 +89,35 @@ class _HubBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return Obx(() {
       final bool scanning = controller.isScanning;
+      final List<MediaAsset> onThisDayAssets = controller.assetsFor(
+        SmartDeckId.onThisDay,
+      );
+
+      // Filter: only show decks with photos, in priority order, excluding onThisDay (which has hero card)
+      final List<SmartDeckId> visibleDecks = smartDeckOrder.where((
+        SmartDeckId id,
+      ) {
+        return id != SmartDeckId.onThisDay &&
+            controller.assetsFor(id).isNotEmpty;
+      }).toList();
+
+      // ignore: unused_local_variable
+      final int readyBytes = visibleDecks.fold<int>(
+        0,
+        (int sum, SmartDeckId id) => sum + controller.totalBytesFor(id),
+      );
+
+      // ignore: unused_local_variable
+      final int totalStorageBytes = controller.totalLibraryBytes > 0
+          ? controller.totalLibraryBytes
+          : readyBytes;
+
       final bool allEmpty =
           !scanning &&
-          smartDeckOrder.every(
-            (SmartDeckId id) => controller.assetsFor(id).isEmpty,
-          );
+          visibleDecks.isEmpty &&
+          onThisDayAssets.isEmpty &&
+          controller.allAssets.isEmpty;
+
       if (allEmpty) {
         return EmptyView(
           icon: AppIcons.decks,
@@ -102,127 +127,159 @@ class _HubBody extends StatelessWidget {
           onCta: controller.retry,
         );
       }
-      // Phase 3B: builder form, so a large Maybe pile (user-marked,
-      // unbounded) builds rows lazily instead of all at once. The
-      // section layout is identical to the old eager list; only
-      // the construction is lazy. Sections: 0 progress, 1 Maybe
-      // header, 2.. Maybe rows (or one empty line), then
-      // projection, decks header, and one row per smart deck.
-      final List<MaybePileItem> maybeItems = controller.maybeItems;
-      final int maybeCount = maybeItems.isEmpty ? 1 : maybeItems.length;
-      final int itemCount = 1 + 1 + maybeCount + 1 + 1 + smartDeckOrder.length;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+
+      return ListView(
+        padding: EdgeInsets.symmetric(vertical: context.sizes.sm),
         children: <Widget>[
-          if (scanning)
+          // Top Header: App Title ("Klara") + Badge Pill (Target + Streak) + Settings button
+          // DecksTopHeader(
+          //   controller: controller,
+          //   totalBytes: totalStorageBytes,
+          //   visibleDecksCount: visibleDecks.length,
+          //   readyBytes: readyBytes,
+          //   scanning: scanning,
+          // ),
+          // if (scanning) ...<Widget>[
+          //   SizedBox(height: context.sizes.xs),
+          //   DecksScanningBanner(controller: controller),
+          // ],
+          if (onThisDayAssets.isNotEmpty) ...<Widget>[
+            SizedBox(height: context.sizes.sm),
             Padding(
-              padding: EdgeInsets.all(context.sizes.screenPadding),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    AppStrings.tr(
-                      AppStrings.decksScanningCount,
-                      <String, String>{
-                        'count': Formatters.formatCount(
-                          controller.scanned.value,
-                        ),
-                      },
-                    ),
-                    style: context.textStyles.bodySmall,
-                  ),
-                  SizedBox(height: context.sizes.sm),
-                  LinearProgressIndicator(value: controller.progress),
-                ],
+              padding: EdgeInsets.symmetric(
+                horizontal: context.sizes.screenPadding,
+              ),
+              child: OnThisDayHeroCard(
+                assets: onThisDayAssets,
+                onTap: () => controller.openDeck(SmartDeckId.onThisDay),
+                media: controller.media,
               ),
             ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: itemCount,
-              itemBuilder: (BuildContext context, int index) {
-                if (index == 0) {
-                  return Padding(
-                    padding: EdgeInsets.all(context.sizes.screenPadding),
-                    child: ProgressSection(
-                      goalTargetMb: controller.goalTargetMb.value,
-                      weekFreedMb: controller.weekFreedMbValue,
-                      goalProgress: controller.goalProgress,
-                      streakCurrent: controller.streak.current,
-                      streakBest: controller.streak.best,
-                      onGoalSelected: controller.setGoal,
-                    ),
-                  );
-                }
-                if (index == 1) {
-                  return Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: context.sizes.screenPadding,
-                    ),
-                    child: SectionHeader(
-                      title: AppStrings.tr(AppStrings.retentionMaybeTitle),
-                      subtitle: AppStrings.tr(AppStrings.retentionMaybeHint),
-                    ),
-                  );
-                }
-                final int maybeIndex = index - 2;
-                if (maybeIndex < maybeCount) {
-                  if (maybeItems.isEmpty) {
-                    return Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: context.sizes.screenPadding,
-                        vertical: context.sizes.sm,
-                      ),
-                      child: Text(
-                        AppStrings.tr(AppStrings.retentionMaybeEmpty),
-                        style: context.textStyles.bodyMedium,
-                      ),
-                    );
-                  }
-                  final MaybePileItem item = maybeItems[maybeIndex];
-                  return MaybePileRow(
-                    item: item,
-                    onSnooze: (int days) => controller.snoozeItem(item, days),
-                    onClearSnooze: () => controller.clearSnoozeItem(item),
-                  );
-                }
-                final int afterMaybe = index - 2 - maybeCount;
-                if (afterMaybe == 0) {
-                  return Padding(
-                    padding: EdgeInsets.all(context.sizes.screenPadding),
-                    child: ProjectionBar(
-                      freeMb: controller.freeMb.value,
-                      projectedFreeMb: controller.projectedFreeMbValue,
-                      inTrashMb: controller.inTrashMb,
-                      markedMb: controller.markedMb,
-                    ),
-                  );
-                }
-                if (afterMaybe == 1) {
-                  return Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: context.sizes.screenPadding,
-                    ),
-                    child: SectionHeader(
-                      title: AppStrings.tr(AppStrings.decksTitle),
-                      subtitle: AppStrings.tr(AppStrings.decksSubtitle),
-                    ),
-                  );
-                }
-                final SmartDeckId id = smartDeckOrder[afterMaybe - 2];
-                return DeckRow(
-                  deckId: id,
-                  count: controller.assetsFor(id).length,
-                  totalBytes: controller.totalBytesFor(id),
-                  ready: controller.deckReady(id),
-                  onTap: controller.assetsFor(id).isNotEmpty
-                      ? () => controller.openDeck(id)
-                      : null,
-                );
-              },
+          ] else if (scanning) ...<Widget>[
+            SizedBox(height: context.sizes.sm),
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: context.sizes.screenPadding,
+              ),
+              child: const HeroCardSkeleton(),
             ),
+          ],
+          SizedBox(height: context.sizes.md),
+          // Timeline Section
+          TimelineSection(
+            assets: controller.allAssets,
+            selectedYear: controller.selectedYear.value,
+            ascending: controller.timelineAscending.value,
+            onYearSelected: (int y) => controller.selectedYear.value = y,
+            onToggleSort: () => controller.timelineAscending.toggle(),
+            onMonthTap: controller.openMonth,
+            media: controller.media,
+            isScanning: scanning,
           ),
+          SizedBox(height: context.sizes.lg),
+          // Smart Decks Section
+          _SmartDecksSection(
+            controller: controller,
+            visibleDecks: visibleDecks,
+            scanning: scanning,
+          ),
+          SizedBox(height: context.sizes.lg),
         ],
       );
     });
+  }
+}
+
+class _SmartDecksSection extends StatelessWidget {
+  const _SmartDecksSection({
+    required this.controller,
+    required this.visibleDecks,
+    required this.scanning,
+  });
+
+  final DecksController controller;
+  final List<SmartDeckId> visibleDecks;
+  final bool scanning;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool showSkeletons = scanning && visibleDecks.isEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        // Header Row: Smart decks + See all (N) ›
+        Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: context.sizes.screenPadding,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  AppStrings.tr(AppStrings.decksTitle),
+                  style: context.textStyles.titleLarge.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              SizedBox(width: context.sizes.xs),
+              Text(
+                AppStrings.tr(AppStrings.seeAllDecks, <String, String>{
+                  'count': visibleDecks.length.toString(),
+                }),
+                style: context.textStyles.labelMedium.copyWith(
+                  color: context.palette.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: context.sizes.md),
+        // Horizontal list of 2x2 grid cards
+        SizedBox(
+          height: 235,
+          child: showSkeletons
+              ? AppSkeleton(
+                  child: ListView.separated(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: context.sizes.screenPadding,
+                    ),
+                    scrollDirection: Axis.horizontal,
+                    clipBehavior: Clip.none,
+                    itemCount: 2,
+                    separatorBuilder: (_, _) =>
+                        SizedBox(width: context.sizes.md),
+                    itemBuilder: (_, _) => const DeckGridSkeleton(),
+                  ),
+                )
+              : ListView.separated(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: context.sizes.screenPadding,
+                  ),
+                  scrollDirection: Axis.horizontal,
+                  clipBehavior: Clip.none,
+                  itemCount: visibleDecks.length,
+                  separatorBuilder: (_, _) => SizedBox(width: context.sizes.md),
+                  itemBuilder: (BuildContext context, int index) {
+                    final SmartDeckId id = visibleDecks[index];
+                    final List<MediaAsset> assets = controller.assetsFor(id);
+                    return SmartDeckGridCard(
+                      deckId: id,
+                      count: assets.length,
+                      totalBytes: controller.totalBytesFor(id),
+                      assets: assets,
+                      media: controller.media,
+                      onTap: () => controller.openDeck(id),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
   }
 }

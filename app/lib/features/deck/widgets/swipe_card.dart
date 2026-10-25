@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_icons.dart';
-import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../services/local/local_service.dart';
 import '../model/swipe_direction.dart';
@@ -45,19 +44,6 @@ class _SwipeCardState extends State<SwipeCard> {
 
   Offset _offset = Offset.zero;
   DeckMark? _exiting;
-
-  double _progressFor(DeckMark mark) {
-    switch (mark) {
-      case DeckMark.keep:
-        return (-_offset.dx / _swipeThreshold).clamp(0, 1).toDouble();
-      case DeckMark.delete:
-        return (_offset.dx / _swipeThreshold).clamp(0, 1).toDouble();
-      case DeckMark.maybe:
-        return (-_offset.dy / _swipeThreshold).clamp(0, 1).toDouble();
-      case DeckMark.favourite:
-        return (_offset.dy / _swipeThreshold).clamp(0, 1).toDouble();
-    }
-  }
 
   void _onPanUpdate(DragUpdateDetails details) {
     if (_exiting != null) {
@@ -143,73 +129,8 @@ class _SwipeCardState extends State<SwipeCard> {
                     color: context.palette.surfaceVariant,
                     child: const Center(child: CircularProgressIndicator()),
                   ),
-                _EdgeLabel(
-                  alignment: Alignment.centerLeft,
-                  label: AppStrings.tr(AppStrings.edgeKeep),
-                  background: context.palette.successBg,
-                  progress: _progressFor(DeckMark.keep),
-                ),
-                _EdgeLabel(
-                  alignment: Alignment.centerRight,
-                  label: AppStrings.tr(AppStrings.edgeDelete),
-                  background: context.palette.errorBg,
-                  progress: _progressFor(DeckMark.delete),
-                ),
-                _EdgeLabel(
-                  alignment: Alignment.topCenter,
-                  label: AppStrings.tr(AppStrings.edgeMaybe),
-                  background: context.palette.warningBg,
-                  progress: _progressFor(DeckMark.maybe),
-                ),
-                _EdgeLabel(
-                  alignment: Alignment.bottomCenter,
-                  label: AppStrings.tr(AppStrings.edgeFavourite),
-                  background: context.palette.primaryContainer,
-                  progress: _progressFor(DeckMark.favourite),
-                ),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// One persistent edge label. Always visible; drag distance towards
-/// its edge raises its opacity so the swipe target highlights.
-class _EdgeLabel extends StatelessWidget {
-  const _EdgeLabel({
-    required this.alignment,
-    required this.label,
-    required this.background,
-    required this.progress,
-  });
-
-  final Alignment alignment;
-  final String label;
-  final Color background;
-  final double progress;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: alignment,
-      child: Padding(
-        padding: EdgeInsets.all(context.sizes.lg),
-        child: Opacity(
-          opacity: 0.6 + (0.4 * progress),
-          child: Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: context.sizes.md,
-              vertical: context.sizes.sm,
-            ),
-            decoration: BoxDecoration(
-              color: background,
-              borderRadius: BorderRadius.circular(context.sizes.pill),
-              border: Border.all(color: context.palette.border),
-            ),
-            child: Text(label, style: context.textStyles.labelMedium),
           ),
         ),
       ),

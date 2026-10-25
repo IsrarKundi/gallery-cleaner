@@ -11,6 +11,7 @@ import 'package:get/get.dart';
 import 'package:image/image.dart' as img;
 import 'package:klara/core/theme/app_theme.dart';
 import 'package:klara/core/utils/result.dart';
+import 'package:klara/features/deck/widgets/swipe_card.dart';
 import 'package:klara/features/decks/binding/decks_binding.dart';
 import 'package:klara/features/decks/binding/duplicates_binding.dart';
 import 'package:klara/features/decks/controller/duplicates_controller.dart';
@@ -261,13 +262,20 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Screenshots'),
+        100,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.ensureVisible(find.text('Screenshots'));
+      await tester.pumpAndSettle();
       expect(find.text('Screenshots'), findsOneWidget);
-      expect(find.text('WhatsApp'), findsOneWidget);
+      expect(find.text('WhatsApp'), findsNothing);
       await tester.tap(find.text('Screenshots'));
       await tester.pumpAndSettle();
-      // Smart-deck screen: same title, progress line, action bar.
+      // Smart-deck screen: same title, progress line in app bar.
       expect(find.text('0 of 1 decided'), findsOneWidget);
-      expect(find.text('Keep'), findsOneWidget);
+      expect(find.byType(SwipeCard), findsOneWidget);
     });
   });
 
@@ -340,7 +348,7 @@ void main() {
   });
 
   group('smart deck view', () {
-    testWidgets('Keep button advances and Undo returns', (
+    testWidgets('SwipeCard drag advances and Undo returns', (
       WidgetTester tester,
     ) async {
       final SmartDeckController controller = SmartDeckController(
@@ -357,10 +365,11 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('0 of 2 decided'), findsOneWidget);
-      await tester.tap(find.text('Keep'));
+      // Swipe left to Keep
+      await tester.drag(find.byType(SwipeCard), const Offset(-500, 0));
       await tester.pumpAndSettle();
       expect(find.text('1 of 2 decided'), findsOneWidget);
-      await tester.tap(find.text('Undo'));
+      await tester.tap(find.byTooltip('Undo'));
       await tester.pumpAndSettle();
       expect(find.text('0 of 2 decided'), findsOneWidget);
     });

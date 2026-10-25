@@ -23,6 +23,33 @@ class Formatters {
     'Dec',
   ];
 
+  static const List<String> _fullMonths = <String>[
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+
+  /// Short month name (e.g. 1 -> "Jan", 10 -> "Oct").
+  static String formatMonth(int month) {
+    if (month < 1 || month > 12) return '';
+    return _months[month - 1];
+  }
+
+  /// Full month name (e.g. 10 -> "October").
+  static String formatFullMonth(int month) {
+    if (month < 1 || month > 12) return '';
+    return _fullMonths[month - 1];
+  }
+
   /// Formats a byte count in 1024-based units with at most one decimal,
   /// e.g. 512 -> "512 B", 1536 -> "1.5 KB", 1048576 -> "1 MB".
   static String formatBytes(int bytes) {

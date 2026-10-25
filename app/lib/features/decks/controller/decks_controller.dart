@@ -396,4 +396,24 @@ class DecksController extends GetxController {
       arguments: SmartDeckLaunch(deckId: id, assets: assetsFor(id)),
     );
   }
+
+  List<MediaAsset> get allAssets => _allAssets;
+  final RxInt selectedYear = DateTime.now().year.obs;
+  final RxBool timelineAscending = false.obs;
+  int get totalLibraryBytes =>
+      _allAssets.fold<int>(0, (int s, MediaAsset a) => s + a.sizeBytes);
+
+  void openMonth(String monthKey) {
+    final List<MediaAsset> monthAssets = _allAssets
+        .where(
+          (MediaAsset a) =>
+              '${a.createDate.year}-${a.createDate.month.toString().padLeft(2, '0')}' ==
+              monthKey,
+        )
+        .toList();
+    Get.toNamed<dynamic>(
+      AppRoutes.smartDeck,
+      arguments: SmartDeckLaunch(deckId: null, assets: monthAssets),
+    );
+  }
 }

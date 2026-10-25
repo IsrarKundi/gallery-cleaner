@@ -25,6 +25,12 @@ class AppStrings {
   static const String screenDuplicates = 'screenDuplicates';
   static const String screenSmartDeck = 'screenSmartDeck';
 
+  // Bottom navigation.
+  static const String navClean = 'navClean';
+  static const String navDecks = 'navDecks';
+  static const String navTrash = 'navTrash';
+  static const String navSettings = 'navSettings';
+
   // Deck edge labels (requirements §3: LOCKED mapping, always visible).
   static const String edgeKeep = 'edgeKeep';
   static const String edgeDelete = 'edgeDelete';
@@ -43,6 +49,8 @@ class AppStrings {
   static const String actionHistory = 'actionHistory';
   static const String actionKeepAll = 'actionKeepAll';
   static const String actionSkip = 'actionSkip';
+  static const String actionAddToAlbum = 'actionAddToAlbum';
+  static const String actionShare = 'actionShare';
 
   // Generic actions.
   static const String actionCancel = 'actionCancel';
@@ -141,6 +149,7 @@ class AppStrings {
   // summary/share, projection) and no Phase 3/4 strings.
   static const String decksTitle = 'decksTitle';
   static const String decksSubtitle = 'decksSubtitle';
+  static const String decksReadyToClean = 'decksReadyToClean';
   static const String decksScanning = 'decksScanning';
   static const String decksScanningCount = 'decksScanningCount';
   static const String decksEmpty = 'decksEmpty';
@@ -149,6 +158,7 @@ class AppStrings {
   static const String decksRowScanning = 'decksRowScanning';
   static const String deckScreenshots = 'deckScreenshots';
   static const String deckWhatsapp = 'deckWhatsapp';
+  static const String deckCamera = 'deckCamera';
   static const String deckDownloads = 'deckDownloads';
   static const String deckVideos = 'deckVideos';
   static const String deckLarge = 'deckLarge';
@@ -198,6 +208,11 @@ class AppStrings {
   static const String retentionProjectionLibrary = 'retentionProjectionLibrary';
   static const String retentionProjectionInTrash = 'retentionProjectionInTrash';
   static const String retentionProjectionMarked = 'retentionProjectionMarked';
+  static const String timelineTitle = 'timelineTitle';
+  static const String timelineTotal = 'timelineTotal';
+  static const String seeAllDecks = 'seeAllDecks';
+  static const String onThisDayReview = 'onThisDayReview';
+  static const String videoBadge = 'videoBadge';
   static const String summaryTitle = 'summaryTitle';
   static const String summaryReviewed = 'summaryReviewed';
   static const String summaryKept = 'summaryKept';
@@ -334,9 +349,14 @@ class AppStrings {
     screenDecks: 'Smart decks',
     screenDuplicates: 'Duplicates',
     screenSmartDeck: 'Smart deck',
+    navClean: 'Clean',
+    navDecks: 'Decks',
+    navTrash: 'Trash',
+    navSettings: 'Settings',
     decksTitle: 'Smart decks',
     decksSubtitle:
         'Groups Klara found in your library. Open one to swipe through it.',
+    decksReadyToClean: 'READY TO CLEAN ({count})',
     decksScanning: 'Scanning your library…',
     decksScanningCount: 'Scanned {count} photos…',
     decksEmpty: 'Nothing found yet',
@@ -346,6 +366,7 @@ class AppStrings {
     decksRowScanning: 'Still scanning…',
     deckScreenshots: 'Screenshots',
     deckWhatsapp: 'WhatsApp',
+    deckCamera: 'Camera',
     deckDownloads: 'Downloads',
     deckVideos: 'Videos',
     deckLarge: 'Large photos',
@@ -385,6 +406,8 @@ class AppStrings {
     actionHistory: 'History',
     actionKeepAll: 'Keep all',
     actionSkip: 'Skip',
+    actionAddToAlbum: 'Add to album',
+    actionShare: 'Share',
     actionCancel: 'Cancel',
     actionConfirm: 'Confirm',
     actionClose: 'Close',
@@ -474,6 +497,11 @@ class AppStrings {
     retentionProjectionInTrash: '{size} in trash, recoverable',
     retentionProjectionMarked: '{size} marked, to be freed',
     summaryTitle: 'Session summary',
+    timelineTitle: 'Timeline',
+    timelineTotal: '{size} total',
+    seeAllDecks: 'See all ({count}) ›',
+    onThisDayReview: '{date} · {count} PHOTOS TO REVIEW',
+    videoBadge: 'VIDEO',
     summaryReviewed: '{count} reviewed',
     summaryKept: '{count} kept',
     summaryDeleteMarked: '{count} marked · {size} to be freed',

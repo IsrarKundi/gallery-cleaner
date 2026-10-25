@@ -3,9 +3,12 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import 'package:skeletonizer/skeletonizer.dart';
+
 import '../../../core/constants/app_icons.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
+import '../../../core/widgets/app_skeleton.dart';
 import '../../../services/media/media_asset.dart';
 
 /// One cell of the review grid: the photo thumbnail with a delete-mark
@@ -48,7 +51,7 @@ class ReviewGridTile extends StatelessWidget {
     Widget image;
     if (thumbnail != null) {
       image = Image.memory(thumbnail, fit: BoxFit.cover);
-    } else {
+    } else if (thumbnailFailed) {
       image = Container(
         color: context.palette.surfaceVariant,
         child: Icon(
@@ -56,6 +59,10 @@ class ReviewGridTile extends StatelessWidget {
           size: context.sizes.iconLg,
           color: context.palette.textSecondary,
         ),
+      );
+    } else {
+      image = const AppSkeleton(
+        child: Bone(width: double.infinity, height: double.infinity),
       );
     }
     if (blurred) {
@@ -81,60 +88,74 @@ class ReviewGridTile extends StatelessWidget {
       button: true,
       label: label,
       excludeSemantics: true,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(context.sizes.radiusMd),
-        child: InkWell(
-          onTap: blurred ? (onReveal ?? onTap) : onTap,
-          child: Stack(
-            fit: StackFit.expand,
-            children: <Widget>[
-              image,
-              if (blurred)
-                Center(
-                  child: Container(
-                    padding: EdgeInsets.all(context.sizes.sm),
-                    decoration: BoxDecoration(
-                      color: context.palette.scrim,
-                      borderRadius: BorderRadius.circular(
-                        context.sizes.radiusMd,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(context.sizes.radiusMd),
+          border: Border.all(
+            color: context.palette.border.withValues(alpha: 0.6),
+            width: 1,
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(context.sizes.radiusMd - 1),
+          child: InkWell(
+            onTap: blurred ? (onReveal ?? onTap) : onTap,
+            child: Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                image,
+                if (blurred)
+                  Positioned.fill(
+                    child: Container(
+                      color: context.palette.scrim.withValues(alpha: 0.45),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Icon(
+                              AppIcons.eye,
+                              size: context.sizes.iconMd,
+                              color: context.palette.onScrim,
+                            ),
+                            SizedBox(height: context.sizes.xs),
+                            Text(
+                              AppStrings.tr(AppStrings.blurTapToReveal),
+                              style: context.textStyles.labelSmall.copyWith(
+                                color: context.palette.onScrim,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        Icon(
-                          AppIcons.eye,
-                          size: context.sizes.iconMd,
-                          color: context.palette.onScrim,
-                        ),
-                        SizedBox(height: context.sizes.xs),
-                        Text(
-                          AppStrings.tr(AppStrings.blurTapToReveal),
-                          style: context.textStyles.labelMedium.copyWith(
-                            color: context.palette.onScrim,
-                          ),
+                  ),
+                Positioned(
+                  top: context.sizes.xs,
+                  right: context.sizes.xs,
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(
+                      color: context.palette.error,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                      boxShadow: const <BoxShadow>[
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 4,
+                          offset: Offset(0, 1),
                         ),
                       ],
                     ),
+                    child: Icon(
+                      AppIcons.delete,
+                      size: context.sizes.md,
+                      color: context.palette.onPrimary,
+                    ),
                   ),
                 ),
-              Positioned(
-                top: context.sizes.xs,
-                right: context.sizes.xs,
-                child: Container(
-                  padding: EdgeInsets.all(context.sizes.xs),
-                  decoration: BoxDecoration(
-                    color: context.palette.error,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    AppIcons.delete,
-                    size: context.sizes.iconSm,
-                    color: context.palette.onPrimary,
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

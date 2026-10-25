@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klara/core/constants/app_icons.dart';
 import 'package:klara/core/theme/app_theme.dart';
+import 'package:klara/core/widgets/app_bottom_nav.dart';
 import 'package:klara/core/widgets/app_card.dart';
 import 'package:klara/core/widgets/app_dialog.dart';
 import 'package:klara/core/widgets/app_scaffold.dart';
@@ -246,5 +247,15 @@ void main() {
     expect(find.text('Card child'), findsOneWidget);
     await tester.tap(find.text('Card child'));
     expect(tapped, isTrue);
+  });
+
+  testWidgets('AppBottomNav renders 4 destinations', (
+    WidgetTester tester,
+  ) async {
+    await pumpKit(tester, const AppBottomNav(currentIndex: 0));
+    expect(find.text('Clean'), findsOneWidget);
+    expect(find.text('Decks'), findsOneWidget);
+    expect(find.text('Trash'), findsOneWidget);
+    expect(find.text('Settings'), findsOneWidget);
   });
 }

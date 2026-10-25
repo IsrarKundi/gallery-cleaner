@@ -6,17 +6,18 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/app_bottom_nav.dart';
 import '../../../core/widgets/app_dialog.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/empty_view.dart';
 import '../../../core/widgets/error_banner.dart';
 import '../../../core/widgets/info_banner.dart';
-import '../../../core/widgets/primary_button.dart';
-import '../../../core/widgets/secondary_button.dart';
 import '../../../services/detection/document_guard.dart';
 import '../controller/review_controller.dart';
+import '../widgets/review_bottom_bar.dart';
 import '../widgets/review_grid_tile.dart';
+import '../widgets/review_loading_skeleton.dart';
 
 /// Review screen (requirements §4): editable grid of delete-marked
 /// photos with counts and total size. Layout + Obx only: marks,
@@ -202,21 +203,29 @@ class ReviewView extends GetView<ReviewController> {
               ),
               onPressed: controller.toggleBlur,
             ),
+            IconButton(
+              icon: Icon(AppIcons.trash, size: context.sizes.iconMd),
+              tooltip: AppStrings.tr(AppStrings.screenTrash),
+              onPressed: () => Get.toNamed<dynamic>(AppRoutes.trash),
+            ),
           ],
           bottomBar: isEmpty
               ? null
-              : _BottomBar(
+              : ReviewBottomBar(
                   controller: controller,
                   onDelete: () => _delete(context),
                 ),
+          bottomNav: const AppBottomNav(currentIndex: 2),
           body: isEmpty
-              ? EmptyView(
-                  icon: AppIcons.review,
-                  title: AppStrings.tr(AppStrings.reviewEmptyTitle),
-                  message: AppStrings.tr(AppStrings.reviewEmptyMessage),
-                  ctaLabel: AppStrings.tr(AppStrings.actionBackToDeck),
-                  onCta: controller.goToDeck,
-                )
+              ? (controller.isLoading.value
+                    ? const ReviewLoadingSkeleton()
+                    : EmptyView(
+                        icon: AppIcons.review,
+                        title: AppStrings.tr(AppStrings.reviewEmptyTitle),
+                        message: AppStrings.tr(AppStrings.reviewEmptyMessage),
+                        // ctaLabel: AppStrings.tr(AppStrings.actionBackToDeck),
+                        // onCta: controller.goToDeck,
+                      ))
               : Column(
                   children: <Widget>[
                     _Header(controller: controller),
@@ -295,17 +304,56 @@ class _Header extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.fromLTRB(
         context.sizes.screenPadding,
-        context.sizes.screenPadding,
-        context.sizes.screenPadding,
         context.sizes.sm,
+        context.sizes.screenPadding,
+        context.sizes.xs,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(
-            '${Formatters.formatCount(controller.items.length)} · '
-            '${Formatters.formatBytes(controller.totalBytes)}',
-            style: context.textStyles.titleMedium,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              Text(
+                '${Formatters.formatCount(controller.items.length)} · '
+                '${Formatters.formatBytes(controller.totalBytes)}',
+                style: context.textStyles.titleLarge.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: context.sizes.sm,
+                  vertical: context.sizes.xxs,
+                ),
+                decoration: BoxDecoration(
+                  color: context.palette.error.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(context.sizes.pill),
+                  border: Border.all(
+                    color: context.palette.error.withValues(alpha: 0.25),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(
+                      AppIcons.delete,
+                      size: context.sizes.md,
+                      color: context.palette.error,
+                    ),
+                    SizedBox(width: context.sizes.xs),
+                    Text(
+                      AppStrings.tr(AppStrings.edgeDelete),
+                      style: context.textStyles.labelSmall.copyWith(
+                        color: context.palette.error,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           SizedBox(height: context.sizes.xs),
           Text(
@@ -315,54 +363,6 @@ class _Header extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Bottom-anchored actions: "Keep all" (secondary) and "Delete N
-/// photos" (the ONLY filled Delete button in the app, design.md §5).
-/// The bar renders only while the set is non-empty, so the 0-selected
-/// state is the empty state above — Delete is never offered at 0.
-class _BottomBar extends StatelessWidget {
-  const _BottomBar({required this.controller, required this.onDelete});
-
-  final ReviewController controller;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: context.palette.background,
-      padding: EdgeInsets.fromLTRB(
-        context.sizes.screenPadding,
-        context.sizes.sm,
-        context.sizes.screenPadding,
-        context.sizes.sm,
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            SecondaryButton(
-              label: AppStrings.tr(AppStrings.actionKeepAll),
-              icon: AppIcons.keep,
-              onPressed: controller.keepAll,
-              isLoading: controller.isDeleting.value,
-            ),
-            SizedBox(height: context.sizes.sm),
-            PrimaryButton(
-              label: AppStrings.tr(
-                AppStrings.reviewDeleteCount,
-                <String, String>{'count': '${controller.items.length}'},
-              ),
-              icon: AppIcons.delete,
-              onPressed: onDelete,
-              isLoading: controller.isDeleting.value,
-            ),
-          ],
-        ),
       ),
     );
   }
