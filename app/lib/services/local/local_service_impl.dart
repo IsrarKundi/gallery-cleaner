@@ -38,6 +38,11 @@ class LocalServiceImpl implements LocalService {
   static const String _historyFile = 'klara_history.json';
   static const String _settingsFile = 'klara_settings.json';
   static const String _analysesFile = 'klara_analyses.json';
+  static const String _snoozesFile = 'klara_snoozes.json';
+  static const String _completionsFile = 'klara_completions.json';
+
+  /// Default weekly goal target (Phase 2B): 1 GB freed per week.
+  static const double defaultGoalTargetMb = 1024;
 
   Future<Directory> _dir() async {
     final Directory dir = await _directoryResolver();
@@ -119,6 +124,108 @@ class LocalServiceImpl implements LocalService {
       );
     } catch (_) {
       return Failure<DeckSession?>(_failure);
+    }
+  }
+
+  @override
+  Future<Result<List<DeckSession>>> listSessions() async {
+    try {
+      final Map<String, dynamic> all = await _readMap(_sessionsFile);
+      final List<DeckSession> sessions = <DeckSession>[];
+      for (final Object? raw in all.values) {
+        sessions.add(DeckSession.fromJson(raw as Map<String, dynamic>));
+      }
+      return Success<List<DeckSession>>(sessions);
+    } catch (_) {
+      return Failure<List<DeckSession>>(_failure);
+    }
+  }
+
+  @override
+  Future<Result<Map<String, DateTime>>> loadSnoozes() async {
+    try {
+      final Map<String, dynamic> all = await _readMap(_snoozesFile);
+      final Map<String, DateTime> snoozes = <String, DateTime>{};
+      for (final MapEntry<String, dynamic> entry in all.entries) {
+        snoozes[entry.key] = DateTime.parse(entry.value as String);
+      }
+      return Success<Map<String, DateTime>>(snoozes);
+    } catch (_) {
+      return Failure<Map<String, DateTime>>(_failure);
+    }
+  }
+
+  @override
+  Future<Result<void>> setSnooze(String assetId, DateTime? until) async {
+    try {
+      final Map<String, dynamic> all = await _readMap(_snoozesFile);
+      if (until == null) {
+        all.remove(assetId);
+      } else {
+        final DateTime day = DateTime(until.year, until.month, until.day);
+        all[assetId] = day.toIso8601String();
+      }
+      await _write(_snoozesFile, all);
+      return const Success<void>(null);
+    } catch (_) {
+      return Failure<void>(_failure);
+    }
+  }
+
+  @override
+  Future<Result<double>> loadGoalTargetMb() async {
+    try {
+      final Map<String, dynamic> settings = await _readMap(_settingsFile);
+      final Object? raw = settings['goalTargetMb'];
+      if (raw is num) {
+        return Success<double>(raw.toDouble());
+      }
+      return const Success<double>(defaultGoalTargetMb);
+    } catch (_) {
+      return Failure<double>(_failure);
+    }
+  }
+
+  @override
+  Future<Result<void>> saveGoalTargetMb(double mb) async {
+    try {
+      final Map<String, dynamic> settings = await _readMap(_settingsFile);
+      settings['goalTargetMb'] = mb;
+      await _write(_settingsFile, settings);
+      return const Success<void>(null);
+    } catch (_) {
+      return Failure<void>(_failure);
+    }
+  }
+
+  @override
+  Future<Result<List<DateTime>>> loadCompletionDays() async {
+    try {
+      final List<dynamic> raw = await _readList(_completionsFile);
+      final List<DateTime> days = <DateTime>[
+        for (final Object? item in raw) DateTime.parse(item as String),
+      ];
+      days.sort();
+      return Success<List<DateTime>>(days);
+    } catch (_) {
+      return Failure<List<DateTime>>(_failure);
+    }
+  }
+
+  @override
+  Future<Result<void>> recordCompletionDay(DateTime day) async {
+    try {
+      final List<dynamic> raw = await _readList(_completionsFile);
+      final Set<String> days = <String>{
+        for (final Object? item in raw) item as String,
+      };
+      final DateTime only = DateTime(day.year, day.month, day.day);
+      days.add(only.toIso8601String());
+      final List<String> sorted = days.toList()..sort();
+      await _write(_completionsFile, sorted);
+      return const Success<void>(null);
+    } catch (_) {
+      return Failure<void>(_failure);
     }
   }
 

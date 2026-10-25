@@ -120,6 +120,35 @@ abstract class LocalService {
   /// Loads the session for [filterKey], or null when none exists.
   Future<Result<DeckSession?>> loadSession(String filterKey);
 
+  /// Every saved session, in no guaranteed order. The Maybe pile
+  /// (Phase 2B) gathers maybe-marked assets from these sessions.
+  Future<Result<List<DeckSession>>> listSessions();
+
+  /// Snooze-until dates by asset id (Phase 2B retention). A snooze
+  /// is set explicitly from the Maybe pile only — marking Maybe
+  /// alone never snoozes. The stored date is the return date
+  /// (date-only): the asset is snoozed while today is before it.
+  Future<Result<Map<String, DateTime>>> loadSnoozes();
+
+  /// Sets the snooze-until date for [assetId], or clears it when
+  /// [until] is null. The date is normalised to date-only.
+  Future<Result<void>> setSnooze(String assetId, DateTime? until);
+
+  /// Weekly freed-space goal target in MB (Phase 2B retention).
+  /// Defaults to 1024 MB when nothing was saved yet.
+  Future<Result<double>> loadGoalTargetMb();
+
+  /// Saves the weekly goal target in MB.
+  Future<Result<void>> saveGoalTargetMb(double mb);
+
+  /// Days (date-only) on which a deck session was completed
+  /// (Phase 2B streaks). One entry per day, never duplicated.
+  Future<Result<List<DateTime>>> loadCompletionDays();
+
+  /// Records [day] (normalised to date-only) as a completed day.
+  /// Idempotent: recording the same day twice stores it once.
+  Future<Result<void>> recordCompletionDay(DateTime day);
+
   /// Appends [entry] to the recorded Trash list.
   Future<Result<void>> recordTrashed(List<TrashEntry> entries);
 

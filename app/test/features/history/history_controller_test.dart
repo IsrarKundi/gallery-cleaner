@@ -30,6 +30,41 @@ class FakeLocal implements LocalService {
   }
 
   @override
+  Future<Result<List<DeckSession>>> listSessions() async {
+    return const Success<List<DeckSession>>(<DeckSession>[]);
+  }
+
+  @override
+  Future<Result<Map<String, DateTime>>> loadSnoozes() async {
+    return const Success<Map<String, DateTime>>(<String, DateTime>{});
+  }
+
+  @override
+  Future<Result<void>> setSnooze(String assetId, DateTime? until) async {
+    return const Success<void>(null);
+  }
+
+  @override
+  Future<Result<double>> loadGoalTargetMb() async {
+    return const Success<double>(1024);
+  }
+
+  @override
+  Future<Result<void>> saveGoalTargetMb(double mb) async {
+    return const Success<void>(null);
+  }
+
+  @override
+  Future<Result<List<DateTime>>> loadCompletionDays() async {
+    return const Success<List<DateTime>>(<DateTime>[]);
+  }
+
+  @override
+  Future<Result<void>> recordCompletionDay(DateTime day) async {
+    return const Success<void>(null);
+  }
+
+  @override
   Future<Result<void>> recordTrashed(List<TrashEntry> entries) async {
     return const Success<void>(null);
   }

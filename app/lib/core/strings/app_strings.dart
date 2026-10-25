@@ -116,6 +116,8 @@ class AppStrings {
   static const String errorTrash = 'errorTrash';
   static const String errorTrashUnsupported = 'errorTrashUnsupported';
   static const String errorLocal = 'errorLocal';
+  static const String errorStorage = 'errorStorage';
+  static const String errorShare = 'errorShare';
 
   // Scan and session.
   static const String scanNow = 'scanNow';
@@ -171,8 +173,39 @@ class AppStrings {
   static const String smartDeckEmptyTitle = 'smartDeckEmptyTitle';
   static const String smartDeckEmptyMessage = 'smartDeckEmptyMessage';
 
-  // First-run tutorial (requirements §3: mandatory, because the mapping
-  // is the opposite of the usual convention).
+  // Phase 2B retention (requirements §7): Maybe snooze, goals,
+  // streaks, On This Day, session summary + share, storage
+  // projection. No Phase 3/4 strings.
+  static const String deckOnThisDay = 'deckOnThisDay';
+  static const String retentionProgressTitle = 'retentionProgressTitle';
+  static const String retentionGoalLabel = 'retentionGoalLabel';
+  static const String retentionGoalProgress = 'retentionGoalProgress';
+  static const String retentionGoalReached = 'retentionGoalReached';
+  static const String retentionGoalPreset = 'retentionGoalPreset';
+  static const String retentionStreak = 'retentionStreak';
+  static const String retentionStreakBest = 'retentionStreakBest';
+  static const String retentionStreakNone = 'retentionStreakNone';
+  static const String retentionMaybeTitle = 'retentionMaybeTitle';
+  static const String retentionMaybeEmpty = 'retentionMaybeEmpty';
+  static const String retentionMaybeSnoozedUntil = 'retentionMaybeSnoozedUntil';
+  static const String retentionSnooze7 = 'retentionSnooze7';
+  static const String retentionSnooze14 = 'retentionSnooze14';
+  static const String retentionSnooze30 = 'retentionSnooze30';
+  static const String retentionClearSnooze = 'retentionClearSnooze';
+  static const String retentionMaybeHint = 'retentionMaybeHint';
+  static const String retentionProjectionTitle = 'retentionProjectionTitle';
+  static const String retentionProjection = 'retentionProjection';
+  static const String retentionProjectionLibrary = 'retentionProjectionLibrary';
+  static const String retentionProjectionInTrash = 'retentionProjectionInTrash';
+  static const String retentionProjectionMarked = 'retentionProjectionMarked';
+  static const String summaryTitle = 'summaryTitle';
+  static const String summaryReviewed = 'summaryReviewed';
+  static const String summaryKept = 'summaryKept';
+  static const String summaryDeleteMarked = 'summaryDeleteMarked';
+  static const String summaryMaybe = 'summaryMaybe';
+  static const String summaryFavourite = 'summaryFavourite';
+  static const String summaryShare = 'summaryShare';
+  static const String summaryShareFailed = 'summaryShareFailed';
   static const String tutorialTitle = 'tutorialTitle';
   static const String tutorialKeep = 'tutorialKeep';
   static const String tutorialDelete = 'tutorialDelete';
@@ -310,6 +343,42 @@ class AppStrings {
     errorTrash: 'That trash action did not complete. Try again.',
     errorTrashUnsupported: 'Trash needs Android 11 or newer on this device.',
     errorLocal: 'Could not save or load your cleaning data. Try again.',
+    errorStorage:
+        'Could not read device storage. Showing library figures instead.',
+    errorShare: 'Sharing did not complete. Try again.',
+    deckOnThisDay: 'On this day',
+    retentionProgressTitle: 'Your progress',
+    retentionGoalLabel: 'Weekly goal',
+    retentionGoalProgress: '{freed} freed of {target} this week',
+    retentionGoalReached: 'Goal reached — nice cleaning!',
+    retentionGoalPreset: '{target} per week',
+    retentionStreak: '{count}-day streak',
+    retentionStreakBest: 'Best: {count} days',
+    retentionStreakNone:
+        'No streak yet — finish a deck or move photos to trash to start one.',
+    retentionMaybeTitle: 'Maybe pile',
+    retentionMaybeEmpty: 'No photos waiting for a decision.',
+    retentionMaybeSnoozedUntil: 'Snoozed until {date}',
+    retentionSnooze7: 'Snooze 7 days',
+    retentionSnooze14: 'Snooze 14 days',
+    retentionSnooze30: 'Snooze 30 days',
+    retentionClearSnooze: 'Clear snooze',
+    retentionMaybeHint: 'Snoozed photos stay Maybe and return to the deck when the snooze ends.',
+    retentionProjectionTitle: 'Storage projection',
+    retentionProjection:
+        '{free} free now → {projected} free after emptying trash',
+    retentionProjectionLibrary:
+        'Library projection (device storage unavailable)',
+    retentionProjectionInTrash: '{size} in trash, recoverable',
+    retentionProjectionMarked: '{size} marked, to be freed',
+    summaryTitle: 'Session summary',
+    summaryReviewed: '{count} reviewed',
+    summaryKept: '{count} kept',
+    summaryDeleteMarked: '{count} marked · {size} to be freed',
+    summaryMaybe: '{count} maybe',
+    summaryFavourite: '{count} favourited',
+    summaryShare: 'Share result',
+    summaryShareFailed: 'Sharing did not complete. Try again.',
     scanNow: 'Scan now',
     scanAgain: 'Scan again',
     clearFilters: 'Clear filters',

@@ -26,6 +26,8 @@ import '../../../services/detection/smart_decks.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/media/media_service.dart';
+import '../../deck/controller/deck_retention.dart';
+import '../../deck/model/retention.dart';
 import '../model/smart_deck_launch.dart';
 
 class SmartDeckController extends GetxController {
@@ -38,6 +40,11 @@ class SmartDeckController extends GetxController {
   final MediaService media;
   final LocalService local;
   final SmartDeckLaunch? initialLaunch;
+
+  /// Phase 2B retention glue, shared with the main deck controller
+  /// (summary, snooze expiry, completion days). No share backend:
+  /// smart-deck finishes show counts without a share button.
+  late final DeckRetention retention = DeckRetention(local: local);
 
   /// Thumbnail edge for swipe cards, matching the deck's preload size.
   static const int thumbnailSize = 512;
@@ -78,6 +85,10 @@ class SmartDeckController extends GetxController {
         .toList();
   }
 
+  /// Finished-session summary (Phase 2B): same counts as the main
+  /// deck, shown without a share button (see SmartDeckView).
+  SessionSummary get summary => retention.summarize(marks, queue);
+
   @override
   void onInit() {
     super.onInit();
@@ -114,6 +125,17 @@ class SmartDeckController extends GetxController {
       },
       onFailure: (_) {},
     );
+    // Phase 2B snooze expiry, same contract as the main deck:
+    // expired snoozed Maybe marks clear so those assets return
+    // to this deck as undecided.
+    final expiry = await retention.clearExpiredSnoozes(
+      Map<String, DeckMark>.of(marks),
+      DateTime.now(),
+    );
+    if (expiry.changed) {
+      marks.assignAll(expiry.marks);
+      _persist();
+    }
     currentIndex.value = _firstUndecidedIndex();
     ready.value = true;
     _preloadAround(currentIndex.value);
@@ -143,6 +165,10 @@ class SmartDeckController extends GetxController {
     currentIndex.value += 1;
     _preloadAround(currentIndex.value);
     _persist();
+    // Phase 2B streak day, same contract as the main deck.
+    if (isFinished) {
+      retention.recordCompletion();
+    }
   }
 
   void undo() {

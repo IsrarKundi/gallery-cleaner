@@ -31,6 +31,8 @@ String smartDeckTitleKey(SmartDeckId id) {
       return AppStrings.deckDark;
     case SmartDeckId.duplicates:
       return AppStrings.deckDuplicates;
+    case SmartDeckId.onThisDay:
+      return AppStrings.deckOnThisDay;
   }
 }
 
@@ -57,6 +59,8 @@ IconData smartDeckIcon(SmartDeckId id) {
       return AppIcons.dark;
     case SmartDeckId.duplicates:
       return AppIcons.duplicates;
+    case SmartDeckId.onThisDay:
+      return AppIcons.onThisDay;
   }
 }
 

@@ -25,14 +25,23 @@ import '../../../services/detection/smart_decks.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/media/media_service.dart';
+import '../../../services/storage/storage_service.dart';
+import '../../../services/trash/trash_entry.dart';
+import '../../deck/model/retention.dart';
 import '../model/decks_status.dart';
+import '../model/maybe_pile_item.dart';
 import '../model/smart_deck_launch.dart';
 
 class DecksController extends GetxController {
-  DecksController({required this.media, required this.local});
+  DecksController({required this.media, required this.local, this.storage});
 
   final MediaService media;
   final LocalService local;
+
+  /// Device-storage backend (Phase 2B projection). Null in tests
+  /// that construct the controller without one — the hub then
+  /// shows the labelled library projection instead.
+  final StorageService? storage;
 
   /// Slider default, shared with the Duplicates screen: the hub's
   /// duplicates row counts groups at this threshold.
@@ -46,6 +55,15 @@ class DecksController extends GetxController {
   final RxMap<SmartDeckId, List<MediaAsset>> deckAssets =
       <SmartDeckId, List<MediaAsset>>{}.obs;
   final RxMap<String, PhotoAnalysis> analyses = <String, PhotoAnalysis>{}.obs;
+
+  // Phase 2B retention state (loaded in init, independent of the scan).
+  final RxList<DeckSession> sessions = <DeckSession>[].obs;
+  final RxMap<String, DateTime> snoozes = <String, DateTime>{}.obs;
+  final RxDouble goalTargetMb = defaultGoalMb.obs;
+  final RxList<HistoryRecord> history = <HistoryRecord>[].obs;
+  final RxList<TrashEntry> trashEntries = <TrashEntry>[].obs;
+  final RxList<DateTime> completionDays = <DateTime>[].obs;
+  final Rx<double?> freeMb = Rx<double?>(null);
 
   final List<MediaAsset> _allAssets = <MediaAsset>[];
 
@@ -70,6 +88,101 @@ class DecksController extends GetxController {
     });
   }
 
+  // ---- Phase 2B retention getters (pure math in retention.dart) ----
+
+  /// MB freed this calendar week, from history only (never trashed).
+  double get weekFreedMbValue => weekFreedMb(history, DateTime.now());
+
+  /// 0–1 goal progress, clamped; 1.0 once the target is met.
+  double get goalProgress {
+    final double target = goalTargetMb.value;
+    if (target <= 0) {
+      return 0;
+    }
+    return (weekFreedMbValue / target).clamp(0, 1).toDouble();
+  }
+
+  /// Streak over completion days + history-record days.
+  StreakResult get streak {
+    final List<DateTime> days = <DateTime>[
+      ...completionDays,
+      for (final HistoryRecord record in history) record.date,
+    ];
+    return computeStreak(days, DateTime.now());
+  }
+
+  /// MB currently in Trash (recoverable, never freed).
+  double get inTrashMb {
+    int bytes = 0;
+    for (final TrashEntry entry in trashEntries) {
+      bytes += entry.sizeBytes;
+    }
+    return bytes / 1048576;
+  }
+
+  /// MB marked delete across all saved sessions, for assets still
+  /// in the scanned library ("to be freed", never freed).
+  double get markedMb {
+    final Map<String, MediaAsset> byId = <String, MediaAsset>{
+      for (final MediaAsset asset in _allAssets) asset.id: asset,
+    };
+    int bytes = 0;
+    for (final DeckSession session in sessions) {
+      for (final MapEntry<String, DeckMark> mark in session.marks.entries) {
+        if (mark.value == DeckMark.delete) {
+          bytes += byId[mark.key]?.sizeBytes ?? 0;
+        }
+      }
+    }
+    return bytes / 1048576;
+  }
+
+  /// Projected device free storage after emptying Trash, or null
+  /// when device free storage is unknown (library fallback then).
+  double? get projectedFreeMbValue {
+    final double? free = freeMb.value;
+    if (free == null) {
+      return null;
+    }
+    return projectedFreeMb(free, inTrashMb);
+  }
+
+  /// Maybe pile: every Maybe mark in every saved session whose
+  /// asset is still in the scanned library, with its snooze state.
+  /// Reads reactive state so an Obx rebuilds as pages arrive.
+  List<MaybePileItem> get maybeItems {
+    // Reactive reads (sessions, snoozes, scanned) so Obx tracks them.
+    final List<DeckSession> allSessions = sessions.toList();
+    final Map<String, DateTime> allSnoozes = Map<String, DateTime>.of(snoozes);
+    final int scannedCount = scanned.value;
+    if (scannedCount == 0 && _allAssets.isEmpty) {
+      return <MaybePileItem>[];
+    }
+    final Map<String, MediaAsset> byId = <String, MediaAsset>{
+      for (final MediaAsset asset in _allAssets) asset.id: asset,
+    };
+    final List<MaybePileItem> items = <MaybePileItem>[];
+    for (final DeckSession session in allSessions) {
+      for (final MapEntry<String, DeckMark> mark in session.marks.entries) {
+        if (mark.value != DeckMark.maybe) {
+          continue;
+        }
+        final MediaAsset? asset = byId[mark.key];
+        if (asset == null) {
+          continue;
+        }
+        items.add(
+          MaybePileItem(
+            asset: asset,
+            sessionKey: session.filterKey,
+            snoozeUntil: allSnoozes[mark.key],
+          ),
+        );
+      }
+    }
+    return items;
+  }
+
   /// List-level decks (bursts, duplicates) are ready only when the
   /// scan completes; the rest are ready as soon as pages arrive.
   bool deckReady(SmartDeckId id) {
@@ -83,6 +196,66 @@ class DecksController extends GetxController {
   void onInit() {
     super.onInit();
     init();
+  }
+
+  /// Loads retention data (sessions, snoozes, goal, history, Trash
+  /// records, completion days, device free storage). Failures leave
+  /// defaults in place — the hub still works, the projection just
+  /// falls back to library figures.
+  Future<void> loadRetention() async {
+    final Result<List<DeckSession>> sessionsResult = await local.listSessions();
+    sessionsResult.fold(onSuccess: sessions.assignAll, onFailure: (_) {});
+    final Result<Map<String, DateTime>> snoozesResult = await local
+        .loadSnoozes();
+    snoozesResult.fold(onSuccess: snoozes.assignAll, onFailure: (_) {});
+    final Result<double> goalResult = await local.loadGoalTargetMb();
+    goalResult.fold(onSuccess: goalTargetMb.call, onFailure: (_) {});
+    final Result<List<HistoryRecord>> historyResult = await local.loadHistory();
+    historyResult.fold(onSuccess: history.assignAll, onFailure: (_) {});
+    final Result<List<TrashEntry>> trashResult = await local.loadTrashEntries();
+    trashResult.fold(onSuccess: trashEntries.assignAll, onFailure: (_) {});
+    final Result<List<DateTime>> completionsResult = await local
+        .loadCompletionDays();
+    completionsResult.fold(
+      onSuccess: completionDays.assignAll,
+      onFailure: (_) {},
+    );
+    final StorageService? backend = storage;
+    if (backend != null) {
+      final Result<double> freeResult = await backend.getFreeMb();
+      freeResult.fold(
+        onSuccess: (double value) => freeMb.value = value,
+        onFailure: (_) => freeMb.value = null,
+      );
+    }
+  }
+
+  /// Snoozes [item]'s asset for [days] from today. The session mark
+  /// stays Maybe — only the snooze record changes.
+  Future<void> snoozeItem(MaybePileItem item, int days) async {
+    final DateTime until = snoozeUntilFor(days, DateTime.now());
+    final Result<void> result = await local.setSnooze(item.asset.id, until);
+    result.fold(
+      onSuccess: (_) => snoozes[item.asset.id] = until,
+      onFailure: (_) {},
+    );
+  }
+
+  /// Clears [item]'s snooze. The asset stays Maybe (unsnoozed) and
+  /// returns to its deck as undecided only via the normal flow —
+  /// clearing a snooze does not itself unmark anything.
+  Future<void> clearSnoozeItem(MaybePileItem item) async {
+    final Result<void> result = await local.setSnooze(item.asset.id, null);
+    result.fold(
+      onSuccess: (_) => snoozes.remove(item.asset.id),
+      onFailure: (_) {},
+    );
+  }
+
+  /// Saves a new weekly goal target (one of the presets).
+  Future<void> setGoal(double mb) async {
+    final Result<void> result = await local.saveGoalTargetMb(mb);
+    result.fold(onSuccess: (_) => goalTargetMb.value = mb, onFailure: (_) {});
   }
 
   Future<void> init() async {
@@ -103,6 +276,7 @@ class DecksController extends GetxController {
       return;
     }
     status.value = DecksStatus.scanning;
+    await loadRetention();
     await _scan();
   }
 

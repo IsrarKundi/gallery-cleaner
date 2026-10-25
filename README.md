@@ -138,13 +138,77 @@ owner's job, as in Phase 1.
   UI isolate; first scan on a very large library takes a while,
   later scans are cheap via the cache. 50,000+ tuning is
   Phase 3 and was not attempted here.
-- **Not in this increment:** Phase 2B (Maybe snooze, goals,
-  streaks, On This Day, summary/share, projection bar),
-  Phase 3/4 items, and any monetization code (still deferred).
+## Phase 2B status (retention, 25 Oct 2026)
+
+Host checks pass (`flutter analyze` clean, full `flutter test`
+suite green, 212 tests). On-device verification is still the
+owner's job, as in Phase 1 — including the two new platform
+behaviours below, which no host test can prove: the share sheet
+and the device-storage reading.
+
+- **Maybe snooze:** `LocalService` gained snooze records
+  (`klara_snoozes.json`, asset id → return date), a session
+  listing, a weekly goal target and completion days
+  (`klara_completions.json`). The hub's Maybe pile gathers
+  Maybe-marked assets from all saved sessions (assets still in
+  the library only) and offers Snooze 7 / 14 / 30 days and Clear
+  snooze. Marking Maybe alone never snoozes. While snoozed the
+  asset stays Maybe and the deck skips it; when the return date
+  arrives, the next load of that session clears the Maybe mark
+  (deck and smart-deck controllers, via the shared
+  `DeckRetention` helper) so the asset returns as undecided,
+  and the snooze record is cleared.
+- **Goals + streaks (hub progress section):** presets 500 MB /
+  1 GB / 2 GB per week, default 1 GB, stored in LocalService.
+  Progress = MB freed this calendar week (Monday–Sunday) from
+  history `mbFreed` only — trashed MB and marked MB never count.
+  A streak day is a day with a completed deck session (final
+  mark lands) or a history record (trash/empty run); the streak
+  counts consecutive days ending today (or yesterday when today
+  is still quiet) and resets on a gap over one day; current +
+  best streaks are shown.
+- **On This Day deck:** same month + day as today, previous
+  years only (today's just-taken photos are excluded), as a
+  smart deck (`smart:onThisDay`) reusing `SmartDeckController`
+  and the hub scanner. Feb 29 photos match only in leap years.
+- **Session summary + shareable result card:** when a main deck
+  finishes, the finished state shows reviewed / kept /
+  delete-marked (+ MB, labelled "to be freed") / maybe /
+  favourite counts plus a Share button. Sharing uses
+  `share_plus` 13.3.1: the card is captured as PNG via
+  `RepaintBoundary` and shared as a file with the summary text;
+  if capture fails, the same numbers are shared as text.
+  Smart-deck finishes show the same counts without a share
+  button. The summary never reports trashed MB as freed.
+- **Storage projection bar (hub):** device free storage now →
+  projected free after emptying Trash (free now + MB in Trash),
+  via the `disk_space` 0.2.1 plugin (StatFs, MB) behind a
+  `StorageService` interface. When device storage cannot be
+  read (or no backend is registered), the bar shows a labelled
+  library projection (in-Trash + marked figures from app
+  records) and invents no device numbers.
+- **New dependencies (both resolved cleanly on Flutter 3.47.7 /
+  Dart 3.13):** `share_plus` ^13.3.1, `disk_space` ^0.2.1. No
+  new Android permissions; no monetization code anywhere.
+- **Refactors to hold the line budget:** deck retention glue
+  (summary/share/snooze-expiry/completion) lives in
+  `DeckRetention` (shared by both deck controllers) and the
+  meter's service calls live in `DeckMeter` (in
+  `space_meter.dart`); the main deck controller is 399 lines.
+  Two tests were updated for superseded behaviour (the icon
+  count pin 26 → 30 for the four new icons; the old "All
+  decided" finished state is now the summary card).
+- **Honest gaps / owner checks:** the share sheet and the
+  `disk_space` reading are host-untestable and need his eyes on
+  a real phone; `disk_space` reads shared-storage free space
+  (the volume holding the photos), not internal-only storage.
+  The string registry (`app_strings.dart`, 425 lines) is over
+  the ~400 line guide — it grows monotonically with every
+  feature and would need a locale split, not a Phase 2B change.
 
 ## Tests
 
-- Unit + widget tests live in `app/test/` (167 tests plus
+- Unit + widget tests live in `app/test/` (211 tests plus
   the golden path below).
 - **Golden path** (`app/test/golden_path_test.dart`, host-runnable
   twin of `app/integration_test/golden_path_test.dart`): splash →
@@ -186,6 +250,8 @@ gradients anywhere in Phase 1 code.
 - [ ] Monetization model + prices (deferred by decision — no
       paywall, ads, or subscriptions exist in Phase 1 code; do
       not add any before that decision).
-- [ ] Phase 2+ scope (smart decks, goals/streaks, dark theme,
-      video compression, document guard, localization, iOS) —
-      none of it is in this build.
+- [ ] Phase 2+ scope (dark theme, video compression,
+      document guard, localization, iOS) — none of it is in
+      this build. Phase 2 itself (smart decks + retention) is
+      complete on host checks; on-device verification of the
+      Phase 2B share sheet and storage reading is still open.

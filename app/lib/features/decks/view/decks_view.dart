@@ -20,8 +20,11 @@ import '../../../core/widgets/section_header.dart';
 import '../../../services/detection/smart_decks.dart';
 import '../controller/decks_controller.dart';
 import '../model/decks_status.dart';
+import '../model/maybe_pile_item.dart';
 import '../model/smart_deck_meta.dart';
 import '../widgets/deck_row.dart';
+import '../widgets/maybe_pile_row.dart';
+import '../widgets/progress_section.dart';
 
 class DecksView extends GetView<DecksController> {
   const DecksView({super.key});
@@ -122,33 +125,89 @@ class _HubBody extends StatelessWidget {
                 ],
               ),
             ),
-          Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: context.sizes.screenPadding,
-            ),
-            child: SectionHeader(
-              title: AppStrings.tr(AppStrings.decksTitle),
-              subtitle: AppStrings.tr(AppStrings.decksSubtitle),
-            ),
-          ),
           Expanded(
-            child: ListView.builder(
-              itemCount: smartDeckOrder.length,
-              itemBuilder: (BuildContext context, int index) {
-                final SmartDeckId id = smartDeckOrder[index];
-                final int count = controller.assetsFor(id).length;
-                return DeckRow(
-                  deckId: id,
-                  count: count,
-                  totalBytes: controller.totalBytesFor(id),
-                  ready: controller.deckReady(id),
-                  onTap: count > 0 ? () => controller.openDeck(id) : null,
-                );
-              },
+            child: ListView(
+              children: <Widget>[
+                Padding(
+                  padding: EdgeInsets.all(context.sizes.screenPadding),
+                  child: ProgressSection(
+                    goalTargetMb: controller.goalTargetMb.value,
+                    weekFreedMb: controller.weekFreedMbValue,
+                    goalProgress: controller.goalProgress,
+                    streakCurrent: controller.streak.current,
+                    streakBest: controller.streak.best,
+                    onGoalSelected: controller.setGoal,
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: context.sizes.screenPadding,
+                  ),
+                  child: SectionHeader(
+                    title: AppStrings.tr(AppStrings.retentionMaybeTitle),
+                    subtitle: AppStrings.tr(AppStrings.retentionMaybeHint),
+                  ),
+                ),
+                ..._maybeRows(context, controller),
+                Padding(
+                  padding: EdgeInsets.all(context.sizes.screenPadding),
+                  child: ProjectionBar(
+                    freeMb: controller.freeMb.value,
+                    projectedFreeMb: controller.projectedFreeMbValue,
+                    inTrashMb: controller.inTrashMb,
+                    markedMb: controller.markedMb,
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: context.sizes.screenPadding,
+                  ),
+                  child: SectionHeader(
+                    title: AppStrings.tr(AppStrings.decksTitle),
+                    subtitle: AppStrings.tr(AppStrings.decksSubtitle),
+                  ),
+                ),
+                for (final SmartDeckId id in smartDeckOrder)
+                  DeckRow(
+                    deckId: id,
+                    count: controller.assetsFor(id).length,
+                    totalBytes: controller.totalBytesFor(id),
+                    ready: controller.deckReady(id),
+                    onTap: controller.assetsFor(id).isNotEmpty
+                        ? () => controller.openDeck(id)
+                        : null,
+                  ),
+              ],
             ),
           ),
         ],
       );
     });
+  }
+
+  List<Widget> _maybeRows(BuildContext context, DecksController controller) {
+    final List<MaybePileItem> items = controller.maybeItems;
+    if (items.isEmpty) {
+      return <Widget>[
+        Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: context.sizes.screenPadding,
+            vertical: context.sizes.sm,
+          ),
+          child: Text(
+            AppStrings.tr(AppStrings.retentionMaybeEmpty),
+            style: context.textStyles.bodyMedium,
+          ),
+        ),
+      ];
+    }
+    return <Widget>[
+      for (final MaybePileItem item in items)
+        MaybePileRow(
+          item: item,
+          onSnooze: (int days) => controller.snoozeItem(item, days),
+          onClearSnooze: () => controller.clearSnoozeItem(item),
+        ),
+    ];
   }
 }

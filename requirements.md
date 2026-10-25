@@ -66,8 +66,11 @@ related work starts. This file is the single source of truth for the build; the 
 - Semantic colour rule (applies to every palette): Keep = green family, Delete = red family,
   Maybe = amber, Favourite = heart filled with the primary colour. Delete must never share a hue
   with the primary brand colour.
-- Colour palette: OPEN — user to pick from the options offered 25 Oct 2026 (industry palettes:
-  WhatsApp/Spotify green family, Google blue family, Spotify dark). Record the pick here when made.
+- Colour palette: PICKED 25 Oct 2026 — Option B "Google blue"
+  (primary #4285F4, Keep #0F9D58, Delete #DB4437, Maybe #F4B400,
+  white background, Favourite = heart filled with the primary).
+  Recorded in `design.md` §2; the earlier OPEN status here was
+  stale and is corrected by this line.
 - Dark mode: Phase 3 (light theme first).
 
 ## 7. Phases (user decision: build in phases)
@@ -122,7 +125,8 @@ direction, but it is NOT locked.
 
 ## 10. Open decisions (must be resolved before the work they block)
 
-1. Final colour palette (user pick pending).
+1. ~~Final colour palette (user pick pending).~~ PICKED 25 Oct 2026
+   (Option B Google blue — see §6).
 2. Name verification on Google Play ("Klara").
 3. Monetization model + prices (before listing).
 4. Store listing copy, icon, and screenshots (after palette + name).

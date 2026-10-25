@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_service.dart';
+import '../../../services/storage/storage_service.dart';
 import '../controller/decks_controller.dart';
 
 class DecksBinding extends Bindings {
@@ -15,6 +16,11 @@ class DecksBinding extends Bindings {
       () => DecksController(
         media: Get.find<MediaService>(),
         local: Get.find<LocalService>(),
+        // Optional: without a storage backend the hub shows the
+        // labelled library projection instead of device numbers.
+        storage: Get.isRegistered<StorageService>()
+            ? Get.find<StorageService>()
+            : null,
       ),
     );
   }

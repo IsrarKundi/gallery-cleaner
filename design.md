@@ -19,6 +19,7 @@ For Klara — a utility, not a portfolio piece — borrow the boring parts: one 
 ## 2. Colour
 
 - **Flat is the baseline.** Gradients and glass are accents, not the system. At most ONE gradient in the app: the empty-state/onboarding hero, or the "freed space" celebration — never on every card.
+  - **Klara rule (requirements §6 wins over this bullet):** Klara ships flat-only — NO gradients anywhere in Klara code (verified by grep in Phase 2B). The "at most one gradient" allowance above does not apply to Klara.
 - **Glass only for the bottom bar and sheet scrims over photos, with an opaque fallback.** Never for the photo grid, list text, form inputs, or the Delete confirmation. Apple's own Liquid Glass needed a more opaque "Tinted" fallback in iOS 26.1 after readability criticism — that is the lesson, not a detail.
 - **Accent count: 1 primary accent + 1 supporting tonal colour + semantic colours used only for their meanings.** Two saturated accents (the Nexora concept uses lime + indigo) look great in a fintech portfolio frame and noisy in a photo grid full of colourful thumbnails — the photos are already the colour.
 - **Semantic rule (locked, from `requirements.md` §6):** Keep = green family, Delete = red family, Maybe = amber, Favourite = heart filled with the primary colour. **Never encode Keep/Delete by colour alone** — always icon + label + position (§9).

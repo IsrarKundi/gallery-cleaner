@@ -1,6 +1,10 @@
+import 'package:get/get.dart';
+
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/trash/trash_entry.dart';
+import '../../../services/trash/trash_service.dart';
+import '../../../core/utils/result.dart';
 
 /// Three-state space totals for the deck meter (requirements §4,
 /// design.md §7). Pure: no service calls, no state.
@@ -67,4 +71,44 @@ SpaceMeterTotals computeSpaceMeter({
     freedBytes: (freedMb * 1048576).round(),
     recoverableUntil: earliest,
   );
+}
+
+/// Owns the deck meter's service calls: loading its Trash/history
+/// inputs and computing totals from the current marks + queue.
+/// The controller keeps the reactive lists; this class keeps the
+/// controller under its line budget without changing behaviour.
+class DeckMeter {
+  DeckMeter({required this.trash, required this.local});
+
+  final TrashService trash;
+  final LocalService local;
+
+  SpaceMeterTotals compute(
+    Map<String, DeckMark> marks,
+    List<MediaAsset> queue,
+    List<TrashEntry> trashEntries,
+    List<HistoryRecord> history,
+  ) {
+    return computeSpaceMeter(
+      marks: marks,
+      assetsById: <String, MediaAsset>{
+        for (final MediaAsset asset in queue) asset.id: asset,
+      },
+      trashEntries: trashEntries,
+      history: history,
+    );
+  }
+
+  /// Reloads Trash records and history for the meter. Failures
+  /// leave the previous totals in place rather than erroring
+  /// the deck.
+  Future<void> refresh(
+    RxList<TrashEntry> trashEntries,
+    RxList<HistoryRecord> history,
+  ) async {
+    final Result<List<TrashEntry>> trashResult = await trash.listTrashed();
+    trashResult.fold(onSuccess: trashEntries.assignAll, onFailure: (_) {});
+    final Result<List<HistoryRecord>> historyResult = await local.loadHistory();
+    historyResult.fold(onSuccess: history.assignAll, onFailure: (_) {});
+  }
 }

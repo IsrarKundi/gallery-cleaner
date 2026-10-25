@@ -19,6 +19,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/empty_view.dart';
 import '../../../features/deck/widgets/deck_action_bar.dart';
+import '../../../features/deck/widgets/session_summary_card.dart';
 import '../../../features/deck/widgets/swipe_card.dart';
 import '../../../services/detection/smart_decks.dart';
 import '../controller/smart_deck_controller.dart';
@@ -70,12 +71,26 @@ class _Body extends StatelessWidget {
         );
       }
       if (controller.isFinished) {
-        return EmptyView(
-          icon: AppIcons.check,
-          title: AppStrings.tr(AppStrings.smartDeckFinishedTitle),
-          message: AppStrings.tr(AppStrings.smartDeckFinishedMessage),
-          ctaLabel: AppStrings.tr(AppStrings.actionReview),
-          onCta: controller.goToReview,
+        // Phase 2B: same summary counts as the main deck, without
+        // a share button (the main deck owns sharing).
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(context.sizes.screenPadding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              SessionSummaryCard(summary: controller.summary),
+              SizedBox(height: context.sizes.xl),
+              SizedBox(
+                width: double.infinity,
+                height: context.sizes.buttonPrimary,
+                child: FilledButton.icon(
+                  onPressed: controller.goToReview,
+                  icon: Icon(AppIcons.review, size: context.sizes.iconSm),
+                  label: Text(AppStrings.tr(AppStrings.actionReview)),
+                ),
+              ),
+            ],
+          ),
         );
       }
       final current = controller.currentAsset!;

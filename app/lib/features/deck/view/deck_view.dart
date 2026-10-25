@@ -13,6 +13,7 @@ import '../controller/deck_controller.dart';
 import '../model/deck_status.dart';
 import '../widgets/deck_action_bar.dart';
 import '../widgets/filter_sheet.dart';
+import '../widgets/session_summary_card.dart';
 import '../widgets/space_meter_bar.dart';
 import '../widgets/swipe_card.dart';
 import '../widgets/tutorial_overlay.dart';
@@ -29,6 +30,10 @@ import '../widgets/tutorial_overlay.dart';
 /// review, so there is no confirmation sheet on this screen.
 class DeckView extends GetView<DeckController> {
   const DeckView({super.key});
+
+  /// RepaintBoundary key for the summary card capture (Phase 2B
+  /// share). The view owns the key; the controller owns sharing.
+  static final GlobalKey _summaryBoundaryKey = GlobalKey();
 
   void _openFilters(BuildContext context) {
     showModalBottomSheet<void>(
@@ -160,12 +165,53 @@ class _ReadyBody extends StatelessWidget {
         );
       }
       if (controller.isFinished) {
-        return EmptyView(
-          icon: AppIcons.check,
-          title: AppStrings.tr(AppStrings.deckFinishedTitle),
-          message: AppStrings.tr(AppStrings.deckFinishedMessage),
-          ctaLabel: AppStrings.tr(AppStrings.actionReview),
-          onCta: controller.goToReview,
+        // Phase 2B summary card: counts + share (when a share
+        // backend exists). Capture failure falls back to sharing
+        // the same numbers as text (controller.shareCard(null)).
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(context.sizes.screenPadding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              RepaintBoundary(
+                key: DeckView._summaryBoundaryKey,
+                child: SessionSummaryCard(
+                  summary: controller.summary,
+                  onShare: controller.retention.canShare
+                      ? () async {
+                          final png = await captureBoundaryPng(
+                            DeckView._summaryBoundaryKey,
+                          );
+                          await controller.retention.shareSummary(
+                            controller.summary,
+                            png,
+                          );
+                        }
+                      : null,
+                ),
+              ),
+              if (controller.retention.shareErrorKey.value.isNotEmpty)
+                Padding(
+                  padding: EdgeInsets.only(top: context.sizes.sm),
+                  child: Text(
+                    AppStrings.tr(controller.retention.shareErrorKey.value),
+                    style: context.textStyles.bodySmall.copyWith(
+                      color: context.palette.error,
+                    ),
+                  ),
+                ),
+              SizedBox(height: context.sizes.xl),
+              SizedBox(
+                width: double.infinity,
+                height: context.sizes.buttonPrimary,
+                child: FilledButton.icon(
+                  onPressed: controller.goToReview,
+                  icon: Icon(AppIcons.review, size: context.sizes.iconSm),
+                  label: Text(AppStrings.tr(AppStrings.actionReview)),
+                ),
+              ),
+            ],
+          ),
         );
       }
       final current = controller.currentAsset!;

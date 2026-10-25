@@ -8,12 +8,15 @@ import '../../../core/utils/result.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/media/media_service.dart';
+import '../../../services/share/share_service.dart';
 import '../../../services/trash/trash_entry.dart';
 import '../../../services/trash/trash_service.dart';
 import '../model/deck_filter.dart';
 import '../model/deck_status.dart';
+import '../model/retention.dart';
 import '../model/space_meter.dart';
 import '../model/thumbnail_preloader.dart';
+import 'deck_retention.dart';
 
 /// The deck: permission, paged queue, marks, undo, filters, session
 /// resume, thumbnail preloading and the three-state space meter
@@ -23,8 +26,6 @@ import '../model/thumbnail_preloader.dart';
 /// points at the current card; "next undecided" is the first queue
 /// index with no mark. A swipe or button records the mark and
 /// advances; undo pops the last decision and returns to that card.
-/// Default queue covers images AND videos (both permissions exist,
-/// trash mechanics identical; splitting them would be a Phase 2 deck).
 ///
 /// Cross-feature contract for review (no review code here): deck ->
 /// review passes the delete-marked list via route arguments (see
@@ -39,11 +40,21 @@ class DeckController extends GetxController {
     required this.media,
     required this.trash,
     required this.local,
-  }) : _preloader = ThumbnailPreloader(media: media);
+    ShareService? share,
+  }) : _preloader = ThumbnailPreloader(media: media),
+       retention = DeckRetention(local: local, share: share),
+       meterState = DeckMeter(trash: trash, local: local);
 
   final MediaService media;
   final TrashService trash;
   final LocalService local;
+
+  /// Phase 2B retention glue (summary, share, snooze expiry,
+  /// completion days). No share backend = no share button.
+  final DeckRetention retention;
+
+  /// Three-state meter state.
+  final DeckMeter meterState;
 
   /// Thumbnail preloading + bounded cache (see thumbnail_preloader.dart).
   final ThumbnailPreloader _preloader;
@@ -97,8 +108,7 @@ class DeckController extends GetxController {
 
   bool get canUndo => undoStack.isNotEmpty;
 
-  /// True only for the honest Android 14 partial-access state: the
-  /// deck works on exactly the granted photos and says so.
+  /// True only for the honest Android 14 partial-access state.
   bool get isPartialAccess =>
       permission.value == MediaPermission.grantedLimited;
 
@@ -109,18 +119,12 @@ class DeckController extends GetxController {
         .toList();
   }
 
+  /// Finished-session summary (Phase 2B; delete MB is "to be freed").
+  SessionSummary get summary => retention.summarize(marks, queue);
+
   /// Live three-state totals (marks + queue + trash + history).
-  /// Trashed MB is never counted as freed (see space_meter.dart).
-  SpaceMeterTotals get meter {
-    return computeSpaceMeter(
-      marks: marks,
-      assetsById: <String, MediaAsset>{
-        for (final MediaAsset asset in queue) asset.id: asset,
-      },
-      trashEntries: trashEntries,
-      history: history,
-    );
-  }
+  SpaceMeterTotals get meter =>
+      meterState.compute(marks, queue, trashEntries, history);
 
   @override
   void onInit() {
@@ -128,8 +132,7 @@ class DeckController extends GetxController {
     init();
   }
 
-  /// Async entry point, shared by onInit, retry and tests. Guarded so
-  /// concurrent callers share one run instead of double-loading.
+  /// Async entry point, shared by onInit, retry and tests (guarded).
   Future<void> init() {
     return _initFuture ??= _init();
   }
@@ -175,7 +178,7 @@ class DeckController extends GetxController {
       onSuccess: albums.assignAll,
       onFailure: (_) => albums.clear(),
     );
-    await refreshMeter();
+    await meterState.refresh(trashEntries, history);
     final Result<bool> tutorialResult = await local.isTutorialSeen();
     showTutorial.value = tutorialResult.fold(
       onSuccess: (bool seen) => !seen,
@@ -201,6 +204,16 @@ class DeckController extends GetxController {
       // crash resume: the resume index scans the loaded queue only.
       marks.assignAll(session!.marks);
       favouriteIds.assignAll(session!.favouriteIds);
+      // Phase 2B snooze expiry: an expired snoozed Maybe mark is
+      // cleared here, so the asset returns to the deck undecided.
+      final expiry = await retention.clearExpiredSnoozes(
+        Map<String, DeckMark>.of(marks),
+        DateTime.now(),
+      );
+      if (expiry.changed) {
+        marks.assignAll(expiry.marks);
+        _persist();
+      }
     }
     currentIndex.value = _firstUndecidedIndex();
     status.value = DeckStatus.ready;
@@ -274,6 +287,12 @@ class DeckController extends GetxController {
     _maybeLoadMore();
     _preloader.preloadAround(queue, currentIndex.value);
     _persist();
+    // Phase 2B streak day: the moment the final mark lands, this
+    // session is complete. Recording is idempotent per day, so an
+    // undo + re-mark on the same day records nothing new.
+    if (isFinished) {
+      retention.recordCompletion();
+    }
   }
 
   /// Pops the last decision and returns to that card. Disabled (a
@@ -342,17 +361,7 @@ class DeckController extends GetxController {
     await local.setTutorialSeen(true);
   }
 
-  /// Reloads Trash records and history for the meter. Failures leave
-  /// the previous totals in place rather than erroring the deck.
-  Future<void> refreshMeter() async {
-    final Result<List<TrashEntry>> trashResult = await trash.listTrashed();
-    trashResult.fold(onSuccess: trashEntries.assignAll, onFailure: (_) {});
-    final Result<List<HistoryRecord>> historyResult = await local.loadHistory();
-    historyResult.fold(onSuccess: history.assignAll, onFailure: (_) {});
-  }
-
-  /// Navigates to review: the delete-marked list as arguments, the
-  /// deck filter key as a route parameter (for session writes).
+  /// Navigates to review with the delete-marked list + filter key.
   void goToReview() {
     Get.toNamed<dynamic>(
       AppRoutes.review,

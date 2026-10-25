@@ -40,6 +40,7 @@ enum SmartDeckId {
   blurry,
   dark,
   duplicates,
+  onThisDay,
 }
 
 /// Size at or over which a photo counts as "large".
@@ -91,6 +92,14 @@ Set<SmartDeckId> decksForAsset(
         decks.add(SmartDeckId.dark);
       }
     }
+  }
+  // On This Day (Phase 2B): same month + day as today, previous
+  // years only, so today's just-taken photos never dominate.
+  // Feb 29 assets match only in leap years (see retention.dart).
+  if (asset.createDate.month == now.month &&
+      asset.createDate.day == now.day &&
+      asset.createDate.year != now.year) {
+    decks.add(SmartDeckId.onThisDay);
   }
   return decks;
 }

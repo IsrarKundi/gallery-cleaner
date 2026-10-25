@@ -70,6 +70,10 @@ class AppIcons {
   static const IconData bursts = PhosphorIconsRegular.images;
   static const IconData blurry = PhosphorIconsRegular.warningDiamond;
   static const IconData dark = PhosphorIconsRegular.moon;
+  static const IconData onThisDay = PhosphorIconsRegular.calendarHeart;
+  static const IconData goal = PhosphorIconsRegular.target;
+  static const IconData streak = PhosphorIconsRegular.trophy;
+  static const IconData share = PhosphorIconsRegular.shareNetwork;
 
   /// Every constant, for tests that assert each one is a valid glyph.
   static const List<IconData> all = <IconData>[
@@ -99,5 +103,9 @@ class AppIcons {
     bursts,
     blurry,
     dark,
+    onThisDay,
+    goal,
+    streak,
+    share,
   ];
 }
