@@ -19,7 +19,9 @@ import '../model/timeline_grouping.dart';
 class TimelineSection extends StatelessWidget {
   const TimelineSection({
     super.key,
-    required this.assets,
+    required this.totalBytes,
+    required this.years,
+    required this.months,
     required this.selectedYear,
     required this.ascending,
     required this.onYearSelected,
@@ -31,7 +33,12 @@ class TimelineSection extends StatelessWidget {
     this.isScanning = false,
   });
 
-  final List<MediaAsset> assets;
+  /// Precomputed by the controller per scan page (solutions
+  /// 4.3) — the widget never folds the whole library itself,
+  /// so a hub rebuild costs O(months), not O(library).
+  final int totalBytes;
+  final List<int> years;
+  final List<MonthSummary> months;
   final int selectedYear;
   final bool ascending;
   final ValueChanged<int> onYearSelected;
@@ -47,17 +54,6 @@ class TimelineSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final int totalBytes = assets.fold<int>(
-      0,
-      (int s, MediaAsset a) => s + a.sizeBytes,
-    );
-    final List<int> years = availableYearsFor(assets);
-    final List<MonthSummary> months = groupAssetsByMonth(
-      assets: assets,
-      targetYear: selectedYear,
-      ascending: ascending,
-    );
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[

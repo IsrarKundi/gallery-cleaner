@@ -101,17 +101,6 @@ class _HubBody extends StatelessWidget {
             controller.assetsFor(id).isNotEmpty;
       }).toList();
 
-      // ignore: unused_local_variable
-      final int readyBytes = visibleDecks.fold<int>(
-        0,
-        (int sum, SmartDeckId id) => sum + controller.totalBytesFor(id),
-      );
-
-      // ignore: unused_local_variable
-      final int totalStorageBytes = controller.totalLibraryBytes > 0
-          ? controller.totalLibraryBytes
-          : readyBytes;
-
       final bool allEmpty =
           !scanning &&
           visibleDecks.isEmpty &&
@@ -170,7 +159,12 @@ class _HubBody extends StatelessWidget {
           SizedBox(height: context.sizes.md),
           // Timeline Section
           TimelineSection(
-            assets: controller.allAssets,
+            totalBytes: controller.timelineTotalBytes,
+            years: controller.timelineYears,
+            months: controller.monthsForYear(
+              controller.selectedYear.value,
+              ascending: controller.timelineAscending.value,
+            ),
             selectedYear: controller.selectedYear.value,
             ascending: controller.timelineAscending.value,
             onYearSelected: (int y) => controller.selectedYear.value = y,

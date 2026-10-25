@@ -46,6 +46,7 @@ import '../../../services/trash/trash_entry.dart';
 import '../../deck/model/retention.dart';
 import '../model/decks_status.dart';
 import '../model/maybe_items.dart';
+import '../model/timeline_grouping.dart';
 import '../model/maybe_pile_item.dart';
 import '../model/smart_deck_launch.dart';
 
@@ -100,6 +101,25 @@ class DecksController extends GetxController {
   final RxMap<SmartDeckId, List<MediaAsset>> deckAssets =
       <SmartDeckId, List<MediaAsset>>{}.obs;
   final RxMap<String, PhotoAnalysis> analyses = <String, PhotoAnalysis>{}.obs;
+
+  // Phase 4.3 incremental timeline state, built per scan page
+  // (see TimelineAccumulator) — never recomputed over the whole
+  // library in build(). The view reads [timelineTotalBytes],
+  // [timelineYears] and [monthsForYear] (at most 12 summaries),
+  // so a hub rebuild costs O(months), not O(library).
+  final TimelineAccumulator _timeline = TimelineAccumulator();
+
+  /// Total library bytes, maintained incrementally per scan page.
+  int get timelineTotalBytes => _timeline.totalBytes;
+
+  /// Years present in the scanned library, newest first.
+  List<int> get timelineYears => _timeline.years;
+
+  /// Month summaries for [year] from the incremental
+  /// accumulators — identical to [groupAssetsByMonth] over the
+  /// full list (see the equivalence test).
+  List<MonthSummary> monthsForYear(int year, {bool ascending = false}) =>
+      _timeline.monthsForYear(year, ascending: ascending);
 
   // Phase 2B retention state (loaded in init, independent of the scan).
   final RxList<DeckSession> sessions = <DeckSession>[].obs;
@@ -363,6 +383,8 @@ class DecksController extends GetxController {
     scanned.value = 0;
     estimatedTotal.value = null;
     scanComplete.value = false;
+    // Phase 4.3: reset the incremental timeline state with it.
+    _timeline.clear();
 
     final DateTime now = DateTime.now();
     _markedAccumulated = true;
@@ -384,6 +406,8 @@ class DecksController extends GetxController {
         analyses.addAll(fresh);
         for (final MediaAsset asset in page) {
           _assetsById[asset.id] = asset;
+          // Phase 4.3: incremental timeline state, per asset.
+          _timeline.add(asset);
           if (_deleteMarkedIds.contains(asset.id)) {
             _markedBytes += asset.sizeBytes;
           }
@@ -457,9 +481,6 @@ class DecksController extends GetxController {
   List<MediaAsset> get allAssets => _allAssets;
   final RxInt selectedYear = DateTime.now().year.obs;
   final RxBool timelineAscending = false.obs;
-  int get totalLibraryBytes =>
-      _allAssets.fold<int>(0, (int s, MediaAsset a) => s + a.sizeBytes);
-
   void openMonth(String monthKey) {
     final List<MediaAsset> monthAssets = _allAssets
         .where(
