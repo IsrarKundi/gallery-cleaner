@@ -83,6 +83,15 @@ class DeckView extends GetView<DeckController> {
             tooltip: AppStrings.tr(AppStrings.screenSettings),
             onPressed: () => Get.toNamed<dynamic>(AppRoutes.settings),
           ),
+          // Phase 4: explicit, one-video-at-a-time compression.
+          // Reached from here so it is discoverable without
+          // touching the swipe flow; the screen itself never
+          // compresses anything unasked.
+          IconButton(
+            icon: Icon(AppIcons.compress, size: context.sizes.iconMd),
+            tooltip: AppStrings.tr(AppStrings.screenCompress),
+            onPressed: () => Get.toNamed<dynamic>(AppRoutes.compress),
+          ),
           IconButton(
             icon: Icon(AppIcons.filter, size: context.sizes.iconMd),
             tooltip: AppStrings.tr(AppStrings.filterTitle),

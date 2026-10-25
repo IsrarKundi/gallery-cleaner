@@ -16,6 +16,8 @@ import '../../features/settings/binding/settings_binding.dart';
 import '../../features/settings/view/settings_view.dart';
 import '../../features/splash/binding/splash_binding.dart';
 import '../../features/splash/view/splash_view.dart';
+import '../../features/compress/binding/compress_binding.dart';
+import '../../features/compress/view/compress_view.dart';
 import '../../features/deck/view/deck_view.dart';
 import '../../features/trash/binding/trash_binding.dart';
 import '../../features/trash/view/trash_view.dart';
@@ -76,6 +78,11 @@ class AppPages {
       name: AppRoutes.settings,
       page: SettingsView.new,
       binding: SettingsBinding(),
+    ),
+    GetPage<dynamic>(
+      name: AppRoutes.compress,
+      page: CompressView.new,
+      binding: CompressBinding(),
     ),
   ];
 }

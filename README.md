@@ -50,13 +50,15 @@ flutter test integration_test/   # golden path on a device (needs one connected)
 ## Permissions — and why
 
 Declared in `android/app/src/main/AndroidManifest.xml`, exactly
-two, both read-only:
+three (the third arrived in Phase 3A):
 
 - `READ_MEDIA_IMAGES` and `READ_MEDIA_VIDEO` — the deck swipes
   through the whole library, which the system photo picker cannot
   do (it only returns user-selected photos). If the user grants
   only selected photos (Android 14 partial access), the app works
   on exactly those photos and says so on the deck.
+- `POST_NOTIFICATIONS` — only for the one weekly nudge, only
+  requested when that toggle is turned on (Phase 3A).
 - `MANAGE_EXTERNAL_STORAGE` is **never** requested (Play lists
   media-file access as an invalid use for it). No account, no
   sign-in, no photo upload: everything is on-device only, and no
@@ -403,6 +405,77 @@ does, and he may not own a 50k library.
   prove state and labels, not device timing or TalkBack
   delivery.
 
+## Phase 4 status (video compression + document guard, Android only, 25 Oct 2026)
+
+Host checks pass (`flutter analyze` clean, full `flutter test`
+suite green: 290 tests, up from 272). On-device verification is
+still the owner's job, as in every phase — the native transcoding
+run, the MediaStore save of a compressed copy, and the real
+screenshot/document mix in his library cannot be proven here.
+
+- **Video compression (requirements §7, Phase 4: "preview + keep
+  original until user confirms"):** a Compress screen (`/compress`,
+  deck AppBar film-strip button) lists the library's videos
+  (paged, newest first, capped at 200). Tapping one video — the
+  only trigger, never automatic, never bulk — transcodes a copy
+  into the app cache with a determinate progress bar and Cancel,
+  then shows the honest preview: original size, compressed size,
+  and "smaller by X". Saving writes the copy into the library as
+  a NEW item (`<name>_compressed.<ext>`) via photo_manager's
+  editor save; the original is never deleted, overwritten or
+  replaced by compression, and the saving is never called
+  "freed" while the original exists — removing the original is a
+  separate review + native-confirmation trash step, and space
+  counts as freed only after trash is emptied or expires. A
+  compressed copy that is not smaller cannot be saved (the UI
+  says so plainly). Failure or cancellation leaves the original
+  untouched and discards the partial cache copy. New dependency,
+  resolved cleanly on Flutter 3.47.7 / Dart 3.13:
+  `video_compress_advanced` 4.0.2 (DefaultQuality,
+  `deleteOrigin: false`, progress stream, cancel supported),
+  behind a `VideoCompressionService` interface; only the
+  implementation imports the SDK and photo_manager's editor.
+  Manifest exception, documented not hidden: the plugin's own
+  manifest declares legacy `WRITE_EXTERNAL_STORAGE`, so it
+  appears in the merged manifest; Klara's own manifest is
+  unchanged (the three permissions above), Klara never requests
+  it at runtime, and on Android 13+ it grants nothing.
+- **Document guard (requirements §7, Phase 4: "warn before
+  deleting screenshots that look like receipts, IDs, tickets, QR
+  codes"):** Klara has no OCR and no content classification, so
+  the guard honestly uses only on-device metadata signals — a
+  screenshot album/folder (the Screenshots deck's match) or a
+  document token in the filename (receipt, invoice, ticket,
+  boarding, passport, licence, identity/id, QR, barcode,
+  document, contract, certificate, voucher, prescription;
+  matched as whole tokens, so "id" never matches inside "video").
+  Enforcement is at Review, the only place deletion is initiated
+  (swipes only mark, so deck/smart-deck/Duplicates marks are all
+  caught there): a banner while document-like items sit in the
+  grid, and a counted confirmation dialog at delete time that
+  stops the run BEFORE any native sheet. "Delete anyway" is the
+  deliberate override and stands (still via the native sheet +
+  30-day Trash); "Keep these documents" unmarks only those items.
+  The guard never deletes and is never an unblockable block.
+  What it cannot do is stated in the code: a receipt screenshot
+  with a generic filename in a non-screenshot folder is not
+  flagged, and a meme in the Screenshots folder is flagged —
+  the copy says Klara cannot read what a photo shows.
+- **Line-budget extractions (same precedent as Phase 3A/3B):**
+  `ReviewBlur` (private-blur state) and `review_session.dart`
+  (session-mark writes) out of the review controller, which is
+  back at exactly 400 lines. The string registry
+  (`app_strings.dart`, now 664 lines) remains the one known
+  exception — it grows monotonically and needs a locale split,
+  not a Phase 4 change.
+- **Honest gaps / owner checks:** the real transcode (quality,
+  speed, and whether DefaultQuality shrinks his actual videos),
+  the MediaStore save appearing in his gallery, and the guard's
+  real-world hit/miss balance on his screenshots all need his
+  eyes on a real phone. Localization, monetization and the iOS
+  port (the rest of Phase 4 in requirements §7) are NOT in this
+  build — they were excluded from this run and remain open.
+
 ## Tests
 
 - Unit + widget tests live in `app/test/` (211 tests plus
@@ -447,8 +520,10 @@ gradients anywhere in Phase 1 code.
 - [ ] Monetization model + prices (deferred by decision — no
       paywall, ads, or subscriptions exist in Phase 1 code; do
       not add any before that decision).
-- [ ] Phase 2+ scope (dark theme, video compression,
-      document guard, localization, iOS) — none of it is in
-      this build. Phase 2 itself (smart decks + retention) is
-      complete on host checks; on-device verification of the
-      Phase 2B share sheet and storage reading is still open.
+- [ ] Remaining Phase 4 scope (localization, monetization,
+      iOS) — none of it is in this build. Phase 4 Android items
+      (video compression, document guard) are complete on host
+      checks; on-device verification of the transcode, the
+      MediaStore save, and the guard's real-world behaviour is
+      still open, as is on-device verification of the Phase 2B
+      share sheet and storage reading.

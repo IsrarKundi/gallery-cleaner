@@ -6,7 +6,7 @@ void main() {
   group('AppIcons', () {
     test('every constant is a valid IconData', () {
       // Phase 3A adds settings + eye + eyeSlash (30 -> 33).
-      expect(AppIcons.all.length, 33);
+      expect(AppIcons.all.length, 34);
       for (final IconData icon in AppIcons.all) {
         expect(icon.codePoint, greaterThan(0));
         expect(icon.fontFamily, isNotNull);

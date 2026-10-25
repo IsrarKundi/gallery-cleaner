@@ -30,4 +30,7 @@ class AppRoutes {
 
   /// Settings screen (Phase 3A).
   static const String settings = '/settings';
+
+  /// Compress-video screen (Phase 4).
+  static const String compress = '/compress';
 }

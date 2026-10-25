@@ -285,6 +285,37 @@ class AppStrings {
   static const String a11yReviewTile = 'a11yReviewTile';
   static const String a11yReviewTileUntitled = 'a11yReviewTileUntitled';
 
+  // Phase 4 Android (requirements §7, Phase 4): video compression
+  // (preview + keep original until the user confirms) and the
+  // document guard (warn before deleting screenshots that look
+  // like receipts, IDs, tickets, QR codes). No monetization, iOS,
+  // localization or Play-listing strings are added here.
+  static const String screenCompress = 'screenCompress';
+  static const String compressEmptyTitle = 'compressEmptyTitle';
+  static const String compressEmptyMessage = 'compressEmptyMessage';
+  static const String compressHint = 'compressHint';
+  static const String compressTapHint = 'compressTapHint';
+  static const String compressing = 'compressing';
+  static const String compressCancel = 'compressCancel';
+  static const String compressPreviewTitle = 'compressPreviewTitle';
+  static const String compressOriginalLabel = 'compressOriginalLabel';
+  static const String compressCompressedLabel = 'compressCompressedLabel';
+  static const String compressSaving = 'compressSaving';
+  static const String compressNotSmaller = 'compressNotSmaller';
+  static const String compressSaveCopy = 'compressSaveCopy';
+  static const String compressDiscard = 'compressDiscard';
+  static const String compressSaved = 'compressSaved';
+  static const String compressOriginalKept = 'compressOriginalKept';
+  static const String compressCancelled = 'compressCancelled';
+  static const String errorCompress = 'errorCompress';
+  static const String errorCompressNotVideo = 'errorCompressNotVideo';
+  static const String documentGuardBanner = 'documentGuardBanner';
+  static const String documentGuardTitle = 'documentGuardTitle';
+  static const String documentGuardMessage = 'documentGuardMessage';
+  static const String documentGuardDeleteAnyway = 'documentGuardDeleteAnyway';
+  static const String documentGuardKeep = 'documentGuardKeep';
+  static const String documentGuardKept = 'documentGuardKept';
+
   // Confirmations and feedback.
   static const String snackMovedToTrash = 'snackMovedToTrash';
   static const String snackMovedToTrashUntil = 'snackMovedToTrashUntil';
@@ -568,6 +599,49 @@ class AppStrings {
     a11yThumbUntitled: 'Photo, tap to make this photo the keeper',
     a11yReviewTile: '{name}, tap to remove from review',
     a11yReviewTileUntitled: 'Photo, tap to remove from review',
+    screenCompress: 'Compress video',
+    compressEmptyTitle: 'No videos found',
+    compressEmptyMessage:
+        'There are no videos in your library to compress right now.',
+    compressHint:
+        'Pick one video. Klara makes a smaller copy first and shows '
+        'you both sizes — nothing is replaced until you say so.',
+    compressTapHint: 'Tap a video to compress it.',
+    compressing: 'Compressing… {percent}%',
+    compressCancel: 'Cancel compression',
+    compressPreviewTitle: 'Compressed copy ready',
+    compressOriginalLabel: 'Original: {size}',
+    compressCompressedLabel: 'Compressed copy: {size}',
+    compressSaving: 'Smaller by {size} — the original stays in your library.',
+    compressNotSmaller:
+        'The compressed copy is not smaller than the original, so '
+        'there is nothing to gain by saving it. Discard it and keep '
+        'the original as it is.',
+    compressSaveCopy: 'Save compressed copy',
+    compressDiscard: 'Discard',
+    compressSaved: 'Compressed copy saved to your library.',
+    compressOriginalKept:
+        'Your original video is still in your library. To remove it, '
+        'mark it for deletion and confirm it in Review — it is not '
+        'counted as freed until trash is emptied.',
+    compressCancelled: 'Compression cancelled. The original is untouched.',
+    errorCompress: 'Compression did not complete. The original is untouched.',
+    errorCompressNotVideo: 'Only videos can be compressed.',
+    documentGuardBanner:
+        '{count} photos here look like documents (screenshots, or '
+        'filenames like receipts, tickets or IDs). Klara cannot read '
+        'what they show — check them before deleting.',
+    documentGuardTitle: 'These may be documents',
+    documentGuardMessage:
+        '{count} photos you marked look like documents — screenshots, '
+        'or filenames like receipts, tickets, IDs or QR codes. Klara '
+        'cannot read what they show, so check them first. Deleting '
+        'them anyway still goes through the system confirmation and '
+        'they stay recoverable in trash for 30 days.',
+    documentGuardDeleteAnyway: 'Delete anyway',
+    documentGuardKeep: 'Keep these documents',
+    documentGuardKept:
+        '{count} document-like photos were kept and removed from this list.',
     snackRestored: 'Photo restored',
     snackRestoredMany: '{count} photos restored',
     snackTrashEmptied: 'Trash emptied. {size} freed.',

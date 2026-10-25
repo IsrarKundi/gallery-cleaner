@@ -6,16 +6,28 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/utils/app_haptics.dart';
 import '../../../core/utils/result.dart';
+import '../../../services/detection/document_guard.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/media/media_service.dart';
 import '../../../services/trash/trash_service.dart';
+import 'review_blur.dart';
+import 'review_session.dart';
 import 'review_delete.dart';
 
 /// Outcome of [ReviewController.deleteSelected], for the view's
 /// post-delete handling and for tests (navigation itself is not
 /// asserted — see the navigation contract below).
-enum ReviewDeleteOutcome { trashed, denied, failed, serviceError }
+enum ReviewDeleteOutcome {
+  trashed,
+  denied,
+  failed,
+  serviceError,
+
+  /// Phase 4 guard blocked the run: document-like items pend in
+  /// [ReviewController.documentGuardPending] for the override.
+  documentGuard,
+}
 
 /// Review screen state (requirements §4): the editable grid of
 /// delete-marked photos the deck passed via route arguments.
@@ -27,11 +39,9 @@ enum ReviewDeleteOutcome { trashed, denied, failed, serviceError }
 /// rule covers [goToDeck] and the view's trash navigation.
 ///
 /// Session contract: the deck passes only the asset list as arguments,
-/// so the deck filter key travels as a route parameter (`filterKey` —
-/// see [DeckController.goToReview]). It defaults to `all` when absent,
-/// which is also the filter the deck reloads under after a stack
-/// reset. Session writes load the stored session, apply the mark
-/// change, and save it back preserving its index and favourites.
+/// so the filter key travels as a route parameter (`filterKey`).
+/// It defaults to `all` when absent. Session writes (see
+/// review_session.dart) preserve the stored index and favourites.
 ///
 /// Outcome priority when the native sheet splits a run: denied wins
 /// over failed (the denied dialog returns the user to the deck, and
@@ -75,15 +85,22 @@ class ReviewController extends GetxController {
   /// view shows the denied explanation, then the stack resets.
   final RxList<String> deniedIds = <String>[].obs;
 
-  /// Phase 3A private blur: when ON, grid thumbnails render
-  /// blurred until tapped (deck is never blurred). Toggled here
-  /// or in Settings — both write the same setting.
-  final RxBool privateBlur = false.obs;
+  /// Phase 3A private blur, extracted to [ReviewBlur] (Phase 4)
+  /// to hold this controller's line budget; forwarded so the
+  /// view's contract is unchanged.
+  final ReviewBlur blur = ReviewBlur();
 
-  /// Phase 3A per-item reveal: tapped-to-reveal ids while blur is
-  /// ON. Cleared on toggle and lost when the screen is left, so a
-  /// revealed photo is never left unblurred behind the user.
-  final RxSet<String> revealedIds = <String>{}.obs;
+  RxBool get privateBlur => blur.privateBlur;
+  RxSet<String> get revealedIds => blur.revealedIds;
+
+  /// Phase 4 guard: document-like items in the current run
+  /// awaiting override or keeping (empty unless the last run
+  /// was blocked with [ReviewDeleteOutcome.documentGuard]).
+  final RxList<MediaAsset> documentGuardPending = <MediaAsset>[].obs;
+
+  /// Phase 4: items [keepDocumentGuarded] last kept, for the
+  /// view's confirmation snackbar.
+  final RxInt documentGuardKeptCount = 0.obs;
 
   /// Phase 3A: favourited items kept out of the last delete run
   /// (they stay in the grid, protected, and are never sent to
@@ -125,47 +142,46 @@ class ReviewController extends GetxController {
   }
 
   /// Reads the persisted blur setting (defaults OFF).
-  Future<void> _loadBlurSetting() async {
-    final Result<AppSettings> result = await local.loadSettings();
-    result.fold(
-      onSuccess: (AppSettings value) => privateBlur.value = value.privateBlur,
-      onFailure: (_) {},
-    );
-  }
+  Future<void> _loadBlurSetting() => blur.load(local);
 
   /// Flips private blur and persists it (the same setting the
   /// Settings screen toggles). Toggling clears all reveals, so
   /// turning blur back on never inherits a stale revealed set.
   Future<void> toggleBlur() async {
-    final Result<AppSettings> loaded = await local.loadSettings();
-    final AppSettings current = loaded.fold(
-      onSuccess: (AppSettings value) => value,
-      onFailure: (_) => const AppSettings(),
-    );
-    final bool next = !current.privateBlur;
-    final Result<void> saved = await local.saveSettings(
-      current.copyWith(privateBlur: next),
-    );
-    saved.fold(
-      onSuccess: (_) {
-        privateBlur.value = next;
-        revealedIds.clear();
-        AppHaptics.mark();
-      },
-      onFailure: (_) => errorKey.value = AppStrings.errorLocal,
-    );
+    errorKey.value = await blur.toggle(local) ?? '';
   }
 
   /// Reveals one blurred thumbnail until blur is toggled off or
-  /// this screen is left (see [revealedIds]).
-  void reveal(String assetId) {
-    revealedIds.add(assetId);
-  }
+  /// this screen is left (see [ReviewBlur.revealedIds]).
+  void reveal(String assetId) => blur.reveal(assetId);
 
   /// True when [asset]'s tile must render blurred: blur ON and
   /// this item not yet tapped to reveal.
-  bool isBlurred(MediaAsset asset) {
-    return privateBlur.value && !revealedIds.contains(asset.id);
+  bool isBlurred(MediaAsset asset) => blur.isBlurred(asset);
+
+  /// Phase 4 guard, the "keep" side: unmarks every pending
+  /// document-like item (back to the deck, undecided). Deletes
+  /// nothing itself.
+  Future<void> keepDocumentGuarded() async {
+    if (documentGuardPending.isEmpty) {
+      return;
+    }
+    final List<MediaAsset> guarded = documentGuardPending.toList();
+    final bool saved = await updateSessionMarks(
+      local: local,
+      filterKey: _filterKey,
+      updates: <String, DeckMark?>{
+        for (final MediaAsset asset in guarded) asset.id: null,
+      },
+    );
+    if (!saved) {
+      errorKey.value = AppStrings.errorLocal;
+      return;
+    }
+    final Set<String> ids = guarded.map((MediaAsset a) => a.id).toSet();
+    items.removeWhere((MediaAsset item) => ids.contains(item.id));
+    documentGuardPending.clear();
+    documentGuardKeptCount.value = guarded.length;
   }
 
   /// Reads the asset list the deck passed as route arguments.
@@ -211,9 +227,11 @@ class ReviewController extends GetxController {
   /// and the error state shows instead of silently dropping it.
   Future<void> unmark(MediaAsset asset) async {
     errorKey.value = '';
-    final bool saved = await _updateSessionMarks(<String, DeckMark?>{
-      asset.id: null,
-    });
+    final bool saved = await updateSessionMarks(
+      local: local,
+      filterKey: _filterKey,
+      updates: <String, DeckMark?>{asset.id: null},
+    );
     if (!saved) {
       errorKey.value = AppStrings.errorLocal;
       return;
@@ -232,7 +250,11 @@ class ReviewController extends GetxController {
     final Map<String, DeckMark?> updates = <String, DeckMark?>{
       for (final MediaAsset asset in items) asset.id: DeckMark.keep,
     };
-    final bool saved = await _updateSessionMarks(updates);
+    final bool saved = await updateSessionMarks(
+      local: local,
+      filterKey: _filterKey,
+      updates: updates,
+    );
     if (!saved) {
       errorKey.value = AppStrings.errorLocal;
       return;
@@ -252,7 +274,15 @@ class ReviewController extends GetxController {
   /// grid and [protectedExcludedCount] explains how many. When
   /// every item is protected, nothing is sent and null returns
   /// (the banner is the whole outcome; no native sheet appears).
-  Future<ReviewDeleteOutcome?> deleteSelected() async {
+  ///
+  /// Phase 4 guard: unless [overrideDocumentGuard] is true, a
+  /// run with document-like items stops BEFORE any native sheet
+  /// with [ReviewDeleteOutcome.documentGuard] and fills
+  /// [documentGuardPending]; the view then asks: delete anyway
+  /// (re-call with the override) or keep those items.
+  Future<ReviewDeleteOutcome?> deleteSelected({
+    bool overrideDocumentGuard = false,
+  }) async {
     if (items.isEmpty || isDeleting.value) {
       return null;
     }
@@ -264,6 +294,7 @@ class ReviewController extends GetxController {
     protectedExcludedCount.value = 0;
     lastTrashedCount.value = 0;
     lastFailedCount.value = 0;
+    documentGuardKeptCount.value = 0;
     // Phase 3B: protection filtering lives in review_delete.dart
     // (extracted to hold the controller's line budget).
     final ReviewDeletePlan plan = await planReviewDelete(
@@ -273,6 +304,16 @@ class ReviewController extends GetxController {
     );
     protectedExcludedCount.value = plan.protectedCount;
     final List<MediaAsset> toDelete = plan.toDelete;
+    // Phase 4 guard (requirements §7): warn, never silently
+    // delete — no native sheet until the user overrides.
+    final List<MediaAsset> guarded = documentLikeItems(toDelete);
+    if (guarded.isNotEmpty && !overrideDocumentGuard) {
+      documentGuardPending.assignAll(guarded);
+      isDeleting.value = false;
+      lastOutcome.value = ReviewDeleteOutcome.documentGuard;
+      return ReviewDeleteOutcome.documentGuard;
+    }
+    documentGuardPending.clear();
     if (toDelete.isEmpty) {
       isDeleting.value = false;
       return null;
@@ -301,9 +342,13 @@ class ReviewController extends GetxController {
       // Denied marks clear best-effort: even if the write fails, the
       // photos stay delete-marked and reappear in the deck for
       // another review instead of vanishing.
-      await _updateSessionMarks(<String, DeckMark?>{
-        for (final String id in outcome.deniedIds) id: null,
-      });
+      await updateSessionMarks(
+        local: local,
+        filterKey: _filterKey,
+        updates: <String, DeckMark?>{
+          for (final String id in outcome.deniedIds) id: null,
+        },
+      );
       deniedIds.assignAll(outcome.deniedIds);
       lastOutcome.value = ReviewDeleteOutcome.denied;
       return ReviewDeleteOutcome.denied;
@@ -323,9 +368,11 @@ class ReviewController extends GetxController {
   /// history record for the run (trashed MB, freed 0 — never freed
   /// while the photos sit in Trash).
   Future<void> _applyTrashed(List<String> ids) async {
-    await _updateSessionMarks(<String, DeckMark?>{
-      for (final String id in ids) id: null,
-    });
+    await updateSessionMarks(
+      local: local,
+      filterKey: _filterKey,
+      updates: <String, DeckMark?>{for (final String id in ids) id: null},
+    );
     final Set<String> trashed = ids.toSet();
     int bytes = 0;
     for (final MediaAsset asset in items) {
@@ -343,45 +390,6 @@ class ReviewController extends GetxController {
       ),
     );
     trashedUntil.value = DateTime.now().add(const Duration(days: 30));
-  }
-
-  /// Loads the deck session for [_filterKey], applies [updates]
-  /// (null removes a mark), and saves it back preserving the stored
-  /// index and favourites. Returns false when the session could not
-  /// be read or written.
-  Future<bool> _updateSessionMarks(Map<String, DeckMark?> updates) async {
-    final Result<DeckSession?> loaded = await local.loadSession(_filterKey);
-    DeckSession? session;
-    final bool loadOk = loaded.fold(
-      onSuccess: (DeckSession? value) {
-        session = value;
-        return true;
-      },
-      onFailure: (_) => false,
-    );
-    if (!loadOk) {
-      return false;
-    }
-    final Map<String, DeckMark> marks = Map<String, DeckMark>.of(
-      session?.marks ?? <String, DeckMark>{},
-    );
-    for (final MapEntry<String, DeckMark?> entry in updates.entries) {
-      final DeckMark? mark = entry.value;
-      if (mark == null) {
-        marks.remove(entry.key);
-      } else {
-        marks[entry.key] = mark;
-      }
-    }
-    final Result<void> saved = await local.saveSession(
-      DeckSession(
-        filterKey: _filterKey,
-        currentIndex: session?.currentIndex ?? 0,
-        marks: marks,
-        favouriteIds: Set<String>.of(session?.favouriteIds ?? <String>{}),
-      ),
-    );
-    return saved.isSuccess;
   }
 
   /// Resets the stack to the deck so it reloads fresh from the

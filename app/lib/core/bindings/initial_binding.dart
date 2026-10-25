@@ -14,6 +14,8 @@ import '../../services/share/share_service_impl.dart';
 import '../../services/storage/storage_service.dart';
 import '../../services/storage/storage_service_impl.dart';
 import '../../services/trash/trash_gateway_impl.dart';
+import '../../services/video/video_compression_service.dart';
+import '../../services/video/video_compression_service_impl.dart';
 import '../../services/trash/trash_service.dart';
 import '../../services/trash/trash_service_impl.dart';
 
@@ -35,6 +37,10 @@ class InitialBinding extends Bindings {
     Get.put<ShareService>(ShareServiceImpl(), permanent: true);
     Get.put<NotificationService>(NotificationServiceImpl(), permanent: true);
     Get.put<AppInfoService>(AppInfoServiceImpl(), permanent: true);
+    Get.put<VideoCompressionService>(
+      VideoCompressionServiceImpl(),
+      permanent: true,
+    );
     Get.put<TrashService>(
       TrashServiceImpl(
         gateway: TrashGatewayImpl(),

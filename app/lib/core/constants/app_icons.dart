@@ -77,6 +77,10 @@ class AppIcons {
   static const IconData settings = PhosphorIconsRegular.gear;
   static const IconData eye = PhosphorIconsRegular.eye;
   static const IconData eyeSlash = PhosphorIconsRegular.eyeSlash;
+  // Phase 4: compress-video entry. Same film-strip glyph as the
+  // Videos deck (a different semantic constant, like keep/check
+  // and delete/trash) — no new glyph family is introduced.
+  static const IconData compress = PhosphorIconsRegular.filmStrip;
 
   /// Every constant, for tests that assert each one is a valid glyph.
   static const List<IconData> all = <IconData>[
@@ -113,5 +117,6 @@ class AppIcons {
     settings,
     eye,
     eyeSlash,
+    compress,
   ];
 }

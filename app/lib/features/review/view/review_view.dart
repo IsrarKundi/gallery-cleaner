@@ -14,6 +14,7 @@ import '../../../core/widgets/error_banner.dart';
 import '../../../core/widgets/info_banner.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../../../core/widgets/secondary_button.dart';
+import '../../../services/detection/document_guard.dart';
 import '../controller/review_controller.dart';
 import '../widgets/review_grid_tile.dart';
 
@@ -36,7 +37,64 @@ class ReviewView extends GetView<ReviewController> {
     if (!context.mounted) {
       return;
     }
+    await _handleOutcome(context, outcome);
+  }
+
+  /// Handles one delete outcome. Split from [_delete] so the
+  /// document-guard override can re-run a delete and feed its
+  /// outcome through the same handling (the override run can
+  /// never return documentGuard again, so this terminates).
+  Future<void> _handleOutcome(
+    BuildContext context,
+    ReviewDeleteOutcome? outcome,
+  ) async {
     switch (outcome) {
+      case ReviewDeleteOutcome.documentGuard:
+        // Phase 4 document guard: warn first, then honour the
+        // user's explicit choice — delete anyway (the deliberate
+        // override, still via the native sheet) or keep the
+        // document-like photos (they leave the grid, undecided).
+        final bool deleteAnyway = await AppDialog.showConfirmation(
+          context,
+          title: AppStrings.tr(AppStrings.documentGuardTitle),
+          message: AppStrings.tr(
+            AppStrings.documentGuardMessage,
+            <String, String>{
+              'count': '${controller.documentGuardPending.length}',
+            },
+          ),
+          confirmLabel: AppStrings.tr(AppStrings.documentGuardDeleteAnyway),
+          cancelLabel: AppStrings.tr(AppStrings.documentGuardKeep),
+          isDestructive: true,
+        );
+        if (!context.mounted) {
+          return;
+        }
+        if (deleteAnyway) {
+          final ReviewDeleteOutcome? next = await controller.deleteSelected(
+            overrideDocumentGuard: true,
+          );
+          if (!context.mounted) {
+            return;
+          }
+          await _handleOutcome(context, next);
+        } else {
+          await controller.keepDocumentGuarded();
+          if (!context.mounted) {
+            return;
+          }
+          if (controller.documentGuardKeptCount.value > 0) {
+            AppSnackbar.show(
+              context,
+              message: AppStrings.tr(
+                AppStrings.documentGuardKept,
+                <String, String>{
+                  'count': '${controller.documentGuardKeptCount.value}',
+                },
+              ),
+            );
+          }
+        }
       case ReviewDeleteOutcome.trashed:
         final DateTime? until = controller.trashedUntil.value;
         Get.offAllNamed<dynamic>(
@@ -173,6 +231,20 @@ class ReviewView extends GetView<ReviewController> {
                         ),
                         onDismiss: () =>
                             controller.protectedExcludedCount.value = 0,
+                      ),
+                    // Phase 4 document guard: warn while the
+                    // document-like items sit in the grid, before
+                    // any delete is attempted. The counted dialog
+                    // at delete time is the override itself.
+                    if (documentLikeItems(controller.items).isNotEmpty)
+                      InfoBanner(
+                        message: AppStrings.tr(
+                          AppStrings.documentGuardBanner,
+                          <String, String>{
+                            'count':
+                                '${documentLikeItems(controller.items).length}',
+                          },
+                        ),
                       ),
                     if (controller.errorKey.value.isNotEmpty)
                       ErrorBanner(
