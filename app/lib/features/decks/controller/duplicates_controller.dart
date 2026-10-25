@@ -25,6 +25,8 @@ import '../../../core/utils/result.dart';
 import '../../../services/detection/grouping.dart';
 import '../../../services/detection/library_scanner.dart';
 import '../../../services/detection/photo_analysis.dart';
+import '../../../services/detection/scan_repository.dart';
+import '../../../services/detection/scan_repository_impl.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/local/protection.dart';
 import '../../../services/media/media_asset.dart';
@@ -38,10 +40,19 @@ class DuplicatesController extends GetxController {
     required this.media,
     required this.local,
     ThumbnailService? thumbnailService,
-  }) : _thumbnails = thumbnailService ?? ThumbnailServiceImpl(media: media);
+    ScanRepository? scanRepository,
+  }) : _thumbnails = thumbnailService ?? ThumbnailServiceImpl(media: media),
+       _scans =
+           scanRepository ?? ScanRepositoryImpl(media: media, local: local);
 
   final MediaService media;
   final LocalService local;
+
+  /// Phase 4.2: the shared scan (see scan_repository.dart). The
+  /// binding supplies the app-wide instance, so hub → Duplicates
+  /// in one session pays exactly one scan; tests that construct
+  /// the controller directly get a private one.
+  final ScanRepository _scans;
 
   /// Phase 2.3: bytes live in the shared thumbnail service.
   final ThumbnailService _thumbnails;
@@ -108,9 +119,18 @@ class DuplicatesController extends GetxController {
       }
       return;
     }
-    final LibraryScanner scanner = LibraryScanner(media: media, local: local);
-    final LibraryScan scan = await scanner.scan();
-    if (scan.pageFailed && scan.assets.isEmpty) {
+    // Phase 4.2: join the shared scan (hub → Duplicates pays one
+    // scan). No page subscription: Duplicates only needs the
+    // final result, and the run belongs to the repository, so
+    // leaving this screen mid-scan neither cancels nor loses it.
+    LibraryScan scan = await _scans.start();
+    if (scan.cancelled) {
+      // Restarted externally while awaiting: join the fresh run
+      // once. A second cancellation means the scan is being
+      // actively restarted; fall through with whatever arrived.
+      scan = await _scans.start();
+    }
+    if ((scan.pageFailed || scan.cancelled) && scan.assets.isEmpty) {
       status.value = DecksStatus.error;
       errorKey.value = AppStrings.errorMediaLoad;
       return;

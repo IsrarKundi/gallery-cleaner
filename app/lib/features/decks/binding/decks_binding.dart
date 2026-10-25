@@ -4,6 +4,7 @@
 
 import 'package:get/get.dart';
 
+import '../../../services/detection/scan_repository.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_service.dart';
 import '../../../services/storage/storage_service.dart';
@@ -24,6 +25,9 @@ class DecksBinding extends Bindings {
             : null,
         thumbnailService: Get.isRegistered<ThumbnailService>()
             ? Get.find<ThumbnailService>()
+            : null,
+        scanRepository: Get.isRegistered<ScanRepository>()
+            ? Get.find<ScanRepository>()
             : null,
       ),
     );

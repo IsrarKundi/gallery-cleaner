@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 import '../../features/settings/controller/settings_controller.dart';
 import '../../services/appinfo/app_info_service.dart';
 import '../../services/appinfo/app_info_service_impl.dart';
+import '../../services/detection/scan_repository.dart';
+import '../../services/detection/scan_repository_impl.dart';
 import '../../services/local/local_service.dart';
 import '../../services/local/local_service_impl.dart';
 import '../../services/media/media_service.dart';
@@ -54,6 +56,16 @@ class InitialBinding extends Bindings {
     // Started by the splash binding; the deck joins it on first init.
     Get.put<DeckWarmUp>(
       DeckWarmUpImpl(media: Get.find<MediaService>()),
+      permanent: true,
+    );
+    // Phase 4.2: the single shared library scan for the hub,
+    // Duplicates, and smart-deck entry. Permanent so a scan
+    // survives controller lifetimes (see scan_repository.dart).
+    Get.put<ScanRepository>(
+      ScanRepositoryImpl(
+        media: Get.find<MediaService>(),
+        local: Get.find<LocalService>(),
+      ),
       permanent: true,
     );
     Get.lazyPut<VideoCompressionService>(

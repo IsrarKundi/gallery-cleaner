@@ -33,6 +33,8 @@ import '../../../core/utils/result.dart';
 import '../../../services/detection/grouping.dart';
 import '../../../services/detection/library_scanner.dart';
 import '../../../services/detection/photo_analysis.dart';
+import '../../../services/detection/scan_repository.dart';
+import '../../../services/detection/scan_repository_impl.dart';
 import '../../../services/detection/smart_decks.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
@@ -53,10 +55,19 @@ class DecksController extends GetxController {
     required this.local,
     this.storage,
     ThumbnailService? thumbnailService,
-  }) : _thumbnails = thumbnailService ?? ThumbnailServiceImpl(media: media);
+    ScanRepository? scanRepository,
+  }) : _thumbnails = thumbnailService ?? ThumbnailServiceImpl(media: media),
+       _scans =
+           scanRepository ?? ScanRepositoryImpl(media: media, local: local);
 
   final MediaService media;
   final LocalService local;
+
+  /// Phase 4.2: the shared scan (see scan_repository.dart). The
+  /// binding supplies the app-wide instance; tests that construct
+  /// the controller directly get a private one.
+  final ScanRepository _scans;
+  ScanSubscription? _scanSubscription;
 
   /// Phase 2.3: hub previews read through the shared thumbnail
   /// service instead of fetching per widget in `initState`.
@@ -322,17 +333,14 @@ class DecksController extends GetxController {
     await _scan();
   }
 
+  @override
+  void onClose() {
+    _scanSubscription?.cancel();
+    _scanSubscription = null;
+    super.onClose();
+  }
+
   Future<void> retry() async {
-    _allAssets.clear();
-    _assetsById.clear();
-    _deckBytes.clear();
-    _markedBytes = 0;
-    _markedAccumulated = false;
-    deckAssets.clear();
-    analyses.clear();
-    scanned.value = 0;
-    estimatedTotal.value = null;
-    scanComplete.value = false;
     await init();
   }
 
@@ -344,23 +352,42 @@ class DecksController extends GetxController {
   }
 
   Future<void> _scan() async {
+    // Phase 4.2: reset scan accumulation first — resubscribing
+    // replays past pages, so stale state would double-count.
+    _allAssets.clear();
+    _assetsById.clear();
+    _deckBytes.clear();
+    _markedBytes = 0;
+    deckAssets.clear();
+    analyses.clear();
+    scanned.value = 0;
+    estimatedTotal.value = null;
+    scanComplete.value = false;
+
     final DateTime now = DateTime.now();
     _markedAccumulated = true;
     // Phase 3B: deck lists accumulate here per page (one assignment
     // per deck per page, not one list copy per asset per deck).
     final Map<SmartDeckId, List<MediaAsset>> accumulated =
         <SmartDeckId, List<MediaAsset>>{};
-    final LibraryScanner scanner = LibraryScanner(media: media, local: local);
-    final LibraryScan result = await scanner.scan(
-      onPage: (List<MediaAsset> page, Map<String, PhotoAnalysis> found) {
+    // Phase 4.2: pages now carry ONLY fresh analyses, so seed the
+    // cumulative map from the cache first (snapshot-served since
+    // 4.1, so this costs no fresh decode). Deck membership below
+    // then resolves cached and fresh assets alike.
+    final Result<Map<String, PhotoAnalysis>> cached = await local
+        .loadAnalyses();
+    cached.fold(onSuccess: analyses.addAll, onFailure: (_) {});
+    _scanSubscription?.cancel();
+    _scanSubscription = _scans.subscribe(
+      onPage: (List<MediaAsset> page, Map<String, PhotoAnalysis> fresh) {
         _allAssets.addAll(page);
-        analyses.assignAll(found);
+        analyses.addAll(fresh);
         for (final MediaAsset asset in page) {
           _assetsById[asset.id] = asset;
           if (_deleteMarkedIds.contains(asset.id)) {
             _markedBytes += asset.sizeBytes;
           }
-          for (final SmartDeckId id in decksForAsset(asset, found, now)) {
+          for (final SmartDeckId id in decksForAsset(asset, analyses, now)) {
             final List<MediaAsset> list = accumulated[id] ??= <MediaAsset>[];
             list.add(asset);
             _deckBytes[id] = (_deckBytes[id] ?? 0) + asset.sizeBytes;
@@ -374,6 +401,13 @@ class DecksController extends GetxController {
         estimatedTotal.value = total;
       },
     );
+    final LibraryScan result = await _scans.start();
+    if (result.cancelled) {
+      // Externally cancelled while awaiting: never present partial
+      // data as ready. The controller is going away or will
+      // re-init; leave status untouched.
+      return;
+    }
     scanComplete.value = true;
     // List-level decks resolve only over the full list.
     final Set<String> burstIds = burstAssetIds(_allAssets);
