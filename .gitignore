@@ -1,0 +1,16 @@
+# Secrets / signing — never commit
+.env*
+!.env.example
+**/key.properties
+**/*.jks
+**/*.keystore
+# Flutter build outputs
+**/build/
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+# IDE / OS
+.idea/
+*.iml
+.DS_Store
+*.log
