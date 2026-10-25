@@ -54,8 +54,9 @@ class SmartDeckController extends GetxController {
   /// smart-deck finishes show counts without a share button.
   late final DeckRetention retention = DeckRetention(local: local);
 
-  /// Thumbnail edge for swipe cards, matching the deck's preload size.
-  static const int thumbnailSize = 512;
+  /// Thumbnail edge for swipe cards, matching the deck's preload size
+  /// (solutions 3.1: deck-card surface, capped at 1080 px).
+  static const int thumbnailSize = 1080;
 
   /// Cards preloaded ahead of the current card (current + next 3).
   static const int preloadAhead = 3;

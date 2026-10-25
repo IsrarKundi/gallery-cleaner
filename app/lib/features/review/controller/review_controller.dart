@@ -49,8 +49,11 @@ class ReviewController extends GetxController {
   final TrashService trash;
   final LocalService local;
 
-  /// Thumbnail edge in pixels, matching the deck's preload size.
-  static const int thumbnailSize = 512;
+  /// Thumbnail edge in pixels for grid tiles (solutions 3.1: grid
+  /// standard 256–320 px, top of the range so 3×-DPR tiles stay
+  /// sharp). Deliberately NOT the deck's 1080: one size per display
+  /// surface, so review tiles stop fetching deck-sized bytes.
+  static const int thumbnailSize = 320;
 
   /// Phase 2.3: bytes live in the shared thumbnail service; the
   /// view observes these same reactive objects through the getters.

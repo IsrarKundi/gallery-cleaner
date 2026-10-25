@@ -36,7 +36,7 @@ class DeckRow extends StatelessWidget {
   final VoidCallback? onTap;
   final List<MediaAsset> assets;
 
-  /// Phase 2.3: shared thumbnail maps for the 128px preview strip,
+  /// Phase 2.3: shared thumbnail maps for the 320px preview strip (solutions 3.1 grid standard),
   /// plus the idempotent request callback (no per-tile fetching).
   final RxMap<String, Uint8List> thumbnails;
   final RxSet<String> failedThumbnails;
@@ -307,12 +307,12 @@ class _PreviewTile extends StatelessWidget {
       }
       // Phase 1.6: decode at display size, never larger than the
       // fetched thumbnail (see decode_size.dart). The tile reads
-      // the 128px shared map.
+      // the 320px shared map (solutions 3.1 grid standard).
       final int decode = decodeSide(
         width: width,
         height: height,
         devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
-        sourceSize: 128,
+        sourceSize: 320,
       );
       return Container(
         width: width,

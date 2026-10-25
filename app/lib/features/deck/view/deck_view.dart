@@ -24,7 +24,7 @@ import '../widgets/deck_home_skeleton.dart';
 import '../widgets/filter_sheet.dart';
 import '../widgets/session_summary_card.dart';
 // import '../widgets/space_meter_bar.dart';
-import '../widgets/swipe_card.dart';
+import '../widgets/deck_card_stack.dart';
 import '../widgets/tutorial_overlay.dart';
 
 /// Deck screen (requirements §3, §7 / design.md §7). Layout + Obx
@@ -310,17 +310,27 @@ class _ReadyBody extends StatelessWidget {
             return Column(children: banners);
           }),
           // Obx(() => SpaceMeterBar(totals: controller.meter)),
+          // Phase 3.1: the stack owns the thumbnail Obx, so preload
+          // arrivals rebuild only the stack — this Obx reads the
+          // queue and index, never the thumbnail maps.
           Expanded(
             child: Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: context.sizes.screenPadding,
               ),
-              child: SwipeCard(
-                key: ValueKey<String>(current.id),
-                thumbnail: controller.thumbnails[current.id],
-                thumbnailFailed: controller.failedThumbnails.contains(
-                  current.id,
-                ),
+              child: DeckCardStack(
+                current: current,
+                next: <MediaAsset>[
+                  for (
+                    int i = controller.currentIndex.value + 1;
+                    i < controller.queue.length &&
+                        i <= controller.currentIndex.value + 2;
+                    i++
+                  )
+                    controller.queue[i],
+                ],
+                thumbnails: controller.thumbnails,
+                failedThumbnails: controller.failedThumbnails,
                 onSwiped: controller.markCurrent,
                 onRetry: controller.retryCurrentThumbnail,
               ),

@@ -33,7 +33,7 @@ class SmartDeckGridCard extends StatelessWidget {
   final List<MediaAsset> assets;
   final VoidCallback onTap;
 
-  /// Phase 2.3: shared thumbnail maps for the 128px grid slots,
+  /// Phase 2.3: shared thumbnail maps for the 320px grid slots (solutions 3.1 grid standard),
   /// plus the idempotent request callback (no per-slot fetching).
   final RxMap<String, Uint8List> thumbnails;
   final RxSet<String> failedThumbnails;
@@ -221,14 +221,14 @@ class _GridSlot extends StatelessWidget {
             if (bytes != null)
               // Phase 1.6: decode at display size, never larger than
               // the fetched thumbnail (see decode_size.dart). The
-              // slot reads the 128px shared map.
+              // slot reads the 320px shared map (solutions 3.1 grid standard).
               LayoutBuilder(
                 builder: (BuildContext context, BoxConstraints constraints) {
                   final int side = decodeSide(
                     width: constraints.maxWidth,
                     height: constraints.maxHeight,
                     devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
-                    sourceSize: 128,
+                    sourceSize: 320,
                   );
                   return Image.memory(
                     bytes,

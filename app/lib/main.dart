@@ -11,6 +11,16 @@ import 'features/settings/controller/settings_controller.dart';
 // Minimal entry ONLY (AGENTS.md): binding, theme, routes, runApp. No
 // UI and no feature logic live here.
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Solutions 3.1: tune the framework image cache to the thumbnail
+  // budget. Decoded bytes are the big memory (a 1080 px deck card
+  // decodes to ~4.6 MiB RGBA; a 320 px grid tile to ~0.4 MiB), so
+  // the cache holds roughly a deck stack plus a grid viewport, next
+  // to the thumbnail service's own 32 MiB byte budget — instead of
+  // the framework default (1000 images / 100 MiB), which lets a
+  // long swipe session grow decoded memory unbounded.
+  PaintingBinding.instance.imageCache.maximumSize = 200;
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 50 * 1024 * 1024;
   runApp(const KlaraApp());
 }
 

@@ -24,7 +24,7 @@ class OnThisDayHeroCard extends StatelessWidget {
   final List<MediaAsset> assets;
   final VoidCallback onTap;
 
-  /// Phase 2.3: shared thumbnail maps for the 128px fanned cards,
+  /// Phase 2.3: shared thumbnail maps for the 320px fanned cards (solutions 3.1 grid standard),
   /// plus the idempotent request callback (no per-card fetching).
   final RxMap<String, Uint8List> thumbnails;
   final RxSet<String> failedThumbnails;
@@ -158,12 +158,12 @@ class _FannedCard extends StatelessWidget {
       const double cardHeight = 84;
       // Phase 1.6: decode at display size, never larger than the
       // fetched thumbnail (see decode_size.dart). The card reads
-      // the 128px shared map.
+      // the 320px shared map (solutions 3.1 grid standard).
       final int decode = decodeSide(
         width: cardWidth,
         height: cardHeight,
         devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
-        sourceSize: 128,
+        sourceSize: 320,
       );
       final double angle = index * 0.08;
       final double xOffset = index * 26.0;

@@ -20,10 +20,11 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/empty_view.dart';
 import '../../../core/widgets/info_banner.dart';
 import '../../../features/deck/widgets/deck_action_bar.dart';
+import '../../../features/deck/widgets/deck_card_stack.dart';
 import '../../../features/deck/widgets/deck_home_skeleton.dart';
 import '../../../features/deck/widgets/session_summary_card.dart';
-import '../../../features/deck/widgets/swipe_card.dart';
 import '../../../services/detection/smart_decks.dart';
+import '../../../services/media/media_asset.dart';
 import '../controller/smart_deck_controller.dart';
 import '../model/smart_deck_meta.dart';
 
@@ -130,17 +131,27 @@ class _Body extends StatelessWidget {
               message: AppStrings.tr(controller.protection.blockedKey.value),
               onDismiss: controller.protection.clearNotice,
             ),
+          // Phase 3.1: same card stack as the main deck (current +
+          // next 2 pre-decoded underneath); the stack owns the
+          // thumbnail Obx so preload arrivals rebuild only it.
           Expanded(
             child: Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: context.sizes.screenPadding,
               ),
-              child: SwipeCard(
-                key: ValueKey<String>(current.id),
-                thumbnail: controller.thumbnails[current.id],
-                thumbnailFailed: controller.failedThumbnails.contains(
-                  current.id,
-                ),
+              child: DeckCardStack(
+                current: current,
+                next: <MediaAsset>[
+                  for (
+                    int i = controller.currentIndex.value + 1;
+                    i < controller.queue.length &&
+                        i <= controller.currentIndex.value + 2;
+                    i++
+                  )
+                    controller.queue[i],
+                ],
+                thumbnails: controller.thumbnails,
+                failedThumbnails: controller.failedThumbnails,
                 onSwiped: controller.markCurrent,
                 onRetry: controller.retryCurrentThumbnail,
               ),

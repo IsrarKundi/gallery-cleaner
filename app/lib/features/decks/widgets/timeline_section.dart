@@ -325,7 +325,7 @@ class _MonthCard extends StatelessWidget {
                             devicePixelRatio: MediaQuery.devicePixelRatioOf(
                               context,
                             ),
-                            sourceSize: 256,
+                            sourceSize: 320,
                           );
                           return Image.memory(
                             bytes,

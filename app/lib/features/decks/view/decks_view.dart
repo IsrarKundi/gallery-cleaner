@@ -152,10 +152,10 @@ class _HubBody extends StatelessWidget {
               child: OnThisDayHeroCard(
                 assets: onThisDayAssets,
                 onTap: () => controller.openDeck(SmartDeckId.onThisDay),
-                thumbnails: controller.thumbnailsFor(128),
-                failedThumbnails: controller.failedFor(128),
+                thumbnails: controller.thumbnailsFor(320),
+                failedThumbnails: controller.failedFor(320),
                 requestThumbnail: (String id) =>
-                    controller.requestThumbnail(id, 128),
+                    controller.requestThumbnail(id, 320),
               ),
             ),
           ] else if (scanning) ...<Widget>[
@@ -176,10 +176,10 @@ class _HubBody extends StatelessWidget {
             onYearSelected: (int y) => controller.selectedYear.value = y,
             onToggleSort: () => controller.timelineAscending.toggle(),
             onMonthTap: controller.openMonth,
-            thumbnails: controller.thumbnailsFor(256),
-            failedThumbnails: controller.failedFor(256),
+            thumbnails: controller.thumbnailsFor(320),
+            failedThumbnails: controller.failedFor(320),
             requestThumbnail: (String id) =>
-                controller.requestThumbnail(id, 256),
+                controller.requestThumbnail(id, 320),
             isScanning: scanning,
           ),
           SizedBox(height: context.sizes.lg),
@@ -279,10 +279,10 @@ class _SmartDecksSection extends StatelessWidget {
                       count: assets.length,
                       totalBytes: controller.totalBytesFor(id),
                       assets: assets,
-                      thumbnails: controller.thumbnailsFor(128),
-                      failedThumbnails: controller.failedFor(128),
+                      thumbnails: controller.thumbnailsFor(320),
+                      failedThumbnails: controller.failedFor(320),
                       requestThumbnail: (String id) =>
-                          controller.requestThumbnail(id, 128),
+                          controller.requestThumbnail(id, 320),
                       onTap: () => controller.openDeck(id),
                     );
                   },

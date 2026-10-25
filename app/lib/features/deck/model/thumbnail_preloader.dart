@@ -37,8 +37,14 @@ class ThumbnailPreloader {
   final MediaService media;
   final ThumbnailService _service;
 
-  /// Thumbnail edge in pixels for deck preloading.
-  static const int thumbnailSize = 512;
+  /// Thumbnail edge in pixels for deck preloading (solutions 3.1:
+  /// deck-card surface = card width × DPR, capped at 1080 px).
+  /// Fixed at the cap so the service key is stable across devices;
+  /// decode stays display-bound via decodeSide (Phase 1.6), so the
+  /// larger fetch buys sharpness on high-DPR phones, not decode
+  /// memory. The 3×-DPR sharpness question stays a device check
+  /// (whether 1080 vs full 1290 px matters visibly).
+  static const int thumbnailSize = 1080;
 
   /// Cards preloaded ahead of the current card (current + next 3).
   static const int preloadAhead = 3;
