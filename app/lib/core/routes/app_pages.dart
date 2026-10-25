@@ -41,7 +41,14 @@ class AppPages {
         // Phase 1.7: the persisted theme applies before the splash
         // leaves, so there is no flash of the wrong theme. The
         // settings load is a small local read that always completes.
-        beforeComplete: () => Get.find<SettingsController>().settingsReady,
+        // Guarded: test harnesses that pump the app without
+        // InitialBinding (e.g. the golden-path test) have no
+        // SettingsController, and the splash must still complete.
+        beforeComplete: () async {
+          if (Get.isRegistered<SettingsController>()) {
+            await Get.find<SettingsController>().settingsReady;
+          }
+        },
       ),
     ),
     GetPage<dynamic>(

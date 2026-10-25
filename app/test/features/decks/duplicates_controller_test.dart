@@ -86,7 +86,11 @@ class _Media implements MediaService {
   }
 
   @override
-  Future<Result<Uint8List>> getThumbnail(String assetId, int size, {int quality = 85}) async {
+  Future<Result<Uint8List>> getThumbnail(
+    String assetId,
+    int size, {
+    int quality = 85,
+  }) async {
     // The scanner analyses at 128px; tiles load at 256px. Counting
     // 128px calls proves regrouping never re-downloads for analysis.
     if (size == 128) {
@@ -397,7 +401,11 @@ class _DeniedMedia implements MediaService {
   }
 
   @override
-  Future<Result<Uint8List>> getThumbnail(String assetId, int size, {int quality = 85}) async {
+  Future<Result<Uint8List>> getThumbnail(
+    String assetId,
+    int size, {
+    int quality = 85,
+  }) async {
     return Success<Uint8List>(Uint8List.fromList(<int>[1]));
   }
 }
