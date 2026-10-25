@@ -20,7 +20,7 @@ owner's job (see "Human-only checklist").
 - Flutter **3.47.7** (pinned in `app/.fvmrc`; use FVM if you have
   it, otherwise the Flutter SDK at that version).
 - An **Android SDK** and a **real Android device** (or emulator).
-  Klara is Android-only in Phase 1; there is no iOS target yet.
+  Klara is Android-only in v1; there is no iOS target yet.
 - **This VM has no Android SDK and no Java**, so no APK can be
   built or run here. Build and run on your own machine, where the
   Android toolchain exists.
