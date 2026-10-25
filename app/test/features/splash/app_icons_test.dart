@@ -5,7 +5,7 @@ import 'package:klara/core/constants/app_icons.dart';
 void main() {
   group('AppIcons', () {
     test('every constant is a valid IconData', () {
-      expect(AppIcons.all.length, 14);
+      expect(AppIcons.all.length, 15);
       for (final IconData icon in AppIcons.all) {
         expect(icon.codePoint, greaterThan(0));
         expect(icon.fontFamily, isNotNull);

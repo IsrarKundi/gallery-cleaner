@@ -42,6 +42,16 @@ class Formatters {
     return '$text ${_units[unit]}';
   }
 
+  /// Formats an MB value (as stored on [HistoryRecord]) with at most
+  /// one decimal, e.g. 12.0 -> "12 MB", 12.5 -> "12.5 MB".
+  static String formatMb(double mb) {
+    final double value = mb < 0 ? 0 : mb;
+    final String text = value % 1 == 0
+        ? value.toStringAsFixed(0)
+        : value.toStringAsFixed(1);
+    return '$text MB';
+  }
+
   /// Groups a count with commas, e.g. 1243 -> "1,243".
   static String formatCount(int count) {
     final String digits = count.abs().toString();

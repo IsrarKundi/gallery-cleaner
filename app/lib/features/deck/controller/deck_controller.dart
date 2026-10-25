@@ -355,11 +355,14 @@ class DeckController extends GetxController {
     historyResult.fold(onSuccess: history.assignAll, onFailure: (_) {});
   }
 
-  /// Navigates to review with the delete-marked list as arguments.
-  /// The route is not wired until the review increment, so this 404s
-  /// until then — expected, and never papered over with a placeholder.
+  /// Navigates to review: the delete-marked list as arguments, the
+  /// deck filter key as a route parameter (for session writes).
   void goToReview() {
-    Get.toNamed<dynamic>(AppRoutes.review, arguments: deleteMarkedAssets);
+    Get.toNamed<dynamic>(
+      AppRoutes.review,
+      arguments: deleteMarkedAssets,
+      parameters: <String, String>{'filterKey': filter.value.filterKey},
+    );
   }
 
   void _maybeLoadMore() {

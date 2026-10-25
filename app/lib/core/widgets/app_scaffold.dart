@@ -10,6 +10,7 @@ class AppScaffold extends StatelessWidget {
     super.key,
     required this.body,
     this.title,
+    this.leading,
     this.actions,
     this.bottomBar,
     this.floatingActionButton,
@@ -17,6 +18,11 @@ class AppScaffold extends StatelessWidget {
 
   final Widget body;
   final String? title;
+
+  /// Overrides the AppBar's automatic back button. Review, trash and
+  /// history pass their own back control so back always resets the
+  /// stack to the deck instead of popping into a stale controller.
+  final Widget? leading;
   final List<Widget>? actions;
   final Widget? bottomBar;
   final Widget? floatingActionButton;
@@ -28,7 +34,7 @@ class AppScaffold extends StatelessWidget {
       backgroundColor: context.palette.background,
       appBar: title == null
           ? null
-          : AppBar(title: Text(title), actions: actions),
+          : AppBar(title: Text(title), leading: leading, actions: actions),
       body: body,
       bottomNavigationBar: bottomBar,
       floatingActionButton: floatingActionButton,

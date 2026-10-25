@@ -2,16 +2,22 @@ import 'package:get/get.dart';
 
 import '../../core/routes/app_routes.dart';
 import '../../features/deck/binding/deck_binding.dart';
+import '../../features/history/binding/history_binding.dart';
+import '../../features/history/view/history_view.dart';
+import '../../features/review/binding/review_binding.dart';
+import '../../features/review/view/review_view.dart';
 import '../../features/splash/binding/splash_binding.dart';
 import '../../features/splash/view/splash_view.dart';
 import '../../features/deck/view/deck_view.dart';
+import '../../features/trash/binding/trash_binding.dart';
+import '../../features/trash/view/trash_view.dart';
 
 /// GetPage wiring (AGENTS.md: named routes only).
 ///
-/// Only splash and deck are wired. Review, trash and history pages do
-/// not exist yet and are deliberately NOT wired with placeholders —
-/// navigating to '/review' from the deck 404s until the review
-/// increment wires it, which is expected, not papered over.
+/// Phase 1 screens: splash, deck, review, trash and history. Review
+/// receives the delete-marked list as route arguments plus the deck
+/// filter key as a route parameter; Trash optionally receives the
+/// recoverable-until date as route arguments for its arrival snackbar.
 class AppPages {
   AppPages._();
 
@@ -27,6 +33,21 @@ class AppPages {
       name: AppRoutes.deck,
       page: DeckView.new,
       binding: DeckBinding(),
+    ),
+    GetPage<dynamic>(
+      name: AppRoutes.review,
+      page: ReviewView.new,
+      binding: ReviewBinding(),
+    ),
+    GetPage<dynamic>(
+      name: AppRoutes.trash,
+      page: TrashView.new,
+      binding: TrashBinding(),
+    ),
+    GetPage<dynamic>(
+      name: AppRoutes.history,
+      page: HistoryView.new,
+      binding: HistoryBinding(),
     ),
   ];
 }

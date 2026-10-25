@@ -29,6 +29,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 ///   a different semantic constant)
 /// - filter → funnelSimple → Regular
 /// - photos → image → Regular
+/// - back → arrowLeft → Regular
 class AppIcons {
   AppIcons._();
 
@@ -46,6 +47,7 @@ class AppIcons {
   static const IconData check = PhosphorIconsRegular.check;
   static const IconData filter = PhosphorIconsRegular.funnelSimple;
   static const IconData photos = PhosphorIconsRegular.image;
+  static const IconData back = PhosphorIconsRegular.arrowLeft;
 
   /// Every constant, for tests that assert each one is a valid glyph.
   static const List<IconData> all = <IconData>[
@@ -63,5 +65,6 @@ class AppIcons {
     check,
     filter,
     photos,
+    back,
   ];
 }

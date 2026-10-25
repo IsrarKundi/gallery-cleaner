@@ -1,0 +1,296 @@
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+
+import '../../../core/constants/app_icons.dart';
+import '../../../core/strings/app_strings.dart';
+import '../../../core/theme/theme_ext.dart';
+import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/app_dialog.dart';
+import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_snackbar.dart';
+import '../../../core/widgets/empty_view.dart';
+import '../../../core/widgets/error_banner.dart';
+import '../../../core/widgets/error_view.dart';
+import '../../../core/widgets/secondary_button.dart';
+import '../controller/trash_controller.dart';
+import '../widgets/trash_row.dart';
+
+/// Trash screen (requirements §4): the recorded Trash list, restore
+/// single + multi, and emptying. Layout + Obx only: the native-sheet
+/// outcomes and history writes live in [TrashController].
+///
+/// Navigation contract (see the controller): every exit resets the
+/// stack with [Get.offAllNamed] — the AppBar back control, the system
+/// back gesture (via [PopScope]) and the empty-state CTA all go to
+/// the deck, never [Get.back] into a stale deck controller.
+/// Emptying is destructive, so it first shows Klara's own in-app
+/// confirmation (stating the deletion cannot be undone — the only
+/// place that wording is allowed, because after emptying restore no
+/// longer exists) and only then the native sheet.
+class TrashView extends GetView<TrashController> {
+  const TrashView({super.key});
+
+  Future<void> _restore(BuildContext context, List<String> ids) async {
+    final TrashActionOutcome? outcome = await controller.restore(ids);
+    if (!context.mounted) {
+      return;
+    }
+    switch (outcome) {
+      case TrashActionOutcome.restored:
+        AppSnackbar.show(
+          context,
+          message: ids.length == 1
+              ? AppStrings.tr(AppStrings.snackRestored)
+              : AppStrings.tr(AppStrings.snackRestoredMany, <String, String>{
+                  'count': '${ids.length}',
+                }),
+        );
+      case TrashActionOutcome.denied:
+        await AppDialog.showConfirmation(
+          context,
+          title: AppStrings.tr(AppStrings.deniedConfirmTitle),
+          message: AppStrings.tr(AppStrings.trashDeniedMessage),
+          confirmLabel: AppStrings.tr(AppStrings.actionOk),
+        );
+      case TrashActionOutcome.failed:
+      case TrashActionOutcome.serviceError:
+      case TrashActionOutcome.emptied:
+      case null:
+        // Failed / service errors render in the inline error strip.
+        break;
+    }
+  }
+
+  Future<void> _emptyTrash(BuildContext context) async {
+    final bool confirmed = await AppDialog.showConfirmation(
+      context,
+      title: AppStrings.tr(AppStrings.trashEmptyConfirmTitle),
+      message: AppStrings.tr(AppStrings.trashEmptyConfirmMessage),
+      confirmLabel: AppStrings.tr(AppStrings.trashEmpty),
+      cancelLabel: AppStrings.tr(AppStrings.actionCancel),
+      isDestructive: true,
+    );
+    if (!confirmed || !context.mounted) {
+      return;
+    }
+    final TrashActionOutcome? outcome = await controller.emptyTrash();
+    if (!context.mounted) {
+      return;
+    }
+    switch (outcome) {
+      case TrashActionOutcome.emptied:
+        AppSnackbar.show(
+          context,
+          message: AppStrings.tr(AppStrings.snackTrashEmptied, <String, String>{
+            'size': Formatters.formatBytes(controller.lastFreedBytes.value),
+          }),
+        );
+      case TrashActionOutcome.denied:
+        await AppDialog.showConfirmation(
+          context,
+          title: AppStrings.tr(AppStrings.deniedConfirmTitle),
+          message: AppStrings.tr(AppStrings.trashDeniedMessage),
+          confirmLabel: AppStrings.tr(AppStrings.actionOk),
+        );
+      case TrashActionOutcome.restored:
+      case TrashActionOutcome.failed:
+      case TrashActionOutcome.serviceError:
+      case null:
+        // Failed / service errors render in the inline error strip.
+        break;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (!didPop) {
+          controller.goToDeck();
+        }
+      },
+      child: Obx(() {
+        final bool isEmpty =
+            !controller.isLoading.value && controller.entries.isEmpty;
+        return AppScaffold(
+          title: AppStrings.tr(AppStrings.screenTrash),
+          leading: IconButton(
+            icon: Icon(AppIcons.back, size: context.sizes.iconMd),
+            tooltip: AppStrings.tr(AppStrings.actionBackToDeck),
+            onPressed: controller.goToDeck,
+          ),
+          bottomBar: isEmpty
+              ? null
+              : _BottomBar(
+                  controller: controller,
+                  onRestoreAll: () => _restore(
+                    context,
+                    controller.entries.map((entry) => entry.assetId).toList(),
+                  ),
+                  onEmptyTrash: () => _emptyTrash(context),
+                ),
+          body: _ArrivalSnack(
+            controller: controller,
+            child: _Body(
+              controller: controller,
+              onRestoreSingle: (String id) => _restore(context, <String>[id]),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class _Body extends StatelessWidget {
+  const _Body({required this.controller, required this.onRestoreSingle});
+
+  final TrashController controller;
+  final ValueChanged<String> onRestoreSingle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      if (controller.isLoading.value && controller.entries.isEmpty) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      if (controller.errorKey.value.isNotEmpty && controller.entries.isEmpty) {
+        return ErrorView(
+          message: AppStrings.tr(controller.errorKey.value),
+          onRetry: controller.init,
+        );
+      }
+      if (controller.entries.isEmpty) {
+        return EmptyView(
+          icon: AppIcons.trash,
+          title: AppStrings.tr(AppStrings.trashEmptyTitle),
+          message: AppStrings.tr(AppStrings.trashEmptyMessage),
+          ctaLabel: AppStrings.tr(AppStrings.actionBackToDeck),
+          onCta: controller.goToDeck,
+        );
+      }
+      return Column(
+        children: <Widget>[
+          if (controller.errorKey.value.isNotEmpty)
+            ErrorBanner(
+              message: AppStrings.tr(controller.errorKey.value),
+              onDismiss: () => controller.errorKey.value = '',
+            ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: controller.entries.length,
+              itemBuilder: (BuildContext context, int index) {
+                final entry = controller.entries[index];
+                return TrashRow(
+                  entry: entry,
+                  onRestore: () => onRestoreSingle(entry.assetId),
+                );
+              },
+            ),
+          ),
+        ],
+      );
+    });
+  }
+}
+
+/// Bottom-anchored actions: "Restore all" (secondary) and "Empty
+/// trash" (destructive outline in the error colour — never a filled
+/// primary, so the destructive action never looks like the primary
+/// flow). The bar renders only while Trash is non-empty.
+class _BottomBar extends StatelessWidget {
+  const _BottomBar({
+    required this.controller,
+    required this.onRestoreAll,
+    required this.onEmptyTrash,
+  });
+
+  final TrashController controller;
+  final VoidCallback onRestoreAll;
+  final VoidCallback onEmptyTrash;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: context.palette.background,
+      padding: EdgeInsets.fromLTRB(
+        context.sizes.screenPadding,
+        context.sizes.sm,
+        context.sizes.screenPadding,
+        context.sizes.sm,
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            SecondaryButton(
+              label: AppStrings.tr(AppStrings.trashRestoreAll),
+              icon: AppIcons.undo,
+              onPressed: onRestoreAll,
+              isLoading: controller.isBusy.value,
+            ),
+            SizedBox(height: context.sizes.sm),
+            SizedBox(
+              height: context.sizes.hitArea,
+              width: double.infinity,
+              child: Center(
+                child: SizedBox(
+                  height: context.sizes.buttonCompact,
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: context.palette.error,
+                    ),
+                    onPressed: controller.isBusy.value ? null : onEmptyTrash,
+                    icon: Icon(AppIcons.trash, size: context.sizes.iconSm),
+                    label: Text(AppStrings.tr(AppStrings.trashEmpty)),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Shows the review delete's arrival snackbar once, on the first
+/// frame after the Trash screen appears, then clears it so rebuilds
+/// never repeat it.
+class _ArrivalSnack extends StatefulWidget {
+  const _ArrivalSnack({required this.controller, required this.child});
+
+  final TrashController controller;
+  final Widget child;
+
+  @override
+  State<_ArrivalSnack> createState() => _ArrivalSnackState();
+}
+
+class _ArrivalSnackState extends State<_ArrivalSnack> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.controller.arrivalSnackDate.value.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        AppSnackbar.show(
+          context,
+          message: AppStrings.tr(
+            AppStrings.snackMovedToTrashUntil,
+            <String, String>{'date': widget.controller.arrivalSnackDate.value},
+          ),
+        );
+        widget.controller.clearArrivalSnack();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}

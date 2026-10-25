@@ -45,6 +45,7 @@ class AppStrings {
   static const String actionConfirm = 'actionConfirm';
   static const String actionClose = 'actionClose';
   static const String actionOk = 'actionOk';
+  static const String actionBackToDeck = 'actionBackToDeck';
 
   // Three-state space meter (requirements §4). Never report trashed
   // space as freed.
@@ -54,6 +55,9 @@ class AppStrings {
 
   // Review.
   static const String reviewDeleteCount = 'reviewDeleteCount';
+  static const String reviewEmptyTitle = 'reviewEmptyTitle';
+  static const String reviewEmptyMessage = 'reviewEmptyMessage';
+  static const String reviewUnmarkHint = 'reviewUnmarkHint';
 
   // Trash.
   static const String trashEmpty = 'trashEmpty';
@@ -61,10 +65,14 @@ class AppStrings {
   static const String trashEmptyConfirmMessage = 'trashEmptyConfirmMessage';
   static const String trashEmptyTitle = 'trashEmptyTitle';
   static const String trashEmptyMessage = 'trashEmptyMessage';
+  static const String trashRestoreAll = 'trashRestoreAll';
+  static const String trashDeniedMessage = 'trashDeniedMessage';
+  static const String trashRowMeta = 'trashRowMeta';
 
   // History.
   static const String historyEmptyTitle = 'historyEmptyTitle';
   static const String historyEmptyMessage = 'historyEmptyMessage';
+  static const String historyRowMeta = 'historyRowMeta';
 
   // Permissions (requirements §5). Partial access is stated honestly:
   // the app works on exactly the granted photos.
@@ -133,7 +141,10 @@ class AppStrings {
 
   // Confirmations and feedback.
   static const String snackMovedToTrash = 'snackMovedToTrash';
+  static const String snackMovedToTrashUntil = 'snackMovedToTrashUntil';
   static const String snackRestored = 'snackRestored';
+  static const String snackRestoredMany = 'snackRestoredMany';
+  static const String snackTrashEmptied = 'snackTrashEmptied';
   static const String snackUndone = 'snackUndone';
 
   /// English (v1) values, keyed by the constants above.
@@ -162,18 +173,28 @@ class AppStrings {
     actionConfirm: 'Confirm',
     actionClose: 'Close',
     actionOk: 'OK',
+    actionBackToDeck: 'Back to deck',
     meterToBeFreed: 'To be freed',
     meterInTrash: 'In trash until {date}',
     meterFreed: 'Freed',
     reviewDeleteCount: 'Delete {count} photos',
+    reviewEmptyTitle: 'Nothing to review',
+    reviewEmptyMessage:
+        'Every marked photo is decided. Go back to the deck to keep cleaning.',
+    reviewUnmarkHint: 'Tap a photo to remove it from this list.',
     trashEmpty: 'Empty trash',
     trashEmptyConfirmTitle: 'Empty trash?',
     trashEmptyConfirmMessage:
         'Photos in trash will be removed and cannot be restored.',
     trashEmptyTitle: 'Trash is empty',
     trashEmptyMessage: 'Photos you remove stay here for 30 days.',
+    trashRestoreAll: 'Restore all',
+    trashDeniedMessage:
+        'You did not confirm, so those photos are still in trash.',
+    trashRowMeta: 'Trashed {trashed} · Recoverable until {until}',
     historyEmptyTitle: 'No history yet',
     historyEmptyMessage: 'Your cleaning history will appear here.',
+    historyRowMeta: '{count} photos · Trashed {trashed} · Freed {freed}',
     permissionTitle: 'Access your photos',
     permissionMessage:
         'Klara needs access to your photos so you can swipe through '
@@ -231,7 +252,10 @@ class AppStrings {
         'before anything is removed.',
     meterInTrashEmpty: 'In trash',
     snackMovedToTrash: 'Moved to trash. You have 30 days to restore.',
+    snackMovedToTrashUntil: 'Moved to trash, recoverable until {date}',
     snackRestored: 'Photo restored',
+    snackRestoredMany: '{count} photos restored',
+    snackTrashEmptied: 'Trash emptied. {size} freed.',
     snackUndone: 'Action undone',
   };
 
