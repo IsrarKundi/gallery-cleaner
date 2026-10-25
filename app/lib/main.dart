@@ -14,7 +14,12 @@ void main() {
 }
 
 class KlaraApp extends StatelessWidget {
-  const KlaraApp({super.key});
+  const KlaraApp({super.key, this.initialBinding});
+
+  /// Test seam ONLY: the golden-path tests inject fake services
+  /// here (no device, no MediaStore on the host). Production
+  /// passes nothing, so behaviour is exactly [InitialBinding].
+  final Bindings? initialBinding;
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +28,7 @@ class KlaraApp extends StatelessWidget {
       theme: AppTheme.light,
       // Light theme only in Phase 1; dark mode is Phase 3.
       themeMode: ThemeMode.light,
-      initialBinding: InitialBinding(),
+      initialBinding: initialBinding ?? InitialBinding(),
       initialRoute: AppRoutes.splash,
       getPages: AppPages.pages,
       builder: (BuildContext context, Widget? child) {

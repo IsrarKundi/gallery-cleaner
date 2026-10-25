@@ -13,6 +13,7 @@ import '../../../services/trash/trash_service.dart';
 import '../model/deck_filter.dart';
 import '../model/deck_status.dart';
 import '../model/space_meter.dart';
+import '../model/thumbnail_preloader.dart';
 
 /// The deck: permission, paged queue, marks, undo, filters, session
 /// resume, thumbnail preloading and the three-state space meter
@@ -38,26 +39,19 @@ class DeckController extends GetxController {
     required this.media,
     required this.trash,
     required this.local,
-  });
+  }) : _preloader = ThumbnailPreloader(media: media);
 
   final MediaService media;
   final TrashService trash;
   final LocalService local;
 
+  /// Thumbnail preloading + bounded cache (see thumbnail_preloader.dart).
+  final ThumbnailPreloader _preloader;
+
   static const int pageSize = 50;
-
-  /// Thumbnail edge in pixels for deck preloading.
-  static const int thumbnailSize = 512;
-
-  /// Cards preloaded ahead of the current card (current + next 3).
-  static const int preloadAhead = 3;
 
   /// When this many cards remain, the next page loads in background.
   static const int paginationTrigger = 10;
-
-  /// Thumbnail cache bound: oldest entries drop first, so a huge
-  /// library cannot grow the cache without bound.
-  static const int maxThumbnailCache = 64;
 
   final Rx<DeckStatus> status = DeckStatus.loading.obs;
   final Rx<MediaPermission?> permission = Rx<MediaPermission?>(null);
@@ -72,8 +66,11 @@ class DeckController extends GetxController {
   final RxList<String> months = <String>[].obs;
   final RxList<TrashEntry> trashEntries = <TrashEntry>[].obs;
   final RxList<HistoryRecord> history = <HistoryRecord>[].obs;
-  final RxMap<String, Uint8List> thumbnails = <String, Uint8List>{}.obs;
-  final RxSet<String> failedThumbnails = <String>{}.obs;
+
+  /// Owned by the thumbnail preloader; the view observes these
+  /// same reactive objects, so preloading behaviour is unchanged.
+  RxMap<String, Uint8List> get thumbnails => _preloader.thumbnails;
+  RxSet<String> get failedThumbnails => _preloader.failedThumbnails;
   final RxBool showTutorial = false.obs;
   final RxBool loadingMore = false.obs;
 
@@ -207,7 +204,7 @@ class DeckController extends GetxController {
     }
     currentIndex.value = _firstUndecidedIndex();
     status.value = DeckStatus.ready;
-    _preloadAroundCurrent();
+    _preloader.preloadAround(queue, currentIndex.value);
   }
 
   /// Loads one page; page 0 replaces the queue, later pages append.
@@ -275,7 +272,7 @@ class DeckController extends GetxController {
     undoStack.add(asset.id);
     currentIndex.value += 1;
     _maybeLoadMore();
-    _preloadAroundCurrent();
+    _preloader.preloadAround(queue, currentIndex.value);
     _persist();
   }
 
@@ -293,7 +290,7 @@ class DeckController extends GetxController {
     }
     final int index = queue.indexWhere((MediaAsset asset) => asset.id == id);
     currentIndex.value = index >= 0 ? index : _firstUndecidedIndex();
-    _preloadAroundCurrent();
+    _preloader.preloadAround(queue, currentIndex.value);
     _persist();
   }
 
@@ -311,7 +308,7 @@ class DeckController extends GetxController {
     }
     if (changed) {
       currentIndex.value = _firstUndecidedIndex();
-      _preloadAroundCurrent();
+      _preloader.preloadAround(queue, currentIndex.value);
       _persist();
     }
   }
@@ -326,8 +323,7 @@ class DeckController extends GetxController {
     marks.clear();
     favouriteIds.clear();
     undoStack.clear();
-    thumbnails.clear();
-    failedThumbnails.clear();
+    _preloader.clear();
     currentIndex.value = 0;
     _hasMore = true;
     _nextPage = 0;
@@ -375,34 +371,8 @@ class DeckController extends GetxController {
     loadingMore.value = true;
     _loadPage(_nextPage).whenComplete(() {
       loadingMore.value = false;
-      _preloadAroundCurrent();
+      _preloader.preloadAround(queue, currentIndex.value);
     });
-  }
-
-  void _preloadAroundCurrent() {
-    final int start = currentIndex.value;
-    for (int i = start; i < queue.length && i <= start + preloadAhead; i++) {
-      _loadThumbnail(queue[i].id);
-    }
-  }
-
-  Future<void> _loadThumbnail(String assetId) async {
-    if (thumbnails.containsKey(assetId) || failedThumbnails.contains(assetId)) {
-      return;
-    }
-    final Result<Uint8List> result = await media.getThumbnail(
-      assetId,
-      thumbnailSize,
-    );
-    result.fold(
-      onSuccess: (Uint8List bytes) {
-        if (thumbnails.length >= maxThumbnailCache) {
-          thumbnails.remove(thumbnails.keys.first);
-        }
-        thumbnails[assetId] = bytes;
-      },
-      onFailure: (_) => failedThumbnails.add(assetId),
-    );
   }
 
   /// Persists on every mark, undo and filter change — never on every

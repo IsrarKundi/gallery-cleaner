@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/constants/app_icons.dart';
+import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../core/utils/formatters.dart';
@@ -52,6 +53,20 @@ class DeckView extends GetView<DeckController> {
       return AppScaffold(
         title: AppStrings.tr(AppStrings.screenDeck),
         actions: <Widget>[
+          // Phase 1 screens are reachable from the deck, not only
+          // via the review-delete flow: Trash for restore/emptying
+          // and History for past cleaning runs. Both reset the
+          // stack back to the deck (their own navigation contract).
+          IconButton(
+            icon: Icon(AppIcons.trash, size: context.sizes.iconMd),
+            tooltip: AppStrings.tr(AppStrings.screenTrash),
+            onPressed: () => Get.toNamed<dynamic>(AppRoutes.trash),
+          ),
+          IconButton(
+            icon: Icon(AppIcons.history, size: context.sizes.iconMd),
+            tooltip: AppStrings.tr(AppStrings.screenHistory),
+            onPressed: () => Get.toNamed<dynamic>(AppRoutes.history),
+          ),
           IconButton(
             icon: Icon(AppIcons.filter, size: context.sizes.iconMd),
             tooltip: AppStrings.tr(AppStrings.filterTitle),

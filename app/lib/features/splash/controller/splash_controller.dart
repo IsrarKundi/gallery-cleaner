@@ -16,8 +16,8 @@ import '../../../core/constants/app_sizes.dart';
 /// so the timer only fires if Lottie playback fails.
 ///
 /// Navigation is NOT done here: [onComplete] is called exactly once and
-/// the deck increment wires it to the deck route. Splash is not yet the
-/// initial route (app_pages.dart is not wired until feature views exist).
+/// app_pages.dart wires it to the deck route. Splash IS the initial
+/// route (main.dart) and all five Phase 1 routes are wired.
 class SplashController extends GetxController {
   SplashController({this.onComplete, Duration? holdDuration})
     : holdDuration = holdDuration ?? const AppSizes().splashHold;
