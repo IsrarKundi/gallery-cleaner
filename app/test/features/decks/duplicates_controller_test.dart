@@ -101,6 +101,11 @@ class _Media implements MediaService {
     }
     return Success<Uint8List>(Uint8List.fromList(<int>[1, 2, 3]));
   }
+
+  @override
+  Future<Result<List<MediaAsset>>> getAssetsByIds(List<String> ids) async {
+    return const Success<List<MediaAsset>>(<MediaAsset>[]);
+  }
 }
 
 class _Local implements LocalService {
@@ -407,5 +412,10 @@ class _DeniedMedia implements MediaService {
     int quality = 85,
   }) async {
     return Success<Uint8List>(Uint8List.fromList(<int>[1]));
+  }
+
+  @override
+  Future<Result<List<MediaAsset>>> getAssetsByIds(List<String> ids) async {
+    return const Success<List<MediaAsset>>(<MediaAsset>[]);
   }
 }

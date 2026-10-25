@@ -94,6 +94,11 @@ class _Media implements MediaService {
   Future<Result<Uint8List>> getThumbnail(String assetId, int size, {int quality = 85}) async {
     return Success<Uint8List>(_png());
   }
+
+  @override
+  Future<Result<List<MediaAsset>>> getAssetsByIds(List<String> ids) async {
+    return const Success<List<MediaAsset>>(<MediaAsset>[]);
+  }
 }
 
 class _Local implements LocalService {

@@ -102,6 +102,11 @@ class _Media implements MediaService {
   }) async {
     return Success<Uint8List>(_png);
   }
+
+  @override
+  Future<Result<List<MediaAsset>>> getAssetsByIds(List<String> ids) async {
+    return const Success<List<MediaAsset>>(<MediaAsset>[]);
+  }
 }
 
 class _Trash implements TrashService {

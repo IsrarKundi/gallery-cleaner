@@ -64,8 +64,16 @@ class FakeMedia implements MediaService {
     int pageSize = 50,
   }) async => const Success<List<MediaAsset>>(<MediaAsset>[]);
   @override
-  Future<Result<Uint8List>> getThumbnail(String assetId, int size, {int quality = 85}) async =>
-      Success<Uint8List>(Uint8List.fromList(<int>[1, 2, 3]));
+  Future<Result<Uint8List>> getThumbnail(
+    String assetId,
+    int size, {
+    int quality = 85,
+  }) async => Success<Uint8List>(Uint8List.fromList(<int>[1, 2, 3]));
+
+  @override
+  Future<Result<List<MediaAsset>>> getAssetsByIds(List<String> ids) async {
+    return const Success<List<MediaAsset>>(<MediaAsset>[]);
+  }
 }
 
 class FakeLocal implements LocalService {

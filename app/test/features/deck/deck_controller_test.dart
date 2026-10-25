@@ -135,6 +135,11 @@ class FakeMedia implements MediaService {
   }) async {
     return Success<Uint8List>(_png);
   }
+
+  @override
+  Future<Result<List<MediaAsset>>> getAssetsByIds(List<String> ids) async {
+    return const Success<List<MediaAsset>>(<MediaAsset>[]);
+  }
 }
 
 class FakeTrash implements TrashService {

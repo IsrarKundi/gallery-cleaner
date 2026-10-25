@@ -15,8 +15,16 @@ import 'package:klara/services/trash/trash_service.dart';
 
 class _FakeMedia implements MediaService {
   @override
-  Future<Result<Uint8List>> getThumbnail(String assetId, int size, {int quality = 85}) async =>
-      Success<Uint8List>(Uint8List(0));
+  Future<Result<Uint8List>> getThumbnail(
+    String assetId,
+    int size, {
+    int quality = 85,
+  }) async => Success<Uint8List>(Uint8List(0));
+
+  @override
+  Future<Result<List<MediaAsset>>> getAssetsByIds(List<String> ids) async {
+    return const Success<List<MediaAsset>>(<MediaAsset>[]);
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

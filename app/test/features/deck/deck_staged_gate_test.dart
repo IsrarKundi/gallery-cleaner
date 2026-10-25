@@ -76,6 +76,11 @@ class _RecordingMedia implements MediaService {
   }
 
   @override
+  Future<Result<List<MediaAsset>>> getAssetsByIds(List<String> ids) async {
+    return const Success<List<MediaAsset>>(<MediaAsset>[]);
+  }
+
+  @override
   Future<Result<void>> presentLimitedSelection() async {
     return const Success<void>(null);
   }

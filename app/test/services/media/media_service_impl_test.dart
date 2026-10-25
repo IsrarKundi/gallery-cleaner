@@ -96,14 +96,14 @@ class _FakeGateway implements MediaPluginGateway {
   }
 }
 
-AssetEntity _entity(String id) {
+AssetEntity _entity(String id, {int createDateSecond = 1700000000}) {
   return AssetEntity(
     id: id,
     typeInt: 1,
     width: 100,
     height: 100,
     title: '$id.jpg',
-    createDateSecond: 1700000000,
+    createDateSecond: createDateSecond,
     relativePath: 'DCIM/Camera',
   );
 }
@@ -232,6 +232,52 @@ void main() {
       };
       await service.getAssets();
       expect((await service.getThumbnail('a1', 512)).isSuccess, isTrue);
+      expect(gateway.entityCalls, 0);
+    });
+  });
+
+  group('getAssetsByIds (Phase 2.4)', () {
+    test('resolves exact ids newest first, skipping gone + audio', () async {
+      gateway.entities = <String, AssetEntity>{
+        'old': _entity('old', createDateSecond: 1700000000),
+        'new': _entity('new', createDateSecond: 1700100000),
+        'aud': AssetEntity(
+          id: 'aud',
+          typeInt: 3,
+          width: 100,
+          height: 100,
+          title: 'aud.mp3',
+          createDateSecond: 1700200000,
+          relativePath: 'Music',
+        ),
+      };
+      gateway.sizes = <String, int>{'old': 11, 'new': 22, 'aud': 33};
+      final Result<List<MediaAsset>> result = await service.getAssetsByIds(
+        <String>['gone', 'old', 'aud', 'new'],
+      );
+      expect(result.isSuccess, isTrue);
+      final List<MediaAsset> assets =
+          (result as Success<List<MediaAsset>>).value;
+      expect(assets.map((MediaAsset a) => a.id).toList(), <String>[
+        'new',
+        'old',
+      ]);
+      expect(assets.map((MediaAsset a) => a.sizeBytes).toList(), <int>[22, 11]);
+      // One fromId per miss; the audio id still resolved (then skipped).
+      expect(gateway.entityCalls, 4);
+    });
+
+    test('entity-cache hit costs zero fromId calls', () async {
+      gateway.pages = <String, List<AssetEntity>>{
+        'all': <AssetEntity>[_entity('a1')],
+      };
+      gateway.entities = <String, AssetEntity>{'a1': _entity('a1')};
+      await service.getAssets();
+      gateway.entityCalls = 0;
+      final Result<List<MediaAsset>> result = await service.getAssetsByIds(
+        <String>['a1'],
+      );
+      expect(result.isSuccess, isTrue);
       expect(gateway.entityCalls, 0);
     });
   });

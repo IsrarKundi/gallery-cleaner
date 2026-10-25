@@ -207,6 +207,61 @@ class MediaServiceImpl implements MediaService {
     }
   }
 
+  /// Phase 2.4: id-targeted resolution (solutions 2.4). Entities
+  /// come from the 2.1 cache first (a hit skips `fromId`); misses
+  /// resolve one `fromId` each, in bounded parallel chunks. Gone
+  /// ids and non-image/video kinds are skipped, never failed, and
+  /// the result is newest first (createDate descending, id
+  /// tiebreak) to match the route-argument path's ordering.
+  @override
+  Future<Result<List<MediaAsset>>> getAssetsByIds(List<String> ids) async {
+    try {
+      final List<AssetEntity> entities = await _entitiesFor(ids);
+      final List<({AssetEntity entity, MediaAssetType type})> kept =
+          <({AssetEntity entity, MediaAssetType type})>[];
+      for (final AssetEntity entity in entities) {
+        final MediaAssetType? assetType = mapAssetType(entity.type);
+        if (assetType != null) {
+          kept.add((entity: entity, type: assetType));
+        }
+      }
+      final List<int> sizes = await _sizesFor(
+        kept
+            .map((({AssetEntity entity, MediaAssetType type}) e) => e.entity)
+            .toList(),
+      );
+      final List<MediaAsset> assets = <MediaAsset>[];
+      for (int i = 0; i < kept.length; i++) {
+        final AssetEntity entity = kept[i].entity;
+        assets.add(
+          MediaAsset(
+            id: entity.id,
+            type: kept[i].type,
+            width: entity.width,
+            height: entity.height,
+            sizeBytes: sizes[i],
+            createDate: entity.createDateTime,
+            title: entity.title ?? '',
+            albumName: _resolveAlbumName(entity.relativePath, ''),
+            isSystemFavourite: entity.isFavorite,
+          ),
+        );
+      }
+      assets.sort((MediaAsset a, MediaAsset b) {
+        final int byDate = b.createDate.compareTo(a.createDate);
+        if (byDate != 0) {
+          return byDate;
+        }
+        return a.id.compareTo(b.id);
+      });
+      return Success<List<MediaAsset>>(assets);
+    } catch (_) {
+      return const Failure<List<MediaAsset>>(
+        AppFailure(messageKey: AppStrings.errorMediaLoad),
+      );
+    }
+  }
+
   /// Builds the query filter. A month key becomes a create-time
   /// condition; without one the condition is ignored (all dates).
   /// Returns null for an invalid month key. `needTitle` is on so
@@ -338,6 +393,43 @@ class MediaServiceImpl implements MediaService {
       return await _gateway.getFileSize(entity);
     } catch (_) {
       return 0;
+    }
+  }
+
+  /// Entities for [ids] in input order, via the cache first and one
+  /// `fromId` per miss, in bounded parallel chunks. A null (gone
+  /// photo) or a failed lookup is skipped, never fatal.
+  Future<List<AssetEntity>> _entitiesFor(List<String> ids) async {
+    final List<AssetEntity> resolved = <AssetEntity>[];
+    for (int start = 0; start < ids.length; start += _sizeParallelism) {
+      final int end = start + _sizeParallelism > ids.length
+          ? ids.length
+          : start + _sizeParallelism;
+      final List<AssetEntity?> chunk = await Future.wait(<Future<AssetEntity?>>[
+        for (int i = start; i < end; i++) _entityFor(ids[i]),
+      ]);
+      for (final AssetEntity? entity in chunk) {
+        if (entity != null) {
+          resolved.add(entity);
+        }
+      }
+    }
+    return resolved;
+  }
+
+  Future<AssetEntity?> _entityFor(String id) async {
+    final AssetEntity? cached = _entities[id];
+    if (cached != null) {
+      return cached;
+    }
+    try {
+      final AssetEntity? entity = await _gateway.getEntity(id);
+      if (entity != null) {
+        _rememberEntity(entity);
+      }
+      return entity;
+    } catch (_) {
+      return null;
     }
   }
 

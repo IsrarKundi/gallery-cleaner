@@ -51,6 +51,11 @@ class _CountingMedia implements MediaService {
   }
 
   @override
+  Future<Result<List<MediaAsset>>> getAssetsByIds(List<String> ids) async {
+    return const Success<List<MediaAsset>>(<MediaAsset>[]);
+  }
+
+  @override
   Future<Result<MediaPermission>> requestPermission() async {
     return const Success<MediaPermission>(MediaPermission.grantedFull);
   }

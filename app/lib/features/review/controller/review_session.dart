@@ -36,11 +36,11 @@ Future<List<MediaAsset>> loadDeleteMarkedAssets({
   if (deleteIds.isEmpty) {
     return <MediaAsset>[];
   }
-  final Result<List<MediaAsset>> assetsResult = await media.getAssets();
+  final Result<List<MediaAsset>> assetsResult = await media.getAssetsByIds(
+    deleteIds.toList(),
+  );
   return assetsResult.fold(
-    onSuccess: (List<MediaAsset> assets) {
-      return assets.where((MediaAsset a) => deleteIds.contains(a.id)).toList();
-    },
+    onSuccess: (List<MediaAsset> assets) => assets,
     onFailure: (_) => <MediaAsset>[],
   );
 }

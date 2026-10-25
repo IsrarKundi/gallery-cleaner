@@ -54,6 +54,13 @@ abstract class MediaService {
     int pageSize = 50,
   });
 
+  /// Phase 2.4: assets for exact ids, newest first. Used by review
+  /// when opened without route arguments: delete marks beyond the
+  /// newest page must still resolve (the old page-0 filter silently
+  /// dropped them). Ids that no longer resolve (deleted photos) are
+  /// skipped, never failed: the page cannot show a gone photo.
+  Future<Result<List<MediaAsset>>> getAssetsByIds(List<String> ids);
+
   /// Thumbnail bytes for one asset at [size] x [size] pixels, for
   /// deck preloading. Returns the raw bytes; the deck renders them.
   ///
