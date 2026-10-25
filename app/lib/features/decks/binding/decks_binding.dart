@@ -5,6 +5,7 @@
 import 'package:get/get.dart';
 
 import '../../../services/detection/scan_repository.dart';
+import '../../../services/lifecycle/app_lifecycle.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_service.dart';
 import '../../../services/storage/storage_service.dart';
@@ -28,6 +29,11 @@ class DecksBinding extends Bindings {
             : null,
         scanRepository: Get.isRegistered<ScanRepository>()
             ? Get.find<ScanRepository>()
+            : null,
+        // Phase 4.4: without a lifecycle service the hub behaves
+        // exactly as before (no resume handling).
+        lifecycle: Get.isRegistered<AppLifecycle>()
+            ? Get.find<AppLifecycle>()
             : null,
       ),
     );

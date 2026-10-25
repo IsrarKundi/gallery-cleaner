@@ -37,6 +37,24 @@ class ThumbnailPreloader {
   final MediaService media;
   final ThumbnailService _service;
 
+  /// Phase 4.4: while paused (app backgrounded) no new preload
+  /// fetches start, and pausing cancels in-flight deck fetches
+  /// (cached bytes and failed marks survive — see [clear]).
+  /// Resume re-runs [preloadAround] for the current window.
+  bool _paused = false;
+
+  bool get isPaused => _paused;
+
+  void setPaused(bool paused) {
+    if (_paused == paused) {
+      return;
+    }
+    _paused = paused;
+    if (paused) {
+      _service.cancelOutside(<ThumbnailKey>{});
+    }
+  }
+
   /// Thumbnail edge in pixels for deck preloading (solutions 3.1:
   /// deck-card surface = card width × DPR, capped at 1080 px).
   /// Fixed at the cap so the service key is stable across devices;
@@ -63,6 +81,9 @@ class ThumbnailPreloader {
   /// Safe to call on every mark/undo: cached, in-flight and
   /// still-window failed ids are all no-ops inside the service.
   void preloadAround(List<MediaAsset> queue, int start) {
+    if (_paused) {
+      return;
+    }
     final List<String> ids = <String>[
       for (int i = start; i < queue.length && i <= start + preloadAhead; i++)
         queue[i].id,

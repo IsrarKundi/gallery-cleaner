@@ -137,6 +137,11 @@ class _Local implements LocalService {
     return const Success<List<HistoryRecord>>(<HistoryRecord>[]);
   }
 
+  // Phase 4.4: setFilter flushes pending writes; the fake must
+  // implement it (noSuchMethod would throw).
+  @override
+  Future<void> flushPendingWrites() async {}
+
   @override
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError(
     'not used by the session test: ${invocation.memberName}',

@@ -23,6 +23,7 @@
 // incrementally per page, so a page costs O(page) and a hub rebuild
 // costs O(user marks), not O(library).
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:get/get.dart';
@@ -30,6 +31,7 @@ import 'package:get/get.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/utils/result.dart';
+import '../../../services/lifecycle/app_lifecycle.dart';
 import '../../../services/detection/grouping.dart';
 import '../../../services/detection/library_scanner.dart';
 import '../../../services/detection/photo_analysis.dart';
@@ -57,12 +59,18 @@ class DecksController extends GetxController {
     this.storage,
     ThumbnailService? thumbnailService,
     ScanRepository? scanRepository,
+    this.lifecycle,
   }) : _thumbnails = thumbnailService ?? ThumbnailServiceImpl(media: media),
        _scans =
            scanRepository ?? ScanRepositoryImpl(media: media, local: local);
 
   final MediaService media;
   final LocalService local;
+
+  /// Phase 4.4 lifecycle delivery (null in tests and on entry
+  /// paths without the initial binding: the hub then behaves
+  /// exactly as before, with no resume handling).
+  final AppLifecycle? lifecycle;
 
   /// Phase 4.2: the shared scan (see scan_repository.dart). The
   /// binding supplies the app-wide instance; tests that construct
@@ -258,7 +266,85 @@ class DecksController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    // Phase 4.4: background pauses the shared scan; resume
+    // re-checks permission and reconciles a dirty library (a
+    // full re-scan is expensive, so it is dirty-gated, unlike
+    // the deck's cheap page-0 refresh).
+    if (lifecycle != null) {
+      lifecycle!.addPauseListener(_handlePause);
+      lifecycle!.addResumeListener(_handleResume);
+      _librarySubscription = lifecycle!.libraryChanged.listen(
+        (_) => _libraryDirty = true,
+      );
+    }
     init();
+  }
+
+  /// Phase 4.4: a library change arrived since the last
+  /// reconciliation (hub re-scan happens on resume, not
+  /// mid-browsing — restarting a scan under the user's scroll
+  /// would reset the hub state).
+  bool _libraryDirty = false;
+
+  /// Phase 4.4: resume handling in flight (single-flight guard,
+  /// same shape as the deck's).
+  Future<void>? _resumeFuture;
+
+  StreamSubscription<void>? _librarySubscription;
+
+  void _handlePause() {
+    _scans.pause();
+  }
+
+  void _handleResume() {
+    if (_resumeFuture != null) {
+      return;
+    }
+    _resumeFuture = _doHubResume();
+    _resumeFuture!.whenComplete(() {
+      _resumeFuture = null;
+    });
+  }
+
+  /// Phase 4.4 hub resume: permission re-check first (never a
+  /// persisted value). Denied → denied state + explanation.
+  /// Granted → clear any background pause first (restart does
+  /// not clear a paused flag), then: denied/error → reload
+  /// from scratch (the deny → Settings → grant → return path,
+  /// no manual tap); dirty library → fresh scan; otherwise the
+  /// running scan simply continues. Never throws.
+  Future<void> _doHubResume() async {
+    try {
+      final Result<MediaPermission> perm = await media.requestPermission();
+      final bool granted = perm.fold(
+        onSuccess: (MediaPermission value) => value != MediaPermission.denied,
+        onFailure: (_) => false,
+      );
+      if (!granted) {
+        status.value = DecksStatus.denied;
+        if (errorKey.value.isEmpty) {
+          errorKey.value = AppStrings.errorMediaPermission;
+        }
+        return;
+      }
+      // Clear any background pause BEFORE any reload path:
+      // restart() does not clear a paused flag, so a paused
+      // scan reloaded here would stall at its first page gate.
+      _scans.resume();
+      if (status.value == DecksStatus.denied ||
+          status.value == DecksStatus.error) {
+        await retry();
+        return;
+      }
+      if (_libraryDirty) {
+        _libraryDirty = false;
+        _scans.restart();
+        await retry();
+        return;
+      }
+    } catch (_) {
+      // Resume handling must never crash the hub.
+    }
   }
 
   /// Loads retention data (sessions, snoozes, goal, history, Trash
@@ -355,6 +441,16 @@ class DecksController extends GetxController {
 
   @override
   void onClose() {
+    if (lifecycle != null) {
+      lifecycle!.removePauseListener(_handlePause);
+      lifecycle!.removeResumeListener(_handleResume);
+    }
+    unawaited(_librarySubscription?.cancel());
+    _librarySubscription = null;
+    // Never leave the shared scan paused after disposal: a
+    // controller that goes away while backgrounded must not
+    // stall the next controller's scan at its first page gate.
+    _scans.resume();
     _scanSubscription?.cancel();
     _scanSubscription = null;
     super.onClose();

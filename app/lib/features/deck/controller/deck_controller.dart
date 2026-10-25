@@ -8,6 +8,7 @@ import '../../../core/strings/app_strings.dart';
 import '../../../core/utils/app_haptics.dart';
 import '../../../core/utils/deferred_action.dart';
 import '../../../core/utils/result.dart';
+import '../../../services/lifecycle/app_lifecycle.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/media/media_service.dart';
@@ -51,6 +52,7 @@ class DeckController extends GetxController {
     ShareService? share,
     this.warmUp,
     ThumbnailService? thumbnailService,
+    this.lifecycle,
   }) : _preloader = ThumbnailPreloader(media: media, service: thumbnailService),
        retention = DeckRetention(local: local, share: share),
        access = DeckAccess(media: media),
@@ -59,6 +61,11 @@ class DeckController extends GetxController {
   final MediaService media;
   final TrashService trash;
   final LocalService local;
+
+  /// Phase 4.4 lifecycle delivery (null in tests and on entry
+  /// paths without the initial binding: the deck then behaves
+  /// exactly as before, with no resume handling).
+  final AppLifecycle? lifecycle;
 
   /// Phase 2.2 warm-up, started by the splash binding. Null in tests
   /// and on any entry path that skips the splash: the deck then runs
@@ -165,7 +172,174 @@ class DeckController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    // Phase 4.4: pause/resume + library-change delivery. The
+    // deck owns no scan, so its pause work is only the
+    // preloader (flush on pause is central, in AppLifecycleImpl).
+    if (lifecycle != null) {
+      lifecycle!.addPauseListener(_handlePause);
+      lifecycle!.addResumeListener(_handleResume);
+      _librarySubscription = lifecycle!.libraryChanged.listen(
+        (_) => _onLibraryChanged(),
+      );
+    }
     init();
+  }
+
+  @override
+  void onClose() {
+    if (lifecycle != null) {
+      lifecycle!.removePauseListener(_handlePause);
+      lifecycle!.removeResumeListener(_handleResume);
+    }
+    unawaited(_librarySubscription?.cancel());
+    _librarySubscription = null;
+    // Dispose flush point (solutions 4.1/4.4): never leave a
+    // coalesced session write behind when the controller goes.
+    unawaited(local.flushPendingWrites());
+    super.onClose();
+  }
+
+  /// Phase 4.4: assets of the last page-0 fetch, for the merge in
+  /// [refreshPageZero] (dates decide gone vs displaced — see
+  /// [mergePageZero]). Empty until the first page 0 lands, in
+  /// which case a refresh only ever prepends (nothing is known
+  /// gone yet).
+  List<MediaAsset> _lastPageZero = <MediaAsset>[];
+
+  /// Phase 4.4: resume handling in flight (see [_handleResume]).
+  /// [markCurrent] awaits it so a mark can never be overwritten
+  /// by the reload's session restore.
+  Future<void>? _resumeFuture;
+
+  /// Phase 4.4: page-0 refresh in flight (see [refreshPageZero]).
+  /// Concurrent refreshes are no-ops: the in-flight fetch covers
+  /// them (same page, same merge, idempotent result).
+  bool _refreshing = false;
+
+  StreamSubscription<void>? _librarySubscription;
+
+  void _handlePause() {
+    _preloader.setPaused(true);
+  }
+
+  void _handleResume() {
+    if (_resumeFuture != null) {
+      return;
+    }
+    _resumeFuture = _doResume();
+    _resumeFuture!.whenComplete(() {
+      _resumeFuture = null;
+    });
+  }
+
+  /// Phase 4.4 resume sequence (never throws: a failed resume
+  /// keeps the pre-resume state rather than crashing the deck).
+  /// 1. Unpause the preloader. 2. Flush pending session writes
+  /// so any later reload reads current marks. 3. Apply snooze
+  /// expiry once (one batched write when something cleared).
+  /// 4. If the deck is not ready, retry from scratch — this is
+  /// the deny → Settings → grant → return path, no manual tap.
+  /// 5. Re-check permission (never a persisted value): denied →
+  /// denied state + explanation; level changed → full reload
+  /// (the visible set becomes the new grant); unchanged →
+  /// cheap page-0 refresh, marks and position preserved.
+  Future<void> _doResume() async {
+    try {
+      _preloader.setPaused(false);
+      await local.flushPendingWrites();
+      if (status.value == DeckStatus.ready) {
+        final ({Map<String, DeckMark> marks, bool changed}) expiry =
+            await retention.clearExpiredSnoozes(
+              Map<String, DeckMark>.of(marks),
+              DateTime.now(),
+            );
+        if (expiry.changed) {
+          marks.assignAll(expiry.marks);
+          _persist();
+        }
+      }
+      if (status.value != DeckStatus.ready) {
+        await retry();
+        return;
+      }
+      final Result<MediaPermission> permResult = await media
+          .requestPermission();
+      final MediaPermission? fresh = permResult.fold(
+        onSuccess: (MediaPermission value) => value,
+        onFailure: (_) => null,
+      );
+      if (fresh == null) {
+        // Re-check failed: keep the current state untouched.
+        return;
+      }
+      if (fresh == MediaPermission.denied) {
+        permission.value = fresh;
+        status.value = DeckStatus.denied;
+        errorKey.value = AppStrings.errorMediaPermission;
+        return;
+      }
+      if (fresh != permission.value) {
+        permission.value = fresh;
+        await _loadFilterData();
+        return;
+      }
+      await refreshPageZero();
+    } catch (_) {
+      // Resume handling must never crash the deck.
+    }
+  }
+
+  /// Phase 4.4: a library-change event while foregrounded
+  /// refreshes page 0 immediately (the merge preserves position
+  /// and marks). Background changes are covered by the resume
+  /// handler, which always refreshes — so nothing is needed here
+  /// while backgrounded.
+  void _onLibraryChanged() {
+    if (lifecycle?.isBackgrounded ?? false) {
+      return;
+    }
+    if (status.value != DeckStatus.ready) {
+      return;
+    }
+    unawaited(refreshPageZero());
+  }
+
+  /// Phase 4.4 cheap page-0 refresh (see [mergePageZero] for the
+  /// merge contract and its honest bounds). A failed fetch keeps
+  /// the current queue; the next resume or change event retries.
+  Future<void> refreshPageZero() async {
+    if (_refreshing) {
+      return;
+    }
+    _refreshing = true;
+    try {
+      final DeckFilter currentFilter = filter.value;
+      final Result<List<MediaAsset>> result = await media.getAssets(
+        albumId: currentFilter.albumId,
+        monthKey: currentFilter.monthKey,
+        page: 0,
+        pageSize: pageSize,
+      );
+      result.fold(
+        onSuccess: (List<MediaAsset> fresh) {
+          final ({List<MediaAsset> queue, int index}) merged = mergePageZero(
+            queue: queue.toList(),
+            freshPageZero: fresh,
+            oldPageZero: _lastPageZero,
+            pageSize: pageSize,
+            index: currentIndex.value,
+          );
+          queue.assignAll(merged.queue);
+          currentIndex.value = merged.index;
+          _lastPageZero = fresh;
+          _refreshMonths();
+          _preloader.preloadAround(queue, currentIndex.value);
+        },
+        onFailure: (_) {},
+      );
+    } finally {
+      _refreshing = false;
+    }
   }
 
   /// Async entry point, shared by onInit, retry and tests (guarded).
@@ -304,6 +478,7 @@ class DeckController extends GetxController {
       }
       if (warmed != null) {
         queue.assignAll(warmed);
+        _lastPageZero = warmed;
         _hasMore = warmed.length == pageSize;
         _nextPage = 1;
         _refreshMonths();
@@ -369,6 +544,7 @@ class DeckController extends GetxController {
         onSuccess: (List<MediaAsset> assets) {
           if (page == 0) {
             queue.assignAll(assets);
+            _lastPageZero = assets;
           } else {
             queue.addAll(assets);
           }
@@ -400,6 +576,18 @@ class DeckController extends GetxController {
   /// this — a mark on an unseen photo is never recorded, and no
   /// banner, haptic or advance happens for it.
   Future<void> markCurrent(DeckMark mark) async {
+    // Phase 4.4: a resume reload may be in flight; a mark
+    // recorded during it would be overwritten by the reload's
+    // session restore, so wait for the resume to settle first.
+    final Future<void>? resume = _resumeFuture;
+    if (resume != null) {
+      try {
+        await resume;
+      } catch (_) {
+        // Resume handling never throws (see _doResume), but a
+        // mark must never be lost to a resume failure.
+      }
+    }
     final MediaAsset? asset = currentAsset;
     if (asset == null || status.value != DeckStatus.ready) {
       return;
@@ -491,6 +679,9 @@ class DeckController extends GetxController {
     status.value = DeckStatus.loading;
     await _loadFilterData();
     _persist();
+    // Filter-change flush point (solutions 4.1/4.4): the new
+    // filter's session must not sit in the coalescing window.
+    unawaited(local.flushPendingWrites());
   }
 
   /// Clears any month/album filter back to All.
@@ -522,6 +713,9 @@ class DeckController extends GetxController {
   void goToReview() => _reviewGate.run(_goToReviewNow);
 
   void _goToReviewNow() {
+    // Go-to-review flush point (solutions 4.1/4.4): review reads
+    // the session, so the marks behind it must be on disk first.
+    unawaited(local.flushPendingWrites());
     Get.toNamed<dynamic>(
       AppRoutes.review,
       arguments: deleteMarkedAssets,

@@ -5,6 +5,9 @@ import '../../services/appinfo/app_info_service.dart';
 import '../../services/appinfo/app_info_service_impl.dart';
 import '../../services/detection/scan_repository.dart';
 import '../../services/detection/scan_repository_impl.dart';
+import '../../services/lifecycle/app_lifecycle.dart';
+import '../../services/lifecycle/app_lifecycle_impl.dart';
+import '../../services/media/library_change_source.dart';
 import '../../services/local/local_service.dart';
 import '../../services/local/local_service_impl.dart';
 import '../../services/media/media_service.dart';
@@ -68,6 +71,20 @@ class InitialBinding extends Bindings {
       ),
       permanent: true,
     );
+    // Phase 4.4: the single foreground/background observer.
+    // Permanent: controllers register listeners in onInit and
+    // unregister in onClose. Constructed (not lazy) so attach()
+    // registers the observer at launch; pause flushes pending
+    // session writes centrally (see app_lifecycle_impl.dart).
+    // The change source is best-effort: if native delivery
+    // fails to start, consumers fall back to resume-time
+    // refresh and this stream simply never emits.
+    final AppLifecycleImpl lifecycle = AppLifecycleImpl(
+      local: Get.find<LocalService>(),
+      changeSource: PhotoManagerChangeSource(),
+    );
+    lifecycle.attach();
+    Get.put<AppLifecycle>(lifecycle, permanent: true);
     Get.lazyPut<VideoCompressionService>(
       VideoCompressionServiceImpl.new,
       fenix: true,

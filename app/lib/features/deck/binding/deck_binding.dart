@@ -1,5 +1,6 @@
 import 'package:get/get.dart';
 
+import '../../../services/lifecycle/app_lifecycle.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_service.dart';
 import '../../../services/share/share_service.dart';
@@ -27,6 +28,11 @@ class DeckBinding extends Bindings {
         // simply shows no share button (never a dead action).
         share: Get.isRegistered<ShareService>()
             ? Get.find<ShareService>()
+            : null,
+        // Phase 4.4: without a lifecycle service the deck behaves
+        // exactly as before (no resume handling).
+        lifecycle: Get.isRegistered<AppLifecycle>()
+            ? Get.find<AppLifecycle>()
             : null,
       ),
     );
