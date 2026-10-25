@@ -56,6 +56,17 @@ class _Local implements LocalService {
   }
 
   @override
+  Future<Result<void>> clearSnoozes(List<String> ids) async {
+    for (final String id in ids) {
+      await setSnooze(id, null);
+    }
+    return const Success<void>(null);
+  }
+
+  @override
+  Future<void> flushPendingWrites() async {}
+
+  @override
   Future<Result<double>> loadGoalTargetMb() async {
     return const Success<double>(1024);
   }

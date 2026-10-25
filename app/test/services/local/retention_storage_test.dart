@@ -20,6 +20,7 @@ void main() {
   });
 
   tearDown(() async {
+    await service.dispose();
     if (await temp.exists()) {
       await temp.delete(recursive: true);
     }

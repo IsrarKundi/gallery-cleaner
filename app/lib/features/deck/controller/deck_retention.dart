@@ -62,9 +62,9 @@ class DeckRetention {
     if (applied.clearedIds.isEmpty) {
       return (marks: marks, changed: false);
     }
-    for (final String id in applied.clearedIds) {
-      await local.setSnooze(id, null);
-    }
+    // Phase 4.1: one batched write for the whole expiry sweep,
+    // not one read-modify-write per cleared snooze.
+    await local.clearSnoozes(applied.clearedIds);
     return (marks: applied.marks, changed: true);
   }
 

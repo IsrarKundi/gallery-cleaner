@@ -1,4 +1,5 @@
-// JSON-file implementation of [LocalService].
+// JSON-file implementation of [LocalService], via per-file
+// [JsonFileStore]s (solutions 4.1).
 //
 // Storage choice: plain JSON files in the app documents directory
 // (via path_provider), one file per data kind. Chosen over
@@ -11,9 +12,19 @@
 // unit tests pass a temp directory and never touch platform
 // channels. Production uses path_provider's documents directory.
 // This is the ONLY local file importing path_provider.
+//
+// What Phase 4.1 changed vs the old direct file IO (see
+// [JsonFileStore] for the mechanics): loads serve the in-memory
+// snapshot after the first decode; session saves coalesce
+// (~1.5 s / 20 marks) and flush at the mandatory points
+// (go-to-review, filter change, app-paused, dispose — the callers
+// drive [flushPendingWrites]); every other write is immediate;
+// all writes are serialised and atomic; bad entries are salvaged
+// per entry instead of failing the whole file. Nothing stored here
+// contains photo content — only asset ids, marks, counts, sizes
+// and dates.
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
@@ -22,22 +33,31 @@ import '../../core/strings/app_strings.dart';
 import '../../core/utils/result.dart';
 import '../detection/photo_analysis.dart';
 import '../trash/trash_entry.dart';
+import 'json_file_store.dart';
 import 'local_service.dart';
-
-/// Resolves the directory holding Klara's JSON files.
-typedef DirectoryResolver = Future<Directory> Function();
 
 class LocalServiceImpl implements LocalService {
   LocalServiceImpl({DirectoryResolver? directoryResolver})
     : _directoryResolver =
-          directoryResolver ?? getApplicationDocumentsDirectory;
+          directoryResolver ?? getApplicationDocumentsDirectory {
+    _sessions = JsonFileStore(fileName: _sessionsFile, directoryResolver: _dir);
+    _trash = JsonFileStore(fileName: _trashFile, directoryResolver: _dir);
+    _history = JsonFileStore(fileName: _historyFile, directoryResolver: _dir);
+    _settings = JsonFileStore(fileName: _settingsFile, directoryResolver: _dir);
+    _analyses = JsonFileStore(fileName: _analysesFile, directoryResolver: _dir);
+    _snoozes = JsonFileStore(fileName: _snoozesFile, directoryResolver: _dir);
+    _completions = JsonFileStore(
+      fileName: _completionsFile,
+      directoryResolver: _dir,
+    );
+  }
 
   final DirectoryResolver _directoryResolver;
 
   /// Phase 1.4: the resolved documents directory, cached after the
-  /// first resolution. Every local operation previously paid its own
-  /// platform-channel round-trip (issues file F-06); concurrent first
-  /// callers share the single in-flight resolution.
+  /// first resolution. Concurrent first callers share the single
+  /// in-flight resolution; a failed resolution is dropped so a
+  /// later call retries instead of replaying the same error.
   Future<Directory>? _dirFuture;
 
   static const String _sessionsFile = 'klara_sessions.json';
@@ -51,6 +71,50 @@ class LocalServiceImpl implements LocalService {
   /// Default weekly goal target (Phase 2B): 1 GB freed per week.
   static const double defaultGoalTargetMb = 1024;
 
+  late final JsonFileStore _sessions;
+  late final JsonFileStore _trash;
+  late final JsonFileStore _history;
+  late final JsonFileStore _settings;
+  late final JsonFileStore _analyses;
+  late final JsonFileStore _snoozes;
+  late final JsonFileStore _completions;
+
+  /// Bad entries skipped per file (cumulative): per-entry parse
+  /// failures counted here plus brace-scan fragments counted by
+  /// the store. Test observability for the salvage contract.
+  final Map<String, int> _entrySkips = <String, int>{};
+
+  /// Bad entries salvaged per file (see [_entrySkips]).
+  Map<String, int> get salvageReport {
+    final Map<JsonFileStore, String> names = <JsonFileStore, String>{
+      _sessions: _sessionsFile,
+      _trash: _trashFile,
+      _history: _historyFile,
+      _settings: _settingsFile,
+      _analyses: _analysesFile,
+      _snoozes: _snoozesFile,
+      _completions: _completionsFile,
+    };
+    return <String, int>{
+      for (final MapEntry<JsonFileStore, String> e in names.entries)
+        e.value: (_entrySkips[e.value] ?? 0) + e.key.salvageSkipped,
+    };
+  }
+
+  /// Atomic disk writes performed per file (test observability
+  /// for the write-amplification benchmark).
+  Map<String, int> get diskWriteCounts {
+    return <String, int>{
+      _sessionsFile: _sessions.diskWrites,
+      _trashFile: _trash.diskWrites,
+      _historyFile: _history.diskWrites,
+      _settingsFile: _settings.diskWrites,
+      _analysesFile: _analyses.diskWrites,
+      _snoozesFile: _snoozes.diskWrites,
+      _completionsFile: _completions.diskWrites,
+    };
+  }
+
   Future<Directory> _dir() {
     final Future<Directory>? cached = _dirFuture;
     if (cached != null) {
@@ -58,8 +122,6 @@ class LocalServiceImpl implements LocalService {
     }
     final Future<Directory> pending = _resolveDir();
     _dirFuture = pending;
-    // A failed resolution must not poison the cache: drop it so a
-    // later call retries instead of replaying the same error.
     unawaited(
       pending.then<void>(
         (_) {},
@@ -81,59 +143,41 @@ class LocalServiceImpl implements LocalService {
     return dir;
   }
 
-  Future<File> _file(String name) async {
-    final Directory dir = await _dir();
-    return File('${dir.path}/$name');
-  }
-
-  /// Reads a JSON list file; a missing file reads as empty.
-  Future<List<dynamic>> _readList(String name) async {
-    final File file = await _file(name);
-    if (!await file.exists()) {
-      return <dynamic>[];
-    }
-    final String text = await file.readAsString();
-    if (text.trim().isEmpty) {
-      return <dynamic>[];
-    }
-    final Object? decoded = jsonDecode(text);
-    if (decoded is! List<dynamic>) {
-      throw const FormatException('Expected a JSON list');
-    }
-    return decoded;
-  }
-
-  /// Reads a JSON map file; a missing file reads as empty.
-  Future<Map<String, dynamic>> _readMap(String name) async {
-    final File file = await _file(name);
-    if (!await file.exists()) {
-      return <String, dynamic>{};
-    }
-    final String text = await file.readAsString();
-    if (text.trim().isEmpty) {
-      return <String, dynamic>{};
-    }
-    final Object? decoded = jsonDecode(text);
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Expected a JSON object');
-    }
-    return decoded;
-  }
-
-  Future<void> _write(String name, Object value) async {
-    final File file = await _file(name);
-    await file.writeAsString(jsonEncode(value));
-  }
-
   AppFailure get _failure =>
       const AppFailure(messageKey: AppStrings.errorLocal);
+
+  void _noteSkipped(String file) {
+    _entrySkips[file] = (_entrySkips[file] ?? 0) + 1;
+  }
+
+  /// Parses one entry, skipping (and counting) bad entries instead
+  /// of failing the whole file (solutions 4.1 salvage).
+  T? _parseEntry<T>(
+    Object? raw,
+    T Function(Map<String, dynamic>) fromJson,
+    String file,
+  ) {
+    try {
+      if (raw is! Map<String, dynamic>) {
+        _noteSkipped(file);
+        return null;
+      }
+      return fromJson(raw);
+    } catch (_) {
+      _noteSkipped(file);
+      return null;
+    }
+  }
 
   @override
   Future<Result<void>> saveSession(DeckSession session) async {
     try {
-      final Map<String, dynamic> all = await _readMap(_sessionsFile);
+      final Map<String, dynamic> all = await _sessions.readMap();
       all[session.filterKey] = session.toJson();
-      await _write(_sessionsFile, all);
+      // Coalesced: the snapshot holds it immediately, so a load
+      // right after this save sees it; the disk write follows
+      // within the window or at the next flush point.
+      _sessions.scheduleWrite();
       return const Success<void>(null);
     } catch (_) {
       return Failure<void>(_failure);
@@ -143,13 +187,13 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<DeckSession?>> loadSession(String filterKey) async {
     try {
-      final Map<String, dynamic> all = await _readMap(_sessionsFile);
+      final Map<String, dynamic> all = await _sessions.readMap();
       final Object? raw = all[filterKey];
       if (raw == null) {
         return const Success<DeckSession?>(null);
       }
       return Success<DeckSession?>(
-        DeckSession.fromJson(raw as Map<String, dynamic>),
+        _parseEntry<DeckSession>(raw, DeckSession.fromJson, _sessionsFile),
       );
     } catch (_) {
       return Failure<DeckSession?>(_failure);
@@ -159,10 +203,17 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<List<DeckSession>>> listSessions() async {
     try {
-      final Map<String, dynamic> all = await _readMap(_sessionsFile);
+      final Map<String, dynamic> all = await _sessions.readMap();
       final List<DeckSession> sessions = <DeckSession>[];
       for (final Object? raw in all.values) {
-        sessions.add(DeckSession.fromJson(raw as Map<String, dynamic>));
+        final DeckSession? session = _parseEntry<DeckSession>(
+          raw,
+          DeckSession.fromJson,
+          _sessionsFile,
+        );
+        if (session != null) {
+          sessions.add(session);
+        }
       }
       return Success<List<DeckSession>>(sessions);
     } catch (_) {
@@ -173,10 +224,14 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<Map<String, DateTime>>> loadSnoozes() async {
     try {
-      final Map<String, dynamic> all = await _readMap(_snoozesFile);
+      final Map<String, dynamic> all = await _snoozes.readMap();
       final Map<String, DateTime> snoozes = <String, DateTime>{};
       for (final MapEntry<String, dynamic> entry in all.entries) {
-        snoozes[entry.key] = DateTime.parse(entry.value as String);
+        try {
+          snoozes[entry.key] = DateTime.parse(entry.value as String);
+        } catch (_) {
+          _noteSkipped(_snoozesFile);
+        }
       }
       return Success<Map<String, DateTime>>(snoozes);
     } catch (_) {
@@ -187,14 +242,33 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<void>> setSnooze(String assetId, DateTime? until) async {
     try {
-      final Map<String, dynamic> all = await _readMap(_snoozesFile);
+      final Map<String, dynamic> all = await _snoozes.readMap();
       if (until == null) {
         all.remove(assetId);
       } else {
         final DateTime day = DateTime(until.year, until.month, until.day);
         all[assetId] = day.toIso8601String();
       }
-      await _write(_snoozesFile, all);
+      await _snoozes.writeNow();
+      return const Success<void>(null);
+    } catch (_) {
+      return Failure<void>(_failure);
+    }
+  }
+
+  @override
+  Future<Result<void>> clearSnoozes(List<String> ids) async {
+    try {
+      final Map<String, dynamic> all = await _snoozes.readMap();
+      bool removed = false;
+      for (final String id in ids) {
+        removed = all.remove(id) != null || removed;
+      }
+      // One read-modify-write for the whole batch (solutions 4.1);
+      // no write at all when nothing was actually present.
+      if (removed) {
+        await _snoozes.writeNow();
+      }
       return const Success<void>(null);
     } catch (_) {
       return Failure<void>(_failure);
@@ -204,7 +278,7 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<double>> loadGoalTargetMb() async {
     try {
-      final Map<String, dynamic> settings = await _readMap(_settingsFile);
+      final Map<String, dynamic> settings = await _settings.readMap();
       final Object? raw = settings['goalTargetMb'];
       if (raw is num) {
         return Success<double>(raw.toDouble());
@@ -218,9 +292,9 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<void>> saveGoalTargetMb(double mb) async {
     try {
-      final Map<String, dynamic> settings = await _readMap(_settingsFile);
+      final Map<String, dynamic> settings = await _settings.readMap();
       settings['goalTargetMb'] = mb;
-      await _write(_settingsFile, settings);
+      await _settings.writeNow();
       return const Success<void>(null);
     } catch (_) {
       return Failure<void>(_failure);
@@ -230,10 +304,15 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<List<DateTime>>> loadCompletionDays() async {
     try {
-      final List<dynamic> raw = await _readList(_completionsFile);
-      final List<DateTime> days = <DateTime>[
-        for (final Object? item in raw) DateTime.parse(item as String),
-      ];
+      final List<dynamic> raw = await _completions.readList();
+      final List<DateTime> days = <DateTime>[];
+      for (final Object? item in raw) {
+        try {
+          days.add(DateTime.parse(item as String));
+        } catch (_) {
+          _noteSkipped(_completionsFile);
+        }
+      }
       days.sort();
       return Success<List<DateTime>>(days);
     } catch (_) {
@@ -244,14 +323,19 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<void>> recordCompletionDay(DateTime day) async {
     try {
-      final List<dynamic> raw = await _readList(_completionsFile);
-      final Set<String> days = <String>{
-        for (final Object? item in raw) item as String,
-      };
+      final List<dynamic> raw = await _completions.readList();
+      // Drop corrupt entries from the snapshot before sorting:
+      // loads already skip them, so this only makes the next
+      // write self-healing instead of failing on a mixed sort.
+      raw.retainWhere((Object? item) => item is String);
       final DateTime only = DateTime(day.year, day.month, day.day);
-      days.add(only.toIso8601String());
-      final List<String> sorted = days.toList()..sort();
-      await _write(_completionsFile, sorted);
+      final String encoded = only.toIso8601String();
+      if (raw.contains(encoded)) {
+        return const Success<void>(null);
+      }
+      raw.add(encoded);
+      raw.sort();
+      await _completions.writeNow();
       return const Success<void>(null);
     } catch (_) {
       return Failure<void>(_failure);
@@ -261,12 +345,13 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<void>> recordTrashed(List<TrashEntry> entries) async {
     try {
-      final List<dynamic> raw = await _readList(_trashFile);
-      final List<Map<String, dynamic>> all = <Map<String, dynamic>>[
-        for (final Object? item in raw) item as Map<String, dynamic>,
-        for (final TrashEntry entry in entries) entry.toJson(),
-      ];
-      await _write(_trashFile, all);
+      final List<dynamic> raw = await _trash.readList();
+      for (final TrashEntry entry in entries) {
+        raw.add(entry.toJson());
+      }
+      // Trash is the only record of trashed assets: immediate,
+      // never coalesced (solutions 4.1).
+      await _trash.writeNow();
       return const Success<void>(null);
     } catch (_) {
       return Failure<void>(_failure);
@@ -276,11 +361,18 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<List<TrashEntry>>> loadTrashEntries() async {
     try {
-      final List<dynamic> raw = await _readList(_trashFile);
-      final List<TrashEntry> entries = <TrashEntry>[
-        for (final Object? item in raw)
-          TrashEntry.fromJson(item as Map<String, dynamic>),
-      ];
+      final List<dynamic> raw = await _trash.readList();
+      final List<TrashEntry> entries = <TrashEntry>[];
+      for (final Object? item in raw) {
+        final TrashEntry? entry = _parseEntry<TrashEntry>(
+          item,
+          TrashEntry.fromJson,
+          _trashFile,
+        );
+        if (entry != null) {
+          entries.add(entry);
+        }
+      }
       entries.sort(
         (TrashEntry a, TrashEntry b) => b.trashedAt.compareTo(a.trashedAt),
       );
@@ -293,16 +385,15 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<void>> removeTrashEntries(List<String> ids) async {
     try {
-      final List<dynamic> raw = await _readList(_trashFile);
+      final List<dynamic> raw = await _trash.readList();
       final Set<String> drop = ids.toSet();
-      final List<Map<String, dynamic>> kept = <Map<String, dynamic>>[];
-      for (final Object? item in raw) {
-        final Map<String, dynamic> json = item as Map<String, dynamic>;
-        if (!drop.contains(json['assetId'] as String)) {
-          kept.add(json);
-        }
-      }
-      await _write(_trashFile, kept);
+      raw.removeWhere(
+        (Object? item) =>
+            item is Map<String, dynamic> &&
+            item['assetId'] is String &&
+            drop.contains(item['assetId'] as String),
+      );
+      await _trash.writeNow();
       return const Success<void>(null);
     } catch (_) {
       return Failure<void>(_failure);
@@ -312,7 +403,9 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<void>> clearTrashEntries() async {
     try {
-      await _write(_trashFile, <dynamic>[]);
+      final List<dynamic> raw = await _trash.readList();
+      raw.clear();
+      await _trash.writeNow();
       return const Success<void>(null);
     } catch (_) {
       return Failure<void>(_failure);
@@ -322,12 +415,9 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<void>> appendHistory(HistoryRecord record) async {
     try {
-      final List<dynamic> raw = await _readList(_historyFile);
-      final List<Map<String, dynamic>> all = <Map<String, dynamic>>[
-        for (final Object? item in raw) item as Map<String, dynamic>,
-        record.toJson(),
-      ];
-      await _write(_historyFile, all);
+      final List<dynamic> raw = await _history.readList();
+      raw.add(record.toJson());
+      await _history.writeNow();
       return const Success<void>(null);
     } catch (_) {
       return Failure<void>(_failure);
@@ -337,11 +427,18 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<List<HistoryRecord>>> loadHistory() async {
     try {
-      final List<dynamic> raw = await _readList(_historyFile);
-      final List<HistoryRecord> records = <HistoryRecord>[
-        for (final Object? item in raw)
-          HistoryRecord.fromJson(item as Map<String, dynamic>),
-      ];
+      final List<dynamic> raw = await _history.readList();
+      final List<HistoryRecord> records = <HistoryRecord>[];
+      for (final Object? item in raw) {
+        final HistoryRecord? record = _parseEntry<HistoryRecord>(
+          item,
+          HistoryRecord.fromJson,
+          _historyFile,
+        );
+        if (record != null) {
+          records.add(record);
+        }
+      }
       records.sort(
         (HistoryRecord a, HistoryRecord b) => b.date.compareTo(a.date),
       );
@@ -354,11 +451,11 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<void>> saveAnalyses(List<PhotoAnalysis> analyses) async {
     try {
-      final Map<String, dynamic> all = await _readMap(_analysesFile);
+      final Map<String, dynamic> all = await _analyses.readMap();
       for (final PhotoAnalysis analysis in analyses) {
         all[analysis.assetId] = analysis.toJson();
       }
-      await _write(_analysesFile, all);
+      await _analyses.writeNow();
       return const Success<void>(null);
     } catch (_) {
       return Failure<void>(_failure);
@@ -368,12 +465,17 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<Map<String, PhotoAnalysis>>> loadAnalyses() async {
     try {
-      final Map<String, dynamic> all = await _readMap(_analysesFile);
+      final Map<String, dynamic> all = await _analyses.readMap();
       final Map<String, PhotoAnalysis> analyses = <String, PhotoAnalysis>{};
       for (final MapEntry<String, dynamic> entry in all.entries) {
-        analyses[entry.key] = PhotoAnalysis.fromJson(
-          entry.value as Map<String, dynamic>,
+        final PhotoAnalysis? analysis = _parseEntry<PhotoAnalysis>(
+          entry.value,
+          PhotoAnalysis.fromJson,
+          _analysesFile,
         );
+        if (analysis != null) {
+          analyses[entry.key] = analysis;
+        }
       }
       return Success<Map<String, PhotoAnalysis>>(analyses);
     } catch (_) {
@@ -384,7 +486,10 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<AppSettings>> loadSettings() async {
     try {
-      final Map<String, dynamic> settings = await _readMap(_settingsFile);
+      // Served from the shared settings snapshot after the first
+      // load: protection reads no longer pay a fresh full decode
+      // per delete run (solutions 4.1).
+      final Map<String, dynamic> settings = await _settings.readMap();
       return Success<AppSettings>(AppSettings.fromJson(settings));
     } catch (_) {
       return Failure<AppSettings>(_failure);
@@ -394,9 +499,9 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<void>> saveSettings(AppSettings settings) async {
     try {
-      final Map<String, dynamic> all = await _readMap(_settingsFile);
+      final Map<String, dynamic> all = await _settings.readMap();
       all.addAll(settings.toJson());
-      await _write(_settingsFile, all);
+      await _settings.writeNow();
       return const Success<void>(null);
     } catch (_) {
       return Failure<void>(_failure);
@@ -406,7 +511,7 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<bool>> isTutorialSeen() async {
     try {
-      final Map<String, dynamic> settings = await _readMap(_settingsFile);
+      final Map<String, dynamic> settings = await _settings.readMap();
       return Success<bool>(settings['tutorialSeen'] as bool? ?? false);
     } catch (_) {
       return Failure<bool>(_failure);
@@ -416,12 +521,40 @@ class LocalServiceImpl implements LocalService {
   @override
   Future<Result<void>> setTutorialSeen(bool seen) async {
     try {
-      final Map<String, dynamic> settings = await _readMap(_settingsFile);
+      final Map<String, dynamic> settings = await _settings.readMap();
       settings['tutorialSeen'] = seen;
-      await _write(_settingsFile, settings);
+      await _settings.writeNow();
       return const Success<void>(null);
     } catch (_) {
       return Failure<void>(_failure);
     }
+  }
+
+  @override
+  Future<void> flushPendingWrites() async {
+    await Future.wait<void>(<Future<void>>[
+      _sessions.flush(),
+      _trash.flush(),
+      _history.flush(),
+      _settings.flush(),
+      _analyses.flush(),
+      _snoozes.flush(),
+      _completions.flush(),
+    ]);
+  }
+
+  /// Flushes pending writes and stops coalescing timers. Call from
+  /// test tearDown; production services live for the process
+  /// lifetime and flush on app-pause instead.
+  Future<void> dispose() async {
+    await Future.wait<void>(<Future<void>>[
+      _sessions.close(),
+      _trash.close(),
+      _history.close(),
+      _settings.close(),
+      _analyses.close(),
+      _snoozes.close(),
+      _completions.close(),
+    ]);
   }
 }

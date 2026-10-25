@@ -244,6 +244,28 @@ abstract class LocalService {
   /// [until] is null. The date is normalised to date-only.
   Future<Result<void>> setSnooze(String assetId, DateTime? until);
 
+  /// Clears the snoozes for [ids] in a single read-modify-write
+  /// (solutions 4.1: snooze expiry batches instead of one write
+  /// per cleared id). Default loops [setSnooze] so test fakes
+  /// need not change; the real implementation batches.
+  Future<Result<void>> clearSnoozes(List<String> ids) async {
+    for (final String id in ids) {
+      final Result<void> result = await setSnooze(id, null);
+      if (result is Failure<void>) {
+        return result;
+      }
+    }
+    return const Success<void>(null);
+  }
+
+  /// Flushes any coalesced writes (solutions 4.1: session saves
+  /// flush at most every ~1.5 s or ~20 marks, AND synchronously
+  /// on go-to-review, on filter change, on app-paused, and on
+  /// dispose). A no-op for fakes and for implementations without
+  /// coalescing; never throws — a failed flush keeps the data
+  /// dirty for the next flush instead of losing it.
+  Future<void> flushPendingWrites() async {}
+
   /// Weekly freed-space goal target in MB (Phase 2B retention).
   /// Defaults to 1024 MB when nothing was saved yet.
   Future<Result<double>> loadGoalTargetMb();

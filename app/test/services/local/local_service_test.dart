@@ -16,6 +16,9 @@ void main() {
   });
 
   tearDown(() async {
+    // Dispose first: coalescing timers must not fire after the
+    // temp directory is gone (they would recreate it on flush).
+    await service.dispose();
     if (await temp.exists()) {
       await temp.delete(recursive: true);
     }
