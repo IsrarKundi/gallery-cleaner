@@ -8,6 +8,11 @@
          enables in Settings. It is requested at toggle time only,
          never at first launch, and schedules nothing on its own. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Phase 1.2: flutter_local_notifications needs this so it can
+         reschedule the weekly nudge after a reboot (plugin README).
+         It is a normal permission: no runtime prompt, so the runtime
+         permission set is unchanged. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <application
         android:label="klara"
         android:name="${applicationName}"
@@ -34,6 +39,20 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Phase 1.2: flutter_local_notifications scheduled
+             notifications need these receivers (plugin README):
+             the first shows a scheduled notification, the second
+             reschedules them after a reboot or app update. Without
+             them the weekly nudge silently never fires. -->
+        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
