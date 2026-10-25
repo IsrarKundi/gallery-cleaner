@@ -4,24 +4,30 @@ import '../constants/app_colors.dart';
 import '../constants/app_sizes.dart';
 import '../constants/app_text.dart';
 
-/// Light theme for Phase 1 (design.md §2, §3, §10).
+/// Light + dark themes for Klara (design.md §2, §3, §10).
 ///
 /// Built ONLY from [AppPalette], [AppTextStyles] and [AppSizes]. No raw
-/// colours, font sizes or layout numbers live here. ThemeMode.light is
-/// set explicitly in main.dart; no dark theme is shipped in Phase 1
-/// (dark mode is Phase 3).
+/// colours, font sizes or layout numbers live here. The dark theme
+/// (Phase 3A) is the same builder with the dark palette — no screen
+/// may hard-code light colours; every colour comes from the active
+/// palette via `context.palette`, so re-theming is automatic.
 class AppTheme {
   AppTheme._();
 
-  static ThemeData get light {
-    const AppPalette palette = AppPalette.light;
+  static ThemeData get light => _build(AppPalette.light, Brightness.light);
+
+  static ThemeData get dark => _build(AppPalette.dark, Brightness.dark);
+
+  static ThemeData _build(AppPalette palette, Brightness brightness) {
     const AppSizes sizes = AppSizes();
     final AppTextStyles styles = AppTextStyles(palette);
+    final bool isDark = brightness == Brightness.dark;
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.light,
+      brightness: brightness,
       fontFamily: AppTextStyles.fontFamily,
-      colorScheme: ColorScheme.light(
+      colorScheme: ColorScheme(
+        brightness: brightness,
         primary: palette.primary,
         onPrimary: palette.onPrimary,
         primaryContainer: palette.primaryContainer,
@@ -82,8 +88,13 @@ class AppTheme {
         color: palette.primary,
       ),
       snackBarTheme: SnackBarThemeData(
+        // The bar is the ink colour in both themes (dark ink on
+        // light, light ink on dark), so its text is the inverse:
+        // white labels on light theme, dark labels on dark theme.
         backgroundColor: palette.textPrimary,
-        contentTextStyle: styles.bodyMedium.copyWith(color: palette.onPrimary),
+        contentTextStyle: styles.bodyMedium.copyWith(
+          color: isDark ? palette.background : palette.onPrimary,
+        ),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(sizes.radiusMd),
@@ -126,7 +137,7 @@ class AppTheme {
           textStyle: styles.labelMedium,
         ),
       ),
-      extensions: const <ThemeExtension<AppPalette>>[AppPalette.light],
+      extensions: <ThemeExtension<AppPalette>>[palette],
     );
   }
 }

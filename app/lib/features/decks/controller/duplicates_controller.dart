@@ -26,6 +26,7 @@ import '../../../services/detection/grouping.dart';
 import '../../../services/detection/library_scanner.dart';
 import '../../../services/detection/photo_analysis.dart';
 import '../../../services/local/local_service.dart';
+import '../../../services/local/protection.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/media/media_service.dart';
 import '../model/decks_status.dart';
@@ -56,6 +57,10 @@ class DuplicatesController extends GetxController {
   final RxList<DuplicateGroup> groups = <DuplicateGroup>[].obs;
   final RxMap<String, Uint8List> thumbnails = <String, Uint8List>{}.obs;
   final RxSet<String> failedThumbnails = <String>{}.obs;
+
+  /// Phase 3A: favourited non-keepers kept out of a delete-marking
+  /// run (count shown as a banner in the view, never silent).
+  final RxInt protectedExcludedCount = 0.obs;
 
   List<MediaAsset> _assets = <MediaAsset>[];
   Map<String, PhotoAnalysis> _analyses = <String, PhotoAnalysis>{};
@@ -127,11 +132,20 @@ class DuplicatesController extends GetxController {
   /// the `duplicates` session, then navigates to review with the
   /// non-keeper list. On a session-write failure nothing navigates:
   /// the marks must be durable before review edits them.
+  ///
+  /// Phase 3A protection: when protection is ON, a favourited
+  /// non-keeper is NOT marked delete — it is marked keep instead
+  /// (keeper-protected: decided, so it never reappears undecided)
+  /// and excluded from the review list, with
+  /// [protectedExcludedCount] explaining how many. When every
+  /// non-keeper is protected there is nothing to review, so no
+  /// navigation happens — the banner is the whole outcome.
   Future<void> markNonKeepers(int groupIndex) async {
     if (groupIndex < 0 || groupIndex >= groups.length) {
       return;
     }
     errorKey.value = '';
+    protectedExcludedCount.value = 0;
     final DuplicateGroup group = groups[groupIndex];
     final Result<DeckSession?> loaded = await local.loadSession(sessionKey);
     DeckSession? session;
@@ -146,11 +160,26 @@ class DuplicatesController extends GetxController {
       errorKey.value = AppStrings.errorLocal;
       return;
     }
+    final Result<AppSettings> settingsResult = await local.loadSettings();
+    final bool protectionOn = settingsResult.fold(
+      onSuccess: (AppSettings value) => value.protection,
+      onFailure: (_) => false,
+    );
+    final Set<String> klaraFavourites = await loadAllKlaraFavouriteIds(local);
+    klaraFavourites.addAll(session?.favouriteIds ?? <String>{});
     final Map<String, DeckMark> marks = Map<String, DeckMark>.of(
       session?.marks ?? <String, DeckMark>{},
     );
+    final List<MediaAsset> toReview = <MediaAsset>[];
     for (final MediaAsset asset in group.nonKeepers) {
-      marks[asset.id] = DeckMark.delete;
+      if (protectionOn &&
+          isProtected(asset, klaraFavourites: klaraFavourites)) {
+        marks[asset.id] = DeckMark.keep;
+        protectedExcludedCount.value += 1;
+      } else {
+        marks[asset.id] = DeckMark.delete;
+        toReview.add(asset);
+      }
     }
     marks[group.keeperId] = DeckMark.keep;
     final Result<void> saved = await local.saveSession(
@@ -165,9 +194,12 @@ class DuplicatesController extends GetxController {
       errorKey.value = AppStrings.errorLocal;
       return;
     }
+    if (toReview.isEmpty) {
+      return;
+    }
     Get.toNamed<dynamic>(
       AppRoutes.review,
-      arguments: group.nonKeepers,
+      arguments: toReview,
       parameters: <String, String>{'filterKey': sessionKey},
     );
   }

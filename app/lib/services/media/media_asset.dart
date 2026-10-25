@@ -29,6 +29,7 @@ class MediaAsset {
     required this.createDate,
     required this.title,
     required this.albumName,
+    this.isSystemFavourite = false,
   });
 
   /// MediaStore id. This is the only handle trash/restore need.
@@ -46,6 +47,12 @@ class MediaAsset {
 
   /// Album/folder the asset was read from.
   final String albumName;
+
+  /// Starred/favourited on the device (photo_manager 3.12.0
+  /// `AssetEntity.isFavorite`, Android 11+ `IS_FAVORITE`; always
+  /// false on Android 10 and below). Used ONLY by favourites
+  /// protection (Phase 3A): Klara never stars or unstars photos.
+  final bool isSystemFavourite;
 }
 
 /// One album/folder from the library, with its asset count.

@@ -12,6 +12,8 @@ import '../../features/history/binding/history_binding.dart';
 import '../../features/history/view/history_view.dart';
 import '../../features/review/binding/review_binding.dart';
 import '../../features/review/view/review_view.dart';
+import '../../features/settings/binding/settings_binding.dart';
+import '../../features/settings/view/settings_view.dart';
 import '../../features/splash/binding/splash_binding.dart';
 import '../../features/splash/view/splash_view.dart';
 import '../../features/deck/view/deck_view.dart';
@@ -69,6 +71,11 @@ class AppPages {
       name: AppRoutes.smartDeck,
       page: SmartDeckView.new,
       binding: SmartDeckBinding(),
+    ),
+    GetPage<dynamic>(
+      name: AppRoutes.settings,
+      page: SettingsView.new,
+      binding: SettingsBinding(),
     ),
   ];
 }

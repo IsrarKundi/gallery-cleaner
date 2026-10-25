@@ -39,11 +39,13 @@ flutter test integration_test/   # golden path on a device (needs one connected)
 
 - `applicationId`: `mobile.klara.app`
 - Package name in `pubspec.yaml`: `klara` (version `1.0.0+1`).
-- Entry: `app/lib/main.dart` — a `GetMaterialApp` with the light
-  theme only (dark mode is Phase 3), initial route `/splash`.
+- Entry: `app/lib/main.dart` — a `GetMaterialApp` with light +
+  dark themes (default System, persisted choice re-applied at
+  launch), initial route `/splash`.
   Routes: `/splash`, `/` (deck), `/review`, `/trash`, `/history`,
   plus Phase 2A: `/decks` (smart-deck hub), `/duplicates`,
-  `/smart-deck` (one smart deck as a swipe deck).
+  `/smart-deck` (one smart deck as a swipe deck), plus Phase 3A:
+  `/settings`.
 
 ## Permissions — and why
 
@@ -205,6 +207,105 @@ and the device-storage reading.
   The string registry (`app_strings.dart`, 425 lines) is over
   the ~400 line guide — it grows monotonically with every
   feature and would need a locale split, not a Phase 2B change.
+
+## Phase 3A status (dark mode, settings, private blur, favourites protection, 25 Oct 2026)
+
+Host checks pass (`flutter analyze` clean, full `flutter test`
+suite green). On-device verification is still the owner's job, as
+in Phase 1 — including the new platform behaviours below, which
+no host test can prove: the real weekly notification delivery,
+the system favourite flag on a real library, and dark-theme feel
+on a real phone.
+
+- **Dark theme:** full `AppPalette.dark` set (`app_colors.dart`,
+  every value documented with contrast reasoning against
+  `#121212`): background `#121212`, surface `#1E1E1E`,
+  surfaceVariant `#2C2C2C` (tonal elevation, never shadow),
+  lightened Google-family brand colours (primary `#8AB4F8`,
+  Keep `#81C995`, Delete `#F28B82`, Maybe `#FDD663`) with dark
+  ink labels (`onPrimary #202124`, because the fills are light).
+  `ThemeData.dark()` is built only from tokens, exactly like the
+  light theme. Every screen re-themes, because no screen
+  hard-codes light colours — all colours come from
+  `context.palette`.
+- **Settings (`/settings`, deck AppBar gear button):** theme
+  (System / Light / Dark, default System, applied live via
+  `Get.changeThemeMode` and re-applied at launch from the
+  persisted record), private blur, favourites protection, weekly
+  nudge, haptics, reduced motion, trash auto-empty prompt, plus
+  an About row (app name, version read at runtime via
+  `package_info_plus` — never hard-coded — and the trust-flow
+  note). Settings live in `klara_settings.json` alongside the
+  goal/tutorial keys, which saving never drops.
+- **Weekly nudge (real, not faked):** `flutter_local_notifications`
+  22.3.2 schedules exactly one weekly nudge (inexact schedule,
+  low importance) when the toggle is ON and cancels it when OFF;
+  a denied notification permission leaves the toggle OFF with an
+  explanation. This is the single new Android permission:
+  `POST_NOTIFICATIONS` (Android 13+ needs it to show any
+  notification), requested at toggle time only. No other
+  permission changed; no media/storage permission was added.
+- **Haptics (design.md §8, previously none existed):** light tick
+  (`selectionClick`) on every mark/select, medium click
+  (`mediumImpact`) when a review delete is confirmed, firm pulse
+  (`heavyImpact`) when trash is emptied. Gated by the haptics
+  toggle (default ON); long vibrations are never used.
+- **Reduced motion:** the in-app toggle, when ON, forces
+  `MediaQuery.disableAnimations` app-wide even if the system
+  setting is off; when OFF, the system setting applies (existing
+  behaviour). Splash already honoured the system setting; it now
+  honours the toggle too through the same MediaQuery override.
+- **Splash adapts to theme:** dark → dark background + white
+  logo SVG + white Lottie variant; light → white background +
+  ink logo + normal Lottie. The white assets already existed —
+  they are wired, not regenerated.
+- **Private blur (default OFF — blurring by default would hide
+  exactly what the user must judge before a restore/delete):**
+  when ON, Review grid thumbnails render blurred (sigma 16)
+  with tap-to-reveal per item; a reveal lasts until blur is
+  toggled or the screen is left. The deck is NEVER blurred (it
+  is the decision screen). Trash rows are metadata-only, so
+  there is no thumbnail to blur there — the eye toggle still
+  lives on Trash because the setting is global, and the rows
+  themselves already show no photo content.
+- **Favourites protection (default OFF — it changes delete
+  behaviour, so it must be an explicit choice):** when ON, a
+  delete mark on a protected photo is blocked on the deck and
+  smart decks (banner explanation, card stays), favourited
+  non-keepers on Duplicates are marked keep instead of delete
+  (with an explained count), and review excludes favourited
+  items from the trash run (they stay in the grid, with an
+  explained count). Protected = Klara favourites from any
+  session OR system favourites (`photo_manager`
+  `AssetEntity.isFavorite`, Android 11+ `IS_FAVORITE`, mapped
+  into `MediaAsset.isSystemFavourite`; Klara never stars or
+  unstars photos). "Edited" protection is NOT implemented:
+  photo_manager 3.12.0 exposes no on-device edited flag for
+  Android (its `hasAdjustments` note is Darwin-only) and
+  MediaStore offers no edited column this app can read — the
+  Settings copy says so honestly instead of faking a signal.
+- **Trash auto-empty — trust-rule resolution (requirements §4
+  wins over any literal auto-delete reading):** the setting
+  (default OFF) NEVER silently deletes media. When ON and trash
+  records pass their recoverableUntil date, Trash shows an
+  in-app prompt dialog; confirming runs the normal empty flow
+  (native sheet follows), declining drops only the expired
+  local records (their system media is already gone after 30
+  days — record cleanup, not media deletion). Still-recoverable
+  records are never touched by either path. When OFF, expired
+  records are left for manual emptying with no prompt.
+- **New dependencies (both resolved cleanly on Flutter 3.47.7 /
+  Dart 3.13):** `flutter_local_notifications` ^22.3.2,
+  `package_info_plus` ^10.2.2. No monetization code anywhere;
+  no ads exist and none were added.
+- **Honest gaps / owner checks:** weekly notification delivery,
+  the `IS_FAVORITE` flag on a real library, and dark-theme feel
+  all need his eyes on a real phone; the settings view and the
+  trash prompt dialog are host-tested for state, not for
+  on-device timing. The string registry (`app_strings.dart`,
+  now 543 lines) is further over the ~400 line guide — it grows
+  monotonically and would need a locale split, not a Phase 3A
+  change. Deck controller is 399 lines, review controller 400.
 
 ## Tests
 

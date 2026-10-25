@@ -111,6 +111,7 @@ class MediaServiceImpl implements MediaService {
             createDate: entity.createDateTime,
             title: entity.title ?? '',
             albumName: path.name,
+            isSystemFavourite: entity.isFavorite,
           ),
         );
       }

@@ -27,4 +27,7 @@ class AppRoutes {
   /// One smart deck as a swipe deck (Phase 2A). The deck's assets
   /// travel as route arguments (see SmartDeckLaunch).
   static const String smartDeck = '/smart-deck';
+
+  /// Settings screen (Phase 3A).
+  static const String settings = '/settings';
 }

@@ -16,6 +16,7 @@ import '../../../core/theme/theme_ext.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/empty_view.dart';
 import '../../../core/widgets/error_view.dart';
+import '../../../core/widgets/info_banner.dart';
 import '../controller/duplicates_controller.dart';
 import '../model/decks_status.dart';
 import '../widgets/duplicate_group_card.dart';
@@ -90,6 +91,16 @@ class _ReadyBody extends StatelessWidget {
       }
       return Column(
         children: <Widget>[
+          if (controller.protectedExcludedCount.value > 0)
+            InfoBanner(
+              message: AppStrings.tr(
+                AppStrings.protectionDuplicatesExcluded,
+                <String, String>{
+                  'count': '${controller.protectedExcludedCount.value}',
+                },
+              ),
+              onDismiss: () => controller.protectedExcludedCount.value = 0,
+            ),
           Padding(
             padding: EdgeInsets.all(context.sizes.screenPadding),
             child: Column(

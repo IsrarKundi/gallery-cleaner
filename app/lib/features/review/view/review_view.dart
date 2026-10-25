@@ -10,6 +10,7 @@ import '../../../core/widgets/app_dialog.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/empty_view.dart';
 import '../../../core/widgets/error_banner.dart';
+import '../../../core/widgets/info_banner.dart';
 import '../../../core/widgets/primary_button.dart';
 import '../../../core/widgets/secondary_button.dart';
 import '../controller/review_controller.dart';
@@ -75,6 +76,23 @@ class ReviewView extends GetView<ReviewController> {
             tooltip: AppStrings.tr(AppStrings.actionBackToDeck),
             onPressed: controller.goToDeck,
           ),
+          // Phase 3A quick eye toggle: same global private-blur
+          // setting as Settings. Icon shows the CURRENT state:
+          // eyeSlash while blurred (tap to show), eye while shown.
+          actions: <Widget>[
+            IconButton(
+              icon: Icon(
+                controller.privateBlur.value ? AppIcons.eyeSlash : AppIcons.eye,
+                size: context.sizes.iconMd,
+              ),
+              tooltip: AppStrings.tr(
+                controller.privateBlur.value
+                    ? AppStrings.blurShowPhotos
+                    : AppStrings.blurHidePhotos,
+              ),
+              onPressed: controller.toggleBlur,
+            ),
+          ],
           bottomBar: isEmpty
               ? null
               : _BottomBar(
@@ -92,6 +110,18 @@ class ReviewView extends GetView<ReviewController> {
               : Column(
                   children: <Widget>[
                     _Header(controller: controller),
+                    if (controller.protectedExcludedCount.value > 0)
+                      InfoBanner(
+                        message: AppStrings.tr(
+                          AppStrings.protectionReviewExcluded,
+                          <String, String>{
+                            'count':
+                                '${controller.protectedExcludedCount.value}',
+                          },
+                        ),
+                        onDismiss: () =>
+                            controller.protectedExcludedCount.value = 0,
+                      ),
                     if (controller.errorKey.value.isNotEmpty)
                       ErrorBanner(
                         message: AppStrings.tr(controller.errorKey.value),
@@ -114,6 +144,8 @@ class ReviewView extends GetView<ReviewController> {
                             thumbnail: controller.thumbnails[asset.id],
                             thumbnailFailed: controller.failedThumbnails
                                 .contains(asset.id),
+                            blurred: controller.isBlurred(asset),
+                            onReveal: () => controller.reveal(asset.id),
                             onTap: () => controller.unmark(asset),
                           );
                         },

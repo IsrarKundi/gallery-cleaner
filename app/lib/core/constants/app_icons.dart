@@ -74,6 +74,9 @@ class AppIcons {
   static const IconData goal = PhosphorIconsRegular.target;
   static const IconData streak = PhosphorIconsRegular.trophy;
   static const IconData share = PhosphorIconsRegular.shareNetwork;
+  static const IconData settings = PhosphorIconsRegular.gear;
+  static const IconData eye = PhosphorIconsRegular.eye;
+  static const IconData eyeSlash = PhosphorIconsRegular.eyeSlash;
 
   /// Every constant, for tests that assert each one is a valid glyph.
   static const List<IconData> all = <IconData>[
@@ -107,5 +110,8 @@ class AppIcons {
     goal,
     streak,
     share,
+    settings,
+    eye,
+    eyeSlash,
   ];
 }

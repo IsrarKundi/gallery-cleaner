@@ -214,6 +214,55 @@ class AppStrings {
   static const String tutorialSwipeNote = 'tutorialSwipeNote';
   static const String tutorialDone = 'tutorialDone';
 
+  // Phase 3A settings (requirements §7, Phase 3): theme, private
+  // blur, favourites protection, weekly nudge, haptics, reduced
+  // motion, trash auto-empty preference, about. No Phase 3B/4
+  // strings (denied/partial polish copy beyond this increment,
+  // performance, accessibility audit, video, documents, iOS,
+  // monetization) are added here.
+  static const String screenSettings = 'screenSettings';
+  static const String settingsSectionDisplay = 'settingsSectionDisplay';
+  static const String settingsSectionPrivacy = 'settingsSectionPrivacy';
+  static const String settingsSectionFeedback = 'settingsSectionFeedback';
+  static const String settingsSectionTrash = 'settingsSectionTrash';
+  static const String settingsSectionAbout = 'settingsSectionAbout';
+  static const String settingsThemeTitle = 'settingsThemeTitle';
+  static const String settingsThemeSystem = 'settingsThemeSystem';
+  static const String settingsThemeLight = 'settingsThemeLight';
+  static const String settingsThemeDark = 'settingsThemeDark';
+  static const String settingsPrivateBlurTitle = 'settingsPrivateBlurTitle';
+  static const String settingsPrivateBlurMessage = 'settingsPrivateBlurMessage';
+  static const String settingsProtectionTitle = 'settingsProtectionTitle';
+  static const String settingsProtectionMessage = 'settingsProtectionMessage';
+  static const String settingsNotificationsTitle = 'settingsNotificationsTitle';
+  static const String settingsNotificationsMessage =
+      'settingsNotificationsMessage';
+  static const String settingsNudgeTitle = 'settingsNudgeTitle';
+  static const String settingsNudgeBody = 'settingsNudgeBody';
+  static const String settingsNotificationsDenied =
+      'settingsNotificationsDenied';
+  static const String settingsHapticsTitle = 'settingsHapticsTitle';
+  static const String settingsHapticsMessage = 'settingsHapticsMessage';
+  static const String settingsReducedMotionTitle = 'settingsReducedMotionTitle';
+  static const String settingsReducedMotionMessage =
+      'settingsReducedMotionMessage';
+  static const String settingsAutoEmptyTitle = 'settingsAutoEmptyTitle';
+  static const String settingsAutoEmptyMessage = 'settingsAutoEmptyMessage';
+  static const String settingsAboutVersion = 'settingsAboutVersion';
+  static const String settingsVersionUnknown = 'settingsVersionUnknown';
+  static const String settingsTrustNote = 'settingsTrustNote';
+  static const String protectionDeckBlocked = 'protectionDeckBlocked';
+  static const String protectionReviewExcluded = 'protectionReviewExcluded';
+  static const String protectionDuplicatesExcluded =
+      'protectionDuplicatesExcluded';
+  static const String blurTapToReveal = 'blurTapToReveal';
+  static const String blurShowPhotos = 'blurShowPhotos';
+  static const String blurHidePhotos = 'blurHidePhotos';
+  static const String trashAutoEmptyPromptTitle = 'trashAutoEmptyPromptTitle';
+  static const String trashAutoEmptyPromptMessage =
+      'trashAutoEmptyPromptMessage';
+  static const String errorNotifications = 'errorNotifications';
+
   // Confirmations and feedback.
   static const String snackMovedToTrash = 'snackMovedToTrash';
   static const String snackMovedToTrashUntil = 'snackMovedToTrashUntil';
@@ -401,6 +450,75 @@ class AppStrings {
         'Every photo in this filter has a mark. Review your choices '
         'before anything is removed.',
     meterInTrashEmpty: 'In trash',
+    screenSettings: 'Settings',
+    settingsSectionDisplay: 'Appearance',
+    settingsSectionPrivacy: 'Privacy',
+    settingsSectionFeedback: 'Feedback',
+    settingsSectionTrash: 'Trash',
+    settingsSectionAbout: 'About',
+    settingsThemeTitle: 'Theme',
+    settingsThemeSystem: 'System',
+    settingsThemeLight: 'Light',
+    settingsThemeDark: 'Dark',
+    settingsPrivateBlurTitle: 'Private blur',
+    settingsPrivateBlurMessage:
+        'Blur thumbnails on Review and Trash until you tap one to '
+        'reveal it. The deck is never blurred — it is where you decide.',
+    settingsProtectionTitle: 'Protect favourites',
+    settingsProtectionMessage:
+        'Favourited photos can never be marked for deletion while '
+        'this is on — your Klara favourites and photos starred on '
+        'the device. There is no reliable edited flag on-device, so '
+        'edited photos are not covered by this toggle.',
+    settingsNotificationsTitle: 'Weekly nudge',
+    settingsNotificationsMessage:
+        'One gentle reminder a week to clean up. No countdowns, no '
+        'marketing.',
+    settingsNudgeTitle: 'Time for a quick clean?',
+    settingsNudgeBody:
+        'A few swipes can free up space. Open Klara when you have a minute.',
+    settingsNotificationsDenied:
+        'Notifications are off on this device, so the weekly nudge '
+        'could not be set. The toggle stays off.',
+    settingsHapticsTitle: 'Haptics',
+    settingsHapticsMessage:
+        'A light tick on each mark, a medium click when a delete is '
+        'confirmed, and a firm pulse when trash is emptied.',
+    settingsReducedMotionTitle: 'Reduced motion',
+    settingsReducedMotionMessage:
+        'When on, animations are replaced with fades even if the '
+        'system setting is off. When off, the system setting applies.',
+    settingsAutoEmptyTitle: 'Prompt to empty expired trash',
+    settingsAutoEmptyMessage:
+        'When on, Klara asks before emptying trash whose 30 days '
+        'have passed. Nothing is ever deleted without your '
+        'confirmation — this only adds a prompt.',
+    settingsAboutVersion: 'Version {version}',
+    settingsVersionUnknown: 'Version unknown',
+    settingsTrustNote:
+        'Klara never deletes anything without your confirmation: '
+        'swipes only mark, review comes first, and the system '
+        'confirmation moves photos to trash for 30 days.',
+    protectionDeckBlocked:
+        'This photo is favourited and protected, so it cannot be '
+        'marked for deletion. Turn off Protect favourites in '
+        'Settings to delete it.',
+    protectionReviewExcluded:
+        '{count} favourited photos were kept out of this delete and '
+        'stay in your library.',
+    protectionDuplicatesExcluded:
+        '{count} favourited photos were kept as keepers instead of '
+        'being marked for deletion.',
+    blurTapToReveal: 'Tap to reveal',
+    blurShowPhotos: 'Show photos',
+    blurHidePhotos: 'Hide photos',
+    trashAutoEmptyPromptTitle: 'Trash has expired photos',
+    trashAutoEmptyPromptMessage:
+        'Some photos in trash have passed their 30 days. Emptying '
+        'trash now removes everything in trash, including photos '
+        'still within their 30 days. Nothing is removed without '
+        'the system confirmation that follows.',
+    errorNotifications: 'The weekly nudge could not be set. Try again.',
     snackMovedToTrash: 'Moved to trash. You have 30 days to restore.',
     snackMovedToTrashUntil: 'Moved to trash, recoverable until {date}',
     snackRestored: 'Photo restored',

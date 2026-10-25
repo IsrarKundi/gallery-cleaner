@@ -144,6 +144,16 @@ class FakeLocalService implements LocalService {
     tutorialSeen = seen;
     return const Success<void>(null);
   }
+
+  @override
+  Future<Result<AppSettings>> loadSettings() async {
+    return const Success<AppSettings>(AppSettings());
+  }
+
+  @override
+  Future<Result<void>> saveSettings(AppSettings settings) async {
+    return const Success<void>(null);
+  }
 }
 
 /// Configurable [TrashGateway] fake: the test decides which ids the

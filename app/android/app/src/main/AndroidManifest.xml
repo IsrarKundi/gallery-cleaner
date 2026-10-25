@@ -3,6 +3,11 @@
          no network: Klara is on-device only. -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <!-- Phase 3A single exception: POST_NOTIFICATIONS is required on
+         Android 13+ to SHOW the weekly nudge the user explicitly
+         enables in Settings. It is requested at toggle time only,
+         never at first launch, and schedules nothing on its own. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:label="klara"
         android:name="${applicationName}"

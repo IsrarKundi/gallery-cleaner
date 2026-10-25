@@ -113,6 +113,116 @@ class HistoryRecord {
   }
 }
 
+/// Theme choice (Phase 3A). Default is [system]: following the OS
+/// is the least surprising default — a user who never opens Settings
+/// gets the theme their phone already uses, and a user who picks
+/// Light or Dark gets exactly that, on every launch.
+enum ThemePreference { system, light, dark }
+
+/// The persisted settings record (Phase 3A), stored in the same
+/// `klara_settings.json` file as the goal target and tutorial flag.
+/// New keys merge into existing records: old records simply read as
+/// defaults for the keys they lack, and saving settings never drops
+/// the goal/tutorial keys (the implementation reads the whole map
+/// first, then writes it back).
+///
+/// Defaults, and why:
+/// - theme system (above); privateBlur OFF — blurring by default
+///   would hide exactly what the user must judge before a restore
+///   or delete, so wrong decisions would be more likely, not less.
+/// - protection OFF — protection changes delete behaviour, so it
+///   must be an explicit user choice, never a surprise.
+/// - weeklyNudge OFF — no notification is scheduled until the user
+///   asks for one. haptics ON (design.md §8 feedback is the norm).
+/// - reducedMotion OFF — the system setting applies until the user
+///   overrides it in-app. trashAutoEmptyPrompt OFF — see the
+///   trust-rule resolution on [AppSettings.trashAutoEmptyPrompt].
+class AppSettings {
+  const AppSettings({
+    this.theme = ThemePreference.system,
+    this.privateBlur = false,
+    this.protection = false,
+    this.weeklyNudge = false,
+    this.haptics = true,
+    this.reducedMotion = false,
+    this.trashAutoEmptyPrompt = false,
+  });
+
+  final ThemePreference theme;
+  final bool privateBlur;
+  final bool protection;
+  final bool weeklyNudge;
+  final bool haptics;
+  final bool reducedMotion;
+
+  /// TRUST-RULE RESOLUTION (requirements §4 wins): "never
+  /// auto-delete" overrides any literal auto-empty reading of the
+  /// Phase 3 settings list. When ON, this setting NEVER silently
+  /// deletes media. It only (a) prompts (in-app dialog, then the
+  /// native sheet) to empty trash when records pass their
+  /// recoverableUntil date, and (b) allows record-only cleanup of
+  /// expired records — dropping stale local records whose system
+  /// media already expired, which deletes no media at all. When
+  /// OFF, expired records are left for manual emptying.
+  final bool trashAutoEmptyPrompt;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'theme': theme.name,
+      'privateBlur': privateBlur,
+      'protection': protection,
+      'weeklyNudge': weeklyNudge,
+      'haptics': haptics,
+      'reducedMotion': reducedMotion,
+      'trashAutoEmptyPrompt': trashAutoEmptyPrompt,
+    };
+  }
+
+  factory AppSettings.fromJson(Map<String, dynamic> json) {
+    bool flag(String key, bool fallback) {
+      final Object? value = json[key];
+      return value is bool ? value : fallback;
+    }
+
+    final Object? themeRaw = json['theme'];
+    final ThemePreference theme = themeRaw is String
+        ? ThemePreference.values.firstWhere(
+            (ThemePreference t) => t.name == themeRaw,
+            orElse: () => ThemePreference.system,
+          )
+        : ThemePreference.system;
+    return AppSettings(
+      theme: theme,
+      privateBlur: flag('privateBlur', false),
+      protection: flag('protection', false),
+      weeklyNudge: flag('weeklyNudge', false),
+      haptics: flag('haptics', true),
+      reducedMotion: flag('reducedMotion', false),
+      trashAutoEmptyPrompt: flag('trashAutoEmptyPrompt', false),
+    );
+  }
+
+  AppSettings copyWith({
+    ThemePreference? theme,
+    bool? privateBlur,
+    bool? protection,
+    bool? weeklyNudge,
+    bool? haptics,
+    bool? reducedMotion,
+    bool? trashAutoEmptyPrompt,
+  }) {
+    return AppSettings(
+      theme: theme ?? this.theme,
+      privateBlur: privateBlur ?? this.privateBlur,
+      protection: protection ?? this.protection,
+      weeklyNudge: weeklyNudge ?? this.weeklyNudge,
+      haptics: haptics ?? this.haptics,
+      reducedMotion: reducedMotion ?? this.reducedMotion,
+      trashAutoEmptyPrompt: trashAutoEmptyPrompt ?? this.trashAutoEmptyPrompt,
+    );
+  }
+}
+
 abstract class LocalService {
   /// Saves (overwrites) the session for its filter key.
   Future<Result<void>> saveSession(DeckSession session);
@@ -173,6 +283,25 @@ abstract class LocalService {
 
   /// Marks the first-run swipe tutorial as shown (or resets it).
   Future<Result<void>> setTutorialSeen(bool seen);
+
+  /// The persisted settings record (Phase 3A). Missing records
+  /// read as [AppSettings] defaults; saving merges into the
+  /// existing settings file without dropping other keys.
+  ///
+  /// Default bodies (fresh-install settings, no persistence) exist
+  /// so test fakes that implement this interface need not change:
+  /// protection OFF, blur OFF, theme system, haptics ON. The real
+  /// implementation ([LocalServiceImpl]) overrides both with JSON
+  /// persistence, and any test that must observe a saved setting
+  /// uses that implementation with a temp directory.
+  Future<Result<AppSettings>> loadSettings() async {
+    return const Success<AppSettings>(AppSettings());
+  }
+
+  /// Saves the whole settings record (see [loadSettings]).
+  Future<Result<void>> saveSettings(AppSettings settings) async {
+    return const Success<void>(null);
+  }
 
   /// Merges [analyses] into the on-device hash cache, keyed by
   /// asset id. Cached hashes/scores make regrouping instant and

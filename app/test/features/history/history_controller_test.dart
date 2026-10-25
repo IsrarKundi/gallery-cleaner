@@ -126,6 +126,16 @@ class FakeLocal implements LocalService {
   Future<Result<void>> setTutorialSeen(bool seen) async {
     return const Success<void>(null);
   }
+
+  @override
+  Future<Result<AppSettings>> loadSettings() async {
+    return const Success<AppSettings>(AppSettings());
+  }
+
+  @override
+  Future<Result<void>> saveSettings(AppSettings settings) async {
+    return const Success<void>(null);
+  }
 }
 
 void main() {

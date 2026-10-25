@@ -7,12 +7,19 @@ import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../controller/splash_controller.dart';
 
-/// Splash screen (design.md §13): white Phase 1 light background, ink
-/// logo version.
+/// Splash screen (design.md §13, Phase 3A theme adaptation).
+///
+/// The background comes from the active palette and the brand assets
+/// follow the brightness: dark mode → dark background + white logo
+/// SVG + white Lottie variant; light (or system-light) → white
+/// background + ink logo + normal Lottie. The white assets already
+/// existed (Phase 1); this increment wires them, it does not
+/// regenerate them.
 ///
 /// - Motion on: the logo Lottie plays once; its finish completes the
 ///   splash (the hold timer is fallback only, cancelled on finish).
-/// - Reduced motion on (system "Remove animations"): the final frame
+/// - Reduced motion on (system "Remove animations", or the in-app
+///   toggle via main.dart's MediaQuery override): the final frame
 ///   renders statically as the logo SVG — no Lottie playback — and the
 ///   hold timer (or a tap) completes the splash.
 /// - Tap anywhere skips, cancelling the timer.
@@ -23,6 +30,21 @@ class SplashView extends StatefulWidget {
 
   @override
   State<SplashView> createState() => _SplashViewState();
+}
+
+/// Pure asset selection, unit-tested directly (pumping a Lottie in
+/// a widget test would load real animation assets, so the rule
+/// itself is tested here, not through the player).
+String splashLogoAsset(bool isDark) {
+  return isDark
+      ? 'assets/icons/klara_logo_white.svg'
+      : 'assets/icons/klara_logo.svg';
+}
+
+String splashLottieAsset(bool isDark) {
+  return isDark
+      ? 'assets/animations/klara_logo_lottie_white.json'
+      : 'assets/animations/klara_logo_lottie.json';
 }
 
 class _SplashViewState extends State<SplashView>
@@ -51,6 +73,7 @@ class _SplashViewState extends State<SplashView>
   @override
   Widget build(BuildContext context) {
     final bool reducedMotion = MediaQuery.disableAnimationsOf(context);
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       backgroundColor: context.palette.background,
       body: Semantics(
@@ -62,11 +85,11 @@ class _SplashViewState extends State<SplashView>
           child: Center(
             child: reducedMotion
                 ? SvgPicture.asset(
-                    'assets/icons/klara_logo.svg',
+                    splashLogoAsset(isDark),
                     width: context.sizes.splashLogoWidth,
                   )
                 : Lottie.asset(
-                    'assets/animations/klara_logo_lottie.json',
+                    splashLottieAsset(isDark),
                     controller: _lottieController,
                     width: context.sizes.splashLogoWidth,
                     height: context.sizes.splashLogoHeight,

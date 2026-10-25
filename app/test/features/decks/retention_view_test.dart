@@ -179,6 +179,16 @@ class _Local implements LocalService {
   }
 
   @override
+  Future<Result<AppSettings>> loadSettings() async {
+    return const Success<AppSettings>(AppSettings());
+  }
+
+  @override
+  Future<Result<void>> saveSettings(AppSettings settings) async {
+    return const Success<void>(null);
+  }
+
+  @override
   Future<Result<void>> saveAnalyses(List<PhotoAnalysis> list) async {
     for (final PhotoAnalysis a in list) {
       analyses[a.assetId] = a;

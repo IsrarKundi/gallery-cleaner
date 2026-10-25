@@ -7,7 +7,7 @@ import '../constants/app_text.dart';
 /// Shortcuts for the token files, so views never import tokens directly
 /// for values they only read (design.md §10).
 extension ThemeExt on BuildContext {
-  /// The active [AppPalette] (light only in Phase 1).
+  /// The active [AppPalette] (light or dark, Phase 3A).
   AppPalette get palette => Theme.of(this).extension<AppPalette>()!;
 
   /// The Material 3 type scale, coloured from the active palette.

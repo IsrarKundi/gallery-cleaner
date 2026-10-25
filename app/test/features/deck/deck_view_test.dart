@@ -236,6 +236,16 @@ class _Local implements LocalService {
     tutorialSeen = seen;
     return const Success<void>(null);
   }
+
+  @override
+  Future<Result<AppSettings>> loadSettings() async {
+    return const Success<AppSettings>(AppSettings());
+  }
+
+  @override
+  Future<Result<void>> saveSettings(AppSettings settings) async {
+    return const Success<void>(null);
+  }
 }
 
 Future<DeckController> _pumpDeck(
@@ -362,10 +372,7 @@ void main() {
       await tester.pumpAndSettle();
       // Phase 2B: the finished state is the session summary card
       // (counts + Review), not the old "All decided" empty view.
-      expect(
-        find.text(AppStrings.tr(AppStrings.summaryTitle)),
-        findsOneWidget,
-      );
+      expect(find.text(AppStrings.tr(AppStrings.summaryTitle)), findsOneWidget);
       expect(find.text(AppStrings.tr(AppStrings.actionReview)), findsOneWidget);
     });
 

@@ -120,6 +120,24 @@ class TrashView extends GetView<TrashController> {
             tooltip: AppStrings.tr(AppStrings.actionBackToDeck),
             onPressed: controller.goToDeck,
           ),
+          // Phase 3A quick eye toggle: same global private-blur
+          // setting as Review/Settings. Trash rows carry no
+          // thumbnails, so this visibly changes Review, not here —
+          // the toggle is still offered here for consistency.
+          actions: <Widget>[
+            IconButton(
+              icon: Icon(
+                controller.privateBlur.value ? AppIcons.eyeSlash : AppIcons.eye,
+                size: context.sizes.iconMd,
+              ),
+              tooltip: AppStrings.tr(
+                controller.privateBlur.value
+                    ? AppStrings.blurShowPhotos
+                    : AppStrings.blurHidePhotos,
+              ),
+              onPressed: controller.toggleBlur,
+            ),
+          ],
           bottomBar: isEmpty
               ? null
               : _BottomBar(
@@ -132,9 +150,12 @@ class TrashView extends GetView<TrashController> {
                 ),
           body: _ArrivalSnack(
             controller: controller,
-            child: _Body(
+            child: _AutoEmptyPrompt(
               controller: controller,
-              onRestoreSingle: (String id) => _restore(context, <String>[id]),
+              child: _Body(
+                controller: controller,
+                onRestoreSingle: (String id) => _restore(context, <String>[id]),
+              ),
             ),
           ),
         );
@@ -289,6 +310,83 @@ class _ArrivalSnackState extends State<_ArrivalSnack> {
         widget.controller.clearArrivalSnack();
       });
     }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+/// Phase 3A auto-empty prompt (trust-rule resolution): shown once,
+/// on the first frame, only when the setting is ON and expired
+/// records exist. Confirming calls the controller's [emptyTrash]
+/// directly — this dialog IS the in-app confirmation, and the
+/// native sheet follows, so nothing here deletes silently.
+/// Declining runs record-only cleanup of the expired records
+/// (their system media is already gone); still-recoverable
+/// records are never touched by either path.
+class _AutoEmptyPrompt extends StatefulWidget {
+  const _AutoEmptyPrompt({required this.controller, required this.child});
+
+  final TrashController controller;
+  final Widget child;
+
+  @override
+  State<_AutoEmptyPrompt> createState() => _AutoEmptyPromptState();
+}
+
+class _AutoEmptyPromptState extends State<_AutoEmptyPrompt> {
+  bool _shown = false;
+  Worker? _promptWorker;
+
+  @override
+  void initState() {
+    super.initState();
+    // The prompt flag is set asynchronously by the controller's
+    // init (trash load, then settings load), so a one-shot check
+    // here would miss it: listen for the flag turning true, and
+    // also check the current value in case init already finished.
+    _promptWorker = ever<bool>(widget.controller.autoEmptyPromptPending, (
+      bool pending,
+    ) {
+      if (pending) {
+        _maybeShow();
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShow());
+  }
+
+  @override
+  void dispose() {
+    _promptWorker?.dispose();
+    super.dispose();
+  }
+
+  void _maybeShow() {
+    if (_shown || !widget.controller.autoEmptyPromptPending.value) {
+      return;
+    }
+    _shown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        return;
+      }
+      final bool confirmed = await AppDialog.showConfirmation(
+        context,
+        title: AppStrings.tr(AppStrings.trashAutoEmptyPromptTitle),
+        message: AppStrings.tr(AppStrings.trashAutoEmptyPromptMessage),
+        confirmLabel: AppStrings.tr(AppStrings.trashEmpty),
+        cancelLabel: AppStrings.tr(AppStrings.actionCancel),
+        isDestructive: true,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (confirmed) {
+        await widget.controller.emptyTrash();
+      } else {
+        await widget.controller.cleanupExpiredRecords();
+      }
+    });
   }
 
   @override

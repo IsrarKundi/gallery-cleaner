@@ -353,6 +353,28 @@ class LocalServiceImpl implements LocalService {
   }
 
   @override
+  Future<Result<AppSettings>> loadSettings() async {
+    try {
+      final Map<String, dynamic> settings = await _readMap(_settingsFile);
+      return Success<AppSettings>(AppSettings.fromJson(settings));
+    } catch (_) {
+      return Failure<AppSettings>(_failure);
+    }
+  }
+
+  @override
+  Future<Result<void>> saveSettings(AppSettings settings) async {
+    try {
+      final Map<String, dynamic> all = await _readMap(_settingsFile);
+      all.addAll(settings.toJson());
+      await _write(_settingsFile, all);
+      return const Success<void>(null);
+    } catch (_) {
+      return Failure<void>(_failure);
+    }
+  }
+
+  @override
   Future<Result<bool>> isTutorialSeen() async {
     try {
       final Map<String, dynamic> settings = await _readMap(_settingsFile);

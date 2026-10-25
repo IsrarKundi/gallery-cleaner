@@ -1,8 +1,10 @@
 import 'dart:typed_data';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_icons.dart';
+import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../services/media/media_asset.dart';
 
@@ -10,6 +12,13 @@ import '../../../services/media/media_asset.dart';
 /// badge. Tapping unmarks the photo (it leaves the grid and returns
 /// to the deck as undecided). A failed thumbnail shows placeholder
 /// art, never a stale image.
+///
+/// Phase 3A private blur: when [blurred] is true the thumbnail
+/// renders through an [ImageFiltered] blur (sigma from AppSizes, so
+/// the subject is not recognisable at grid size) with a tap-to-reveal
+/// affordance; tapping calls [onReveal] instead of [onTap]. Once
+/// revealed, the tile behaves exactly as before until blur is
+/// toggled or the screen is left.
 class ReviewGridTile extends StatelessWidget {
   const ReviewGridTile({
     super.key,
@@ -17,6 +26,8 @@ class ReviewGridTile extends StatelessWidget {
     required this.thumbnail,
     required this.thumbnailFailed,
     required this.onTap,
+    this.blurred = false,
+    this.onReveal,
   });
 
   final MediaAsset asset;
@@ -24,25 +35,71 @@ class ReviewGridTile extends StatelessWidget {
   final bool thumbnailFailed;
   final VoidCallback onTap;
 
+  /// True when this tile must render blurred (blur ON, not revealed).
+  final bool blurred;
+
+  /// Called instead of [onTap] while [blurred] is true.
+  final VoidCallback? onReveal;
+
   @override
   Widget build(BuildContext context) {
     final Uint8List? thumbnail = this.thumbnail;
+    final bool blurred = this.blurred;
+    Widget image;
+    if (thumbnail != null) {
+      image = Image.memory(thumbnail, fit: BoxFit.cover);
+    } else {
+      image = Container(
+        color: context.palette.surfaceVariant,
+        child: Icon(
+          AppIcons.photos,
+          size: context.sizes.iconLg,
+          color: context.palette.textSecondary,
+        ),
+      );
+    }
+    if (blurred) {
+      image = ImageFiltered(
+        imageFilter: ImageFilter.blur(
+          sigmaX: context.sizes.privateBlurSigma,
+          sigmaY: context.sizes.privateBlurSigma,
+        ),
+        child: image,
+      );
+    }
     return ClipRRect(
       borderRadius: BorderRadius.circular(context.sizes.radiusMd),
       child: InkWell(
-        onTap: onTap,
+        onTap: blurred ? (onReveal ?? onTap) : onTap,
         child: Stack(
           fit: StackFit.expand,
           children: <Widget>[
-            if (thumbnail != null)
-              Image.memory(thumbnail, fit: BoxFit.cover)
-            else
-              Container(
-                color: context.palette.surfaceVariant,
-                child: Icon(
-                  AppIcons.photos,
-                  size: context.sizes.iconLg,
-                  color: context.palette.textSecondary,
+            image,
+            if (blurred)
+              Center(
+                child: Container(
+                  padding: EdgeInsets.all(context.sizes.sm),
+                  decoration: BoxDecoration(
+                    color: context.palette.scrim,
+                    borderRadius: BorderRadius.circular(context.sizes.radiusMd),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Icon(
+                        AppIcons.eye,
+                        size: context.sizes.iconMd,
+                        color: context.palette.onScrim,
+                      ),
+                      SizedBox(height: context.sizes.xs),
+                      Text(
+                        AppStrings.tr(AppStrings.blurTapToReveal),
+                        style: context.textStyles.labelMedium.copyWith(
+                          color: context.palette.onScrim,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             Positioned(

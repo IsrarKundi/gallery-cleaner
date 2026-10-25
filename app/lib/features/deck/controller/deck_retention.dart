@@ -68,6 +68,35 @@ class DeckRetention {
     return (marks: applied.marks, changed: true);
   }
 
+  /// Restores a saved session into the controller's live [marks]
+  /// and [favouriteIds], then applies snooze expiry (Phase 2B):
+  /// expired snoozed Maybe marks clear so those assets return
+  /// undecided. Returns true when expiry changed the marks, so
+  /// the caller persists. Marks for assets no longer present are
+  /// kept (they contribute nothing and never crash resume: the
+  /// resume index scans the loaded queue only). Shared by the deck
+  /// and smart-deck controllers — previously duplicated in both.
+  Future<bool> restoreSession(
+    RxMap<String, DeckMark> marks,
+    RxSet<String> favouriteIds,
+    DeckSession? session,
+  ) async {
+    if (session == null) {
+      return false;
+    }
+    marks.assignAll(session.marks);
+    favouriteIds.assignAll(session.favouriteIds);
+    final expiry = await clearExpiredSnoozes(
+      Map<String, DeckMark>.of(marks),
+      DateTime.now(),
+    );
+    if (!expiry.changed) {
+      return false;
+    }
+    marks.assignAll(expiry.marks);
+    return true;
+  }
+
   /// Records today as a completed day (idempotent per day).
   void recordCompletion() {
     local.recordCompletionDay(DateTime.now());

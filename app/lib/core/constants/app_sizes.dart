@@ -77,4 +77,11 @@ class AppSizes {
   // Height matching the generated logo aspect (755:200 viewBox).
   double get splashLogoHeight => 53;
   Duration get splashHold => const Duration(milliseconds: 3000);
+
+  // Private blur (Phase 3A): the Gaussian sigma for blurred
+  // thumbnails on Review (Trash rows are metadata-only, so there is
+  // nothing to blur there). 16 is strong enough that a photo's
+  // subject is not recognisable at grid size, while the tile still
+  // reads as a photo placeholder rather than a blank box.
+  double get privateBlurSigma => 16;
 }

@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 
 import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
+import '../../../core/utils/app_haptics.dart';
 import '../../../core/utils/result.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
@@ -16,6 +17,7 @@ import '../model/deck_status.dart';
 import '../model/retention.dart';
 import '../model/space_meter.dart';
 import '../model/thumbnail_preloader.dart';
+import 'deck_protection.dart';
 import 'deck_retention.dart';
 
 /// The deck: permission, paged queue, marks, undo, filters, session
@@ -84,6 +86,9 @@ class DeckController extends GetxController {
   RxSet<String> get failedThumbnails => _preloader.failedThumbnails;
   final RxBool showTutorial = false.obs;
   final RxBool loadingMore = false.obs;
+
+  /// Phase 3A favourites protection (see DeckProtection).
+  final DeckProtection protection = DeckProtection();
 
   Future<void>? _initFuture;
   bool _hasMore = true;
@@ -198,23 +203,12 @@ class DeckController extends GetxController {
       errorKey.value = AppStrings.errorMediaLoad;
       return;
     }
-    if (session != null) {
-      // Marks for assets no longer present are kept in the map but
-      // contribute nothing (meter looks assets up by id) and never
-      // crash resume: the resume index scans the loaded queue only.
-      marks.assignAll(session!.marks);
-      favouriteIds.assignAll(session!.favouriteIds);
-      // Phase 2B snooze expiry: an expired snoozed Maybe mark is
-      // cleared here, so the asset returns to the deck undecided.
-      final expiry = await retention.clearExpiredSnoozes(
-        Map<String, DeckMark>.of(marks),
-        DateTime.now(),
-      );
-      if (expiry.changed) {
-        marks.assignAll(expiry.marks);
-        _persist();
-      }
+    if (await retention.restoreSession(marks, favouriteIds, session)) {
+      _persist();
     }
+    // Phase 3A protection, loaded with the session so a toggle
+    // change in Settings applies on the next deck load.
+    await protection.load(local);
     currentIndex.value = _firstUndecidedIndex();
     status.value = DeckStatus.ready;
     _preloader.preloadAround(queue, currentIndex.value);
@@ -276,6 +270,10 @@ class DeckController extends GetxController {
     if (asset == null || status.value != DeckStatus.ready) {
       return;
     }
+    // Phase 3A: a protected delete mark is blocked, not recorded.
+    if (protection.blocksDelete(mark, asset, favouriteIds)) {
+      return;
+    }
     marks[asset.id] = mark;
     if (mark == DeckMark.favourite) {
       favouriteIds.add(asset.id);
@@ -287,6 +285,8 @@ class DeckController extends GetxController {
     _maybeLoadMore();
     _preloader.preloadAround(queue, currentIndex.value);
     _persist();
+    // Phase 3A haptics (design.md §8): light tick on every mark.
+    AppHaptics.mark();
     // Phase 2B streak day: the moment the final mark lands, this
     // session is complete. Recording is idempotent per day, so an
     // undo + re-mark on the same day records nothing new.

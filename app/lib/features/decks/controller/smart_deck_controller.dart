@@ -21,11 +21,13 @@ import 'dart:typed_data';
 import 'package:get/get.dart';
 
 import '../../../core/routes/app_routes.dart';
+import '../../../core/utils/app_haptics.dart';
 import '../../../core/utils/result.dart';
 import '../../../services/detection/smart_decks.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/media/media_service.dart';
+import '../../deck/controller/deck_protection.dart';
 import '../../deck/controller/deck_retention.dart';
 import '../../deck/model/retention.dart';
 import '../model/smart_deck_launch.dart';
@@ -60,6 +62,9 @@ class SmartDeckController extends GetxController {
   final RxList<String> undoStack = <String>[].obs;
   final RxMap<String, Uint8List> thumbnails = <String, Uint8List>{}.obs;
   final RxSet<String> failedThumbnails = <String>{}.obs;
+
+  /// Phase 3A favourites protection (see DeckProtection).
+  final DeckProtection protection = DeckProtection();
 
   SmartDeckLaunch? _launch;
   String _sessionKey = 'smart:unknown';
@@ -116,26 +121,16 @@ class SmartDeckController extends GetxController {
     final Result<DeckSession?> sessionResult = await local.loadSession(
       _sessionKey,
     );
+    DeckSession? session;
     sessionResult.fold(
-      onSuccess: (DeckSession? session) {
-        if (session != null) {
-          marks.assignAll(session.marks);
-          favouriteIds.assignAll(session.favouriteIds);
-        }
-      },
+      onSuccess: (DeckSession? value) => session = value,
       onFailure: (_) {},
     );
-    // Phase 2B snooze expiry, same contract as the main deck:
-    // expired snoozed Maybe marks clear so those assets return
-    // to this deck as undecided.
-    final expiry = await retention.clearExpiredSnoozes(
-      Map<String, DeckMark>.of(marks),
-      DateTime.now(),
-    );
-    if (expiry.changed) {
-      marks.assignAll(expiry.marks);
+    if (await retention.restoreSession(marks, favouriteIds, session)) {
       _persist();
     }
+    // Phase 3A protection, same contract as the main deck.
+    await protection.load(local);
     currentIndex.value = _firstUndecidedIndex();
     ready.value = true;
     _preloadAround(currentIndex.value);
@@ -155,6 +150,11 @@ class SmartDeckController extends GetxController {
     if (asset == null || !ready.value) {
       return;
     }
+    // Phase 3A: protected photos can never be marked delete here
+    // either — same block + explanation as the main deck.
+    if (protection.blocksDelete(mark, asset, favouriteIds)) {
+      return;
+    }
     marks[asset.id] = mark;
     if (mark == DeckMark.favourite) {
       favouriteIds.add(asset.id);
@@ -165,6 +165,7 @@ class SmartDeckController extends GetxController {
     currentIndex.value += 1;
     _preloadAround(currentIndex.value);
     _persist();
+    AppHaptics.mark();
     // Phase 2B streak day, same contract as the main deck.
     if (isFinished) {
       retention.recordCompletion();

@@ -18,6 +18,7 @@ import '../../../core/theme/theme_ext.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/empty_view.dart';
+import '../../../core/widgets/info_banner.dart';
 import '../../../features/deck/widgets/deck_action_bar.dart';
 import '../../../features/deck/widgets/session_summary_card.dart';
 import '../../../features/deck/widgets/swipe_card.dart';
@@ -101,6 +102,11 @@ class _Body extends StatelessWidget {
       final int decided = controller.marks.length;
       return Column(
         children: <Widget>[
+          if (controller.protection.blockedKey.value.isNotEmpty)
+            InfoBanner(
+              message: AppStrings.tr(controller.protection.blockedKey.value),
+              onDismiss: controller.protection.clearNotice,
+            ),
           Padding(
             padding: EdgeInsets.all(context.sizes.screenPadding),
             child: Text(

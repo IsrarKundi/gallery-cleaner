@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 
 import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
+import '../../../core/utils/app_haptics.dart';
 import '../../../core/utils/result.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/trash/trash_entry.dart';
@@ -55,6 +56,30 @@ class TrashController extends GetxController {
   /// MB freed by the last confirmed emptying, for the snackbar.
   final RxInt lastFreedBytes = 0.obs;
 
+  /// Phase 3A private blur (same setting as Review/Settings).
+  /// Trash rows are metadata-only — trashed assets are hidden from
+  /// MediaStore queries, so there is no thumbnail to blur here.
+  /// The toggle still lives on this screen because the setting is
+  /// global, and the rows themselves already show no photo content.
+  final RxBool privateBlur = false.obs;
+
+  /// Phase 3A auto-empty prompt state. True only when the setting
+  /// is ON and at least one record has passed its recoverableUntil
+  /// date. The view then shows the prompt dialog (in-app
+  /// confirmation); confirming calls [emptyTrash] (native sheet
+  /// follows), declining calls [cleanupExpiredRecords].
+  final RxBool autoEmptyPromptPending = false.obs;
+  final RxInt expiredCount = 0.obs;
+
+  /// Records past their recoverableUntil date (system media for
+  /// these is already gone after the 30 days).
+  List<TrashEntry> get expiredEntries {
+    final DateTime now = DateTime.now();
+    return entries
+        .where((TrashEntry e) => e.recoverableUntil.isBefore(now))
+        .toList();
+  }
+
   @override
   void onInit() {
     super.onInit();
@@ -86,6 +111,10 @@ class TrashController extends GetxController {
   }
 
   /// Loads the recorded Trash list. Shared by onInit and retry.
+  /// Also loads the Phase 3A settings (blur + auto-empty prompt):
+  /// the prompt fires only when the setting is ON and expired
+  /// records exist — when OFF, expired records are simply left
+  /// for manual emptying, with no prompt and no cleanup.
   Future<void> init() async {
     isLoading.value = true;
     errorKey.value = '';
@@ -97,6 +126,58 @@ class TrashController extends GetxController {
       },
     );
     isLoading.value = false;
+    final Result<AppSettings> settingsResult = await local.loadSettings();
+    settingsResult.fold(
+      onSuccess: (AppSettings value) {
+        privateBlur.value = value.privateBlur;
+        expiredCount.value = expiredEntries.length;
+        autoEmptyPromptPending.value =
+            value.trashAutoEmptyPrompt && expiredCount.value > 0;
+      },
+      onFailure: (_) {},
+    );
+  }
+
+  /// Flips private blur and persists it (same setting as Review
+  /// and Settings). See [privateBlur] for why Trash rows do not
+  /// visibly change: they carry no thumbnails.
+  Future<void> toggleBlur() async {
+    final Result<AppSettings> loaded = await local.loadSettings();
+    final AppSettings current = loaded.fold(
+      onSuccess: (AppSettings value) => value,
+      onFailure: (_) => const AppSettings(),
+    );
+    final bool next = !current.privateBlur;
+    final Result<void> saved = await local.saveSettings(
+      current.copyWith(privateBlur: next),
+    );
+    saved.fold(
+      onSuccess: (_) {
+        privateBlur.value = next;
+        AppHaptics.mark();
+      },
+      onFailure: (_) => errorKey.value = AppStrings.errorLocal,
+    );
+  }
+
+  /// Record-only cleanup of expired records (Phase 3A trust-rule
+  /// resolution): drops stale local records whose system media
+  /// already expired after 30 days. This deletes NO media — there
+  /// is none left to delete for these ids — and it never touches
+  /// still-recoverable records. Called when the user declines the
+  /// auto-empty prompt, so the list stops advertising restores
+  /// that the system can no longer honour.
+  Future<void> cleanupExpiredRecords() async {
+    final List<String> ids = expiredEntries
+        .map((TrashEntry e) => e.assetId)
+        .toList();
+    autoEmptyPromptPending.value = false;
+    if (ids.isEmpty) {
+      return;
+    }
+    await local.removeTrashEntries(ids);
+    await _refresh();
+    expiredCount.value = expiredEntries.length;
   }
 
   /// Restores [ids] (single row or all) through the native sheet.
@@ -167,8 +248,12 @@ class TrashController extends GetxController {
           mbFreed: bytes / 1048576,
         ),
       );
+      // Phase 3A haptics (design.md §8): firm pulse when trash is
+      // emptied and space is actually freed.
+      AppHaptics.freed();
     }
     await _refresh();
+    autoEmptyPromptPending.value = false;
     if (outcome.deniedIds.isNotEmpty) {
       return TrashActionOutcome.denied;
     }

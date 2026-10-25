@@ -9,6 +9,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/empty_view.dart';
 import '../../../core/widgets/error_view.dart';
+import '../../../core/widgets/info_banner.dart';
 import '../controller/deck_controller.dart';
 import '../model/deck_status.dart';
 import '../widgets/deck_action_bar.dart';
@@ -76,6 +77,11 @@ class DeckView extends GetView<DeckController> {
             icon: Icon(AppIcons.history, size: context.sizes.iconMd),
             tooltip: AppStrings.tr(AppStrings.screenHistory),
             onPressed: () => Get.toNamed<dynamic>(AppRoutes.history),
+          ),
+          IconButton(
+            icon: Icon(AppIcons.settings, size: context.sizes.iconMd),
+            tooltip: AppStrings.tr(AppStrings.screenSettings),
+            onPressed: () => Get.toNamed<dynamic>(AppRoutes.settings),
           ),
           IconButton(
             icon: Icon(AppIcons.filter, size: context.sizes.iconMd),
@@ -221,6 +227,11 @@ class _ReadyBody extends StatelessWidget {
           '${current.albumName}';
       return Column(
         children: <Widget>[
+          if (controller.protection.blockedKey.value.isNotEmpty)
+            InfoBanner(
+              message: AppStrings.tr(controller.protection.blockedKey.value),
+              onDismiss: controller.protection.clearNotice,
+            ),
           if (controller.isPartialAccess)
             Container(
               width: double.infinity,

@@ -4,8 +4,10 @@ import 'package:get/get.dart';
 
 import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
+import '../../../core/utils/app_haptics.dart';
 import '../../../core/utils/result.dart';
 import '../../../services/local/local_service.dart';
+import '../../../services/local/protection.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/media/media_service.dart';
 import '../../../services/trash/trash_service.dart';
@@ -70,6 +72,21 @@ class ReviewController extends GetxController {
   /// view shows the denied explanation, then the stack resets.
   final RxList<String> deniedIds = <String>[].obs;
 
+  /// Phase 3A private blur: when ON, grid thumbnails render
+  /// blurred until tapped (deck is never blurred). Toggled here
+  /// or in Settings — both write the same setting.
+  final RxBool privateBlur = false.obs;
+
+  /// Phase 3A per-item reveal: tapped-to-reveal ids while blur is
+  /// ON. Cleared on toggle and lost when the screen is left, so a
+  /// revealed photo is never left unblurred behind the user.
+  final RxSet<String> revealedIds = <String>{}.obs;
+
+  /// Phase 3A: favourited items kept out of the last delete run
+  /// (they stay in the grid, protected, and are never sent to
+  /// trash). The view shows this count as a banner.
+  final RxInt protectedExcludedCount = 0.obs;
+
   /// Shared recoverable-until date for a trashed run (trashedAt +
   /// 30 days, from the controller's clock — the service records the
   /// same moment, so this matches except across a midnight edge).
@@ -93,6 +110,51 @@ class ReviewController extends GetxController {
     }
     _filterKey = filterKeyOverride ?? _routeFilterKey();
     _loadThumbnails();
+    _loadBlurSetting();
+  }
+
+  /// Reads the persisted blur setting (defaults OFF).
+  Future<void> _loadBlurSetting() async {
+    final Result<AppSettings> result = await local.loadSettings();
+    result.fold(
+      onSuccess: (AppSettings value) => privateBlur.value = value.privateBlur,
+      onFailure: (_) {},
+    );
+  }
+
+  /// Flips private blur and persists it (the same setting the
+  /// Settings screen toggles). Toggling clears all reveals, so
+  /// turning blur back on never inherits a stale revealed set.
+  Future<void> toggleBlur() async {
+    final Result<AppSettings> loaded = await local.loadSettings();
+    final AppSettings current = loaded.fold(
+      onSuccess: (AppSettings value) => value,
+      onFailure: (_) => const AppSettings(),
+    );
+    final bool next = !current.privateBlur;
+    final Result<void> saved = await local.saveSettings(
+      current.copyWith(privateBlur: next),
+    );
+    saved.fold(
+      onSuccess: (_) {
+        privateBlur.value = next;
+        revealedIds.clear();
+        AppHaptics.mark();
+      },
+      onFailure: (_) => errorKey.value = AppStrings.errorLocal,
+    );
+  }
+
+  /// Reveals one blurred thumbnail until blur is toggled off or
+  /// this screen is left (see [revealedIds]).
+  void reveal(String assetId) {
+    revealedIds.add(assetId);
+  }
+
+  /// True when [asset]'s tile must render blurred: blur ON and
+  /// this item not yet tapped to reveal.
+  bool isBlurred(MediaAsset asset) {
+    return privateBlur.value && !revealedIds.contains(asset.id);
   }
 
   /// Reads the asset list the deck passed as route arguments.
@@ -173,6 +235,12 @@ class ReviewController extends GetxController {
   /// + Trash navigation, denied dialog + deck navigation, or the
   /// error state with retry). Returns null when there is nothing to
   /// delete or a delete is already running.
+  ///
+  /// Phase 3A protection: when ON, favourited items (Klara or
+  /// system) are EXCLUDED from the trash run — they stay in the
+  /// grid and [protectedExcludedCount] explains how many. When
+  /// every item is protected, nothing is sent and null returns
+  /// (the banner is the whole outcome; no native sheet appears).
   Future<ReviewDeleteOutcome?> deleteSelected() async {
     if (items.isEmpty || isDeleting.value) {
       return null;
@@ -182,7 +250,47 @@ class ReviewController extends GetxController {
     deniedIds.clear();
     trashedUntil.value = null;
     lastOutcome.value = null;
-    final List<String> ids = items.map((MediaAsset a) => a.id).toList();
+    protectedExcludedCount.value = 0;
+    List<MediaAsset> toDelete = items.toList();
+    final Result<AppSettings> settingsResult = await local.loadSettings();
+    final bool protectionOn = settingsResult.fold(
+      onSuccess: (AppSettings value) => value.protection,
+      onFailure: (_) => false,
+    );
+    if (protectionOn) {
+      final Set<String> klaraFavourites = await loadAllKlaraFavouriteIds(local);
+      final Result<DeckSession?> sessionResult = await local.loadSession(
+        _filterKey,
+      );
+      sessionResult.fold(
+        onSuccess: (DeckSession? session) {
+          if (session != null) {
+            klaraFavourites.addAll(session.favouriteIds);
+          }
+        },
+        onFailure: (_) {},
+      );
+      final List<MediaAsset> protected = toDelete
+          .where(
+            (MediaAsset asset) =>
+                isProtected(asset, klaraFavourites: klaraFavourites),
+          )
+          .toList();
+      if (protected.isNotEmpty) {
+        protectedExcludedCount.value = protected.length;
+        final Set<String> protectedIds = protected
+            .map((MediaAsset a) => a.id)
+            .toSet();
+        toDelete = toDelete
+            .where((MediaAsset asset) => !protectedIds.contains(asset.id))
+            .toList();
+      }
+    }
+    if (toDelete.isEmpty) {
+      isDeleting.value = false;
+      return null;
+    }
+    final List<String> ids = toDelete.map((MediaAsset a) => a.id).toList();
     final Result<TrashOutcome> result = await trash.trashAssets(ids);
     isDeleting.value = false;
     if (result.isFailure) {
@@ -193,6 +301,9 @@ class ReviewController extends GetxController {
     final TrashOutcome outcome = (result as Success<TrashOutcome>).value;
     if (outcome.trashedIds.isNotEmpty) {
       await _applyTrashed(outcome.trashedIds);
+      // Phase 3A haptics (design.md §8): medium click when a
+      // delete is confirmed through the native sheet.
+      AppHaptics.deleteConfirm();
     }
     if (outcome.deniedIds.isNotEmpty) {
       // Denied marks clear best-effort: even if the write fails, the
