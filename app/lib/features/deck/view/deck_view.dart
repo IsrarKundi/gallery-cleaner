@@ -333,6 +333,8 @@ class _ReadyBody extends StatelessWidget {
                 failedThumbnails: controller.failedThumbnails,
                 onSwiped: controller.markCurrent,
                 onRetry: controller.retryCurrentThumbnail,
+                onExitStart: () => controller.setCardExiting(true),
+                onExitEnd: () => controller.setCardExiting(false),
               ),
             ),
           ),

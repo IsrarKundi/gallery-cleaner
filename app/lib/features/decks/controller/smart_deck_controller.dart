@@ -22,6 +22,7 @@ import 'package:get/get.dart';
 
 import '../../../core/routes/app_routes.dart';
 import '../../../core/utils/app_haptics.dart';
+import '../../../core/utils/deferred_action.dart';
 import '../../../core/utils/result.dart';
 import '../../../services/detection/smart_decks.dart';
 import '../../../services/local/local_service.dart';
@@ -217,7 +218,20 @@ class SmartDeckController extends GetxController {
     _persist();
   }
 
-  void goToReview() {
+  /// Phase 3.2 settled-review gate (same contract as the main
+  /// deck's): review navigation requested while a card exit is in
+  /// flight defers until the flight ends.
+  final DeferredAction _reviewGate = DeferredAction();
+
+  /// True while a card exit animation is in flight.
+  bool get isCardExiting => _reviewGate.isBusy;
+
+  /// Called by the view from the card's exit callbacks.
+  void setCardExiting(bool exiting) => _reviewGate.setBusy(exiting);
+
+  void goToReview() => _reviewGate.run(_goToReviewNow);
+
+  void _goToReviewNow() {
     Get.toNamed<dynamic>(
       AppRoutes.review,
       arguments: deleteMarkedAssets,

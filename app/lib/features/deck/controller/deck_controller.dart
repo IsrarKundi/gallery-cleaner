@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/utils/app_haptics.dart';
+import '../../../core/utils/deferred_action.dart';
 import '../../../core/utils/result.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
@@ -502,8 +503,25 @@ class DeckController extends GetxController {
     await local.setTutorialSeen(true);
   }
 
-  /// Navigates to review with the delete-marked list + filter key.
-  void goToReview() {
+  /// Phase 3.2 settled-review gate: while a card exit animation is
+  /// in flight its mark is unrecorded, so review navigation
+  /// requested then defers until the flight ends instead of opening
+  /// review with a stale mark set. The view drives this from the
+  /// card's exit callbacks; bottom-nav taps during a flight stay a
+  /// residual until the Phase 7 shell keeps the deck alive.
+  final DeferredAction _reviewGate = DeferredAction();
+
+  /// True while a card exit animation is in flight.
+  bool get isCardExiting => _reviewGate.isBusy;
+
+  /// Called by the view from the card's exit callbacks.
+  void setCardExiting(bool exiting) => _reviewGate.setBusy(exiting);
+
+  /// Navigates to review with the delete-marked list + filter key,
+  /// deferred while a card exit is in flight (see [_reviewGate]).
+  void goToReview() => _reviewGate.run(_goToReviewNow);
+
+  void _goToReviewNow() {
     Get.toNamed<dynamic>(
       AppRoutes.review,
       arguments: deleteMarkedAssets,

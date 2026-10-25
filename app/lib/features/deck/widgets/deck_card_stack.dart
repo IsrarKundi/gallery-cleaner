@@ -34,6 +34,8 @@ class DeckCardStack extends StatelessWidget {
     required this.failedThumbnails,
     required this.onSwiped,
     this.onRetry,
+    this.onExitStart,
+    this.onExitEnd,
   });
 
   /// The top, interactive card.
@@ -53,6 +55,11 @@ class DeckCardStack extends StatelessWidget {
 
   /// Tap-to-retry for a failed top card (see [SwipeCard.onRetry]).
   final VoidCallback? onRetry;
+
+  /// Exit-flight callbacks for the settled-review gate (see
+  /// [SwipeCard.onExitStart] / [SwipeCard.onExitEnd]).
+  final VoidCallback? onExitStart;
+  final VoidCallback? onExitEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -82,6 +89,8 @@ class DeckCardStack extends StatelessWidget {
             thumbnailFailed: failedThumbnails.contains(current.id),
             onSwiped: onSwiped,
             onRetry: onRetry,
+            onExitStart: onExitStart,
+            onExitEnd: onExitEnd,
           ),
         ],
       );
