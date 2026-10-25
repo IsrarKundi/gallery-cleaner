@@ -42,7 +42,7 @@ class AppSizes {
   double get listRowMin => 56;
   double get appBar => 56;
 
-  // Icons.
+  // Glyph sizes.
   double get iconSm => 20;
   double get iconMd => 24;
   double get iconLg => 28;
@@ -65,4 +65,12 @@ class AppSizes {
   // Snackbar visibility (not motion; kept here so no widget file invents
   // its own duration).
   Duration get snackBarDuration => const Duration(seconds: 4);
+
+  // Splash (design.md §13): logo width on the splash screen, and the
+  // hold-timer fallback. The Lottie itself is ~1.67s, so the timer only
+  // fires if Lottie playback fails; it is cancelled on Lottie finish.
+  double get splashLogoWidth => 200;
+  // Height matching the generated logo aspect (755:200 viewBox).
+  double get splashLogoHeight => 53;
+  Duration get splashHold => const Duration(milliseconds: 3000);
 }

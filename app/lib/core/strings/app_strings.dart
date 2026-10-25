@@ -104,6 +104,9 @@ class AppStrings {
   static const String scanningPhotos = 'scanningPhotos';
   static const String resumeSession = 'resumeSession';
 
+  // Splash (design.md §13): accessibility label for tap-to-skip.
+  static const String splashSkipLabel = 'splashSkipLabel';
+
   // First-run tutorial (requirements §3: mandatory, because the mapping
   // is the opposite of the usual convention).
   static const String tutorialTitle = 'tutorialTitle';
@@ -199,6 +202,7 @@ class AppStrings {
         'Swiping only marks a photo. Nothing is removed until you '
         'review it and confirm.',
     tutorialDone: 'Got it',
+    splashSkipLabel: 'Skip splash',
     snackMovedToTrash: 'Moved to trash. You have 30 days to restore.',
     snackRestored: 'Photo restored',
     snackUndone: 'Action undone',

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:klara/core/constants/app_icons.dart';
 import 'package:klara/core/theme/app_theme.dart';
 import 'package:klara/core/widgets/app_card.dart';
 import 'package:klara/core/widgets/app_dialog.dart';
@@ -117,7 +118,7 @@ void main() {
     await pumpKit(
       tester,
       EmptyView(
-        icon: Icons.photo,
+        icon: AppIcons.photos,
         title: 'Empty title',
         message: 'Empty message',
         ctaLabel: 'Do it',
@@ -130,7 +131,7 @@ void main() {
     await pumpKit(
       tester,
       const EmptyView(
-        icon: Icons.photo,
+        icon: AppIcons.photos,
         title: 'Empty title',
         message: 'Empty message',
       ),

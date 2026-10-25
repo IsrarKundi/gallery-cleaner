@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../constants/app_icons.dart';
 import '../strings/app_strings.dart';
 import '../theme/theme_ext.dart';
 import 'primary_button.dart';
@@ -29,7 +30,7 @@ class ErrorView extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             Icon(
-              Icons.error_outline,
+              AppIcons.error,
               size: context.sizes.iconLg,
               color: context.palette.error,
             ),

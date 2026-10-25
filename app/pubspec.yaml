@@ -36,6 +36,9 @@ dependencies:
   cupertino_icons: ^1.0.8
   get: ^4.7.3
   photo_manager: ^3.12.0
+  phosphoricons_flutter: ^1.1.1
+  flutter_svg: ^2.3.0
+  lottie: ^3.6.1
 
 dev_dependencies:
   flutter_test:
@@ -47,6 +50,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -54,6 +58,12 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/icons/klara_logo.svg
+    - assets/icons/klara_logo_white.svg
+    - assets/animations/klara_logo_lottie.json
+    - assets/animations/klara_logo_lottie_white.json
 
   fonts:
     - family: Inter
@@ -95,3 +105,14 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Launcher icon (Android only in v1; design.md §13). Provisional art:
+# flat #4285F4 field, photo stack + swipe arrow — final approval is the
+# owner's eyes before any Play listing.
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icons/klara_launcher_foreground.png"
+  adaptive_icon_background: "#4285F4"
+  adaptive_icon_foreground: "assets/icons/klara_launcher_foreground.png"
+  min_sdk_android: 21
