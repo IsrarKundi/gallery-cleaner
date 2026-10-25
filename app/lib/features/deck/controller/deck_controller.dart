@@ -5,7 +5,6 @@ import 'package:get/get.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/utils/app_haptics.dart';
-import '../../../core/utils/perf_log.dart';
 import '../../../core/utils/result.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
@@ -102,10 +101,6 @@ class DeckController extends GetxController {
   int _nextPage = 0;
   bool _loadingPage = false;
 
-  // TEMPORARY Phase 0 baseline instrumentation (remove before release):
-  // one-shot worker that marks the first visible thumbnail, then dies.
-  Worker? _firstThumbWorker;
-
   /// Current card, or null when the queue is empty or finished.
   MediaAsset? get currentAsset {
     final int index = currentIndex.value;
@@ -153,13 +148,6 @@ class DeckController extends GetxController {
     return _initFuture ??= _init();
   }
 
-  @override
-  void onClose() {
-    // TEMPORARY Phase 0 baseline instrumentation (remove before release).
-    _firstThumbWorker?.dispose();
-    super.onClose();
-  }
-
   /// Re-requests permission and reloads the deck (denied-state retry).
   Future<void> retry() async {
     _initFuture = null;
@@ -201,8 +189,6 @@ class DeckController extends GetxController {
       }
       return;
     }
-    // TEMPORARY Phase 0 baseline instrumentation (remove before release).
-    PerfLog.mark('permissionDone');
     await _loadFilterData();
   }
 
@@ -216,16 +202,12 @@ class DeckController extends GetxController {
       onSuccess: albums.assignAll,
       onFailure: (_) => albums.clear(),
     );
-    // TEMPORARY Phase 0 baseline instrumentation (remove before release).
-    PerfLog.mark('albumsDone');
     await meterState.refresh(trashEntries, history);
-    PerfLog.mark('meterDone');
     final Result<bool> tutorialResult = await local.isTutorialSeen();
     showTutorial.value = tutorialResult.fold(
       onSuccess: (bool seen) => !seen,
       onFailure: (_) => false,
     );
-    PerfLog.mark('tutorialDone');
     DeckSession? session;
     final Result<DeckSession?> sessionResult = await local.loadSession(
       filter.value.filterKey,
@@ -234,37 +216,20 @@ class DeckController extends GetxController {
       onSuccess: (DeckSession? value) => session = value,
       onFailure: (_) => session = null,
     );
-    PerfLog.mark('sessionDone');
     final bool firstPageOk = await _loadPage(0);
     if (!firstPageOk) {
       status.value = DeckStatus.error;
       errorKey.value = AppStrings.errorMediaLoad;
       return;
     }
-    PerfLog.mark('page0Done');
     if (await retention.restoreSession(marks, favouriteIds, session)) {
       _persist();
     }
-    PerfLog.mark('restoreDone');
     // Phase 3A protection, loaded with the session so a toggle
     // change in Settings applies on the next deck load.
     await protection.load(local);
-    PerfLog.mark('protectionDone');
     currentIndex.value = firstUndecidedIndex(queue, marks);
     status.value = DeckStatus.ready;
-    PerfLog.mark('deckReady');
-    // TEMPORARY Phase 0: one-shot worker marking the first visible
-    // thumbnail, registered before preloading starts.
-    _firstThumbWorker?.dispose();
-    _firstThumbWorker = ever(_preloader.thumbnails, (_) {
-      final MediaAsset? current = currentAsset;
-      if (current != null &&
-          _preloader.thumbnails.containsKey(current.id)) {
-        PerfLog.mark('firstThumbnail');
-        _firstThumbWorker?.dispose();
-        _firstThumbWorker = null;
-      }
-    });
     _preloader.preloadAround(queue, currentIndex.value);
   }
 

@@ -5,15 +5,12 @@ import 'core/bindings/initial_binding.dart';
 import 'core/routes/app_pages.dart';
 import 'core/routes/app_routes.dart';
 import 'core/strings/app_strings.dart';
-import 'core/utils/perf_log.dart';
 import 'core/theme/app_theme.dart';
 import 'features/settings/controller/settings_controller.dart';
 
 // Minimal entry ONLY (AGENTS.md): binding, theme, routes, runApp. No
 // UI and no feature logic live here.
 void main() {
-  // TEMPORARY Phase 0 baseline instrumentation (remove before release).
-  PerfLog.mark('runApp');
   runApp(const KlaraApp());
 }
 
