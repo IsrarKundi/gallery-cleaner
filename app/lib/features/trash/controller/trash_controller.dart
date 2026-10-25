@@ -56,6 +56,13 @@ class TrashController extends GetxController {
   /// MB freed by the last confirmed emptying, for the snackbar.
   final RxInt lastFreedBytes = 0.obs;
 
+  /// Phase 3B mixed-outcome counts for the view's denied dialogs:
+  /// how many of the last restore were actually restored, and how
+  /// many failed to resolve. A pure denied run leaves both at 0, so
+  /// the view can tell a pure denial from a partial one.
+  final RxInt lastRestoredCount = 0.obs;
+  final RxInt lastFailedCount = 0.obs;
+
   /// Phase 3A private blur (same setting as Review/Settings).
   /// Trash rows are metadata-only — trashed assets are hidden from
   /// MediaStore queries, so there is no thumbnail to blur here.
@@ -190,6 +197,8 @@ class TrashController extends GetxController {
     }
     isBusy.value = true;
     errorKey.value = '';
+    lastRestoredCount.value = 0;
+    lastFailedCount.value = 0;
     final Result<RestoreOutcome> result = await trash.restoreAssets(ids);
     isBusy.value = false;
     if (result.isFailure) {
@@ -197,8 +206,17 @@ class TrashController extends GetxController {
       return TrashActionOutcome.serviceError;
     }
     final RestoreOutcome outcome = (result as Success<RestoreOutcome>).value;
+    lastRestoredCount.value = outcome.restoredIds.length;
+    lastFailedCount.value = outcome.failedIds.length;
     await _refresh();
     if (outcome.deniedIds.isNotEmpty) {
+      // Phase 3B: a denied run that also failed some ids used to
+      // hide the failures behind the denied dialog. The error strip
+      // survives under the dialog, so the user still sees that a
+      // retry is possible for the failed ids.
+      if (outcome.failedIds.isNotEmpty) {
+        errorKey.value = AppStrings.errorTrash;
+      }
       return TrashActionOutcome.denied;
     }
     if (outcome.failedIds.isNotEmpty) {

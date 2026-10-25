@@ -67,29 +67,33 @@ class ProgressSection extends StatelessWidget {
         SizedBox(height: context.sizes.sm),
         LinearProgressIndicator(value: goalProgress),
         SizedBox(height: context.sizes.sm),
-        Row(
+        // Phase 3B accessibility (design.md §3, §9): the old Row
+        // overflowed on narrow phones at the 1.30 text-scale cap
+        // (three preset chips no longer fit one line). A Wrap
+        // keeps every preset reachable at every scale instead of
+        // clipping one off-screen.
+        Wrap(
+          spacing: context.sizes.sm,
+          runSpacing: context.sizes.sm,
           children: <Widget>[
             for (final double preset in goalPresetsMb)
-              Padding(
-                padding: EdgeInsets.only(right: context.sizes.sm),
-                child: ChoiceChip(
-                  label: Text(
-                    AppStrings.tr(
-                      AppStrings.retentionGoalPreset,
-                      <String, String>{
-                        'target': Formatters.formatBytes(
-                          (preset * 1048576).round(),
-                        ),
-                      },
-                    ),
+              ChoiceChip(
+                label: Text(
+                  AppStrings.tr(
+                    AppStrings.retentionGoalPreset,
+                    <String, String>{
+                      'target': Formatters.formatBytes(
+                        (preset * 1048576).round(),
+                      ),
+                    },
                   ),
-                  selected: goalTargetMb == preset,
-                  onSelected: (bool selected) {
-                    if (selected) {
-                      onGoalSelected(preset);
-                    }
-                  },
                 ),
+                selected: goalTargetMb == preset,
+                onSelected: (bool selected) {
+                  if (selected) {
+                    onGoalSelected(preset);
+                  }
+                },
               ),
           ],
         ),

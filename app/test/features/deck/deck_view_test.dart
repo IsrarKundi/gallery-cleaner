@@ -39,6 +39,16 @@ MediaAsset _asset(String id, int size, DateTime date, String album) {
 }
 
 class _Media implements MediaService {
+  @override
+  Future<Result<void>> presentLimitedSelection() async {
+    return const Success<void>(null);
+  }
+
+  @override
+  Future<Result<void>> openAppSettings() async {
+    return const Success<void>(null);
+  }
+
   _Media({
     this.permission = MediaPermission.grantedFull,
     List<MediaAsset>? assets,

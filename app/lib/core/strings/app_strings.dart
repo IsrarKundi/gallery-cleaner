@@ -216,10 +216,11 @@ class AppStrings {
 
   // Phase 3A settings (requirements §7, Phase 3): theme, private
   // blur, favourites protection, weekly nudge, haptics, reduced
-  // motion, trash auto-empty preference, about. No Phase 3B/4
-  // strings (denied/partial polish copy beyond this increment,
-  // performance, accessibility audit, video, documents, iOS,
-  // monetization) are added here.
+  // motion, trash auto-empty preference, about.
+  // Phase 3B (requirements §7, Phase 3): denied/partial polish
+  // copy (partial-access actions, mixed native-sheet outcomes) and
+  // accessibility labels. No Phase 4 strings (video, documents,
+  // iOS, monetization) are added here.
   static const String screenSettings = 'screenSettings';
   static const String settingsSectionDisplay = 'settingsSectionDisplay';
   static const String settingsSectionPrivacy = 'settingsSectionPrivacy';
@@ -262,6 +263,27 @@ class AppStrings {
   static const String trashAutoEmptyPromptMessage =
       'trashAutoEmptyPromptMessage';
   static const String errorNotifications = 'errorNotifications';
+
+  // Phase 3B denied/partial polish (requirements §5, §7).
+  static const String permissionPartialAddMore = 'permissionPartialAddMore';
+  static const String permissionPartialSettingsHint =
+      'permissionPartialSettingsHint';
+  static const String permissionDeniedSettingsHint =
+      'permissionDeniedSettingsHint';
+  static const String actionViewTrash = 'actionViewTrash';
+  static const String deniedConfirmMixedMessage = 'deniedConfirmMixedMessage';
+  static const String snackMovedToTrashMany = 'snackMovedToTrashMany';
+  static const String trashRestoreDeniedMixed = 'trashRestoreDeniedMixed';
+  static const String trashEmptyDeniedMixed = 'trashEmptyDeniedMixed';
+
+  // Phase 3B accessibility labels (design.md §9): TalkBack labels
+  // for controls whose tap target carries no visible text.
+  static const String a11yThumbKeeper = 'a11yThumbKeeper';
+  static const String a11yThumbKeeperUntitled = 'a11yThumbKeeperUntitled';
+  static const String a11yThumb = 'a11yThumb';
+  static const String a11yThumbUntitled = 'a11yThumbUntitled';
+  static const String a11yReviewTile = 'a11yReviewTile';
+  static const String a11yReviewTileUntitled = 'a11yReviewTileUntitled';
 
   // Confirmations and feedback.
   static const String snackMovedToTrash = 'snackMovedToTrash';
@@ -521,6 +543,31 @@ class AppStrings {
     errorNotifications: 'The weekly nudge could not be set. Try again.',
     snackMovedToTrash: 'Moved to trash. You have 30 days to restore.',
     snackMovedToTrashUntil: 'Moved to trash, recoverable until {date}',
+    snackMovedToTrashMany: '{count} photos moved to trash. The rest could not be moved — try again.',
+    permissionPartialAddMore: 'Add more photos',
+    permissionPartialSettingsHint:
+        'To see your whole library, open Settings and choose Allow all '
+        'photos, then come back and tap Add more photos to reload.',
+    permissionDeniedSettingsHint:
+        'If Allow access does nothing, photo access was denied for good. '
+        'Open Settings to allow it there.',
+    actionViewTrash: 'View trash',
+    deniedConfirmMixedMessage:
+        '{trashed} photos moved to trash, {denied} returned to the deck, '
+        'and {failed} could not be moved. The returned photos are back '
+        'in your deck, undecided.',
+    trashRestoreDeniedMixed:
+        '{restored} photos restored. The rest are still in trash because '
+        'you did not confirm.',
+    trashEmptyDeniedMixed:
+        '{size} freed. The rest are still in trash because you did not '
+        'confirm.',
+    a11yThumbKeeper: '{name}, keeper, tap to keep this photo',
+    a11yThumbKeeperUntitled: 'Keeper photo, tap to keep this photo',
+    a11yThumb: '{name}, tap to make this photo the keeper',
+    a11yThumbUntitled: 'Photo, tap to make this photo the keeper',
+    a11yReviewTile: '{name}, tap to remove from review',
+    a11yReviewTileUntitled: 'Photo, tap to remove from review',
     snackRestored: 'Photo restored',
     snackRestoredMany: '{count} photos restored',
     snackTrashEmptied: 'Trash emptied. {size} freed.',

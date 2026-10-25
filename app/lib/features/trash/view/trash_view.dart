@@ -11,8 +11,8 @@ import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/empty_view.dart';
 import '../../../core/widgets/error_banner.dart';
 import '../../../core/widgets/error_view.dart';
-import '../../../core/widgets/secondary_button.dart';
 import '../controller/trash_controller.dart';
+import '../widgets/trash_bottom_bar.dart';
 import '../widgets/trash_row.dart';
 
 /// Trash screen (requirements §4): the recorded Trash list, restore
@@ -46,10 +46,19 @@ class TrashView extends GetView<TrashController> {
                 }),
         );
       case TrashActionOutcome.denied:
+        // Phase 3B: a denied restore that also restored some photos
+        // used to report only the denial. Count the restored part.
         await AppDialog.showConfirmation(
           context,
           title: AppStrings.tr(AppStrings.deniedConfirmTitle),
-          message: AppStrings.tr(AppStrings.trashDeniedMessage),
+          message: controller.lastRestoredCount.value > 0
+              ? AppStrings.tr(
+                  AppStrings.trashRestoreDeniedMixed,
+                  <String, String>{
+                    'restored': '${controller.lastRestoredCount.value}',
+                  },
+                )
+              : AppStrings.tr(AppStrings.trashDeniedMessage),
           confirmLabel: AppStrings.tr(AppStrings.actionOk),
         );
       case TrashActionOutcome.failed:
@@ -86,10 +95,24 @@ class TrashView extends GetView<TrashController> {
           }),
         );
       case TrashActionOutcome.denied:
+        // Phase 3B: a denied emptying that also removed some photos
+        // used to report only the denial (and swallow the freed
+        // figure). Count the removed part; no history is written
+        // for a denied run beyond what emptyTrash already recorded
+        // for the removed ids.
         await AppDialog.showConfirmation(
           context,
           title: AppStrings.tr(AppStrings.deniedConfirmTitle),
-          message: AppStrings.tr(AppStrings.trashDeniedMessage),
+          message: controller.lastFreedBytes.value > 0
+              ? AppStrings.tr(
+                  AppStrings.trashEmptyDeniedMixed,
+                  <String, String>{
+                    'size': Formatters.formatBytes(
+                      controller.lastFreedBytes.value,
+                    ),
+                  },
+                )
+              : AppStrings.tr(AppStrings.trashDeniedMessage),
           confirmLabel: AppStrings.tr(AppStrings.actionOk),
         );
       case TrashActionOutcome.restored:
@@ -140,8 +163,8 @@ class TrashView extends GetView<TrashController> {
           ],
           bottomBar: isEmpty
               ? null
-              : _BottomBar(
-                  controller: controller,
+              : TrashBottomBar(
+                  isBusy: controller.isBusy.value,
                   onRestoreAll: () => _restore(
                     context,
                     controller.entries.map((entry) => entry.assetId).toList(),
@@ -220,64 +243,6 @@ class _Body extends StatelessWidget {
 /// trash" (destructive outline in the error colour — never a filled
 /// primary, so the destructive action never looks like the primary
 /// flow). The bar renders only while Trash is non-empty.
-class _BottomBar extends StatelessWidget {
-  const _BottomBar({
-    required this.controller,
-    required this.onRestoreAll,
-    required this.onEmptyTrash,
-  });
-
-  final TrashController controller;
-  final VoidCallback onRestoreAll;
-  final VoidCallback onEmptyTrash;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: context.palette.background,
-      padding: EdgeInsets.fromLTRB(
-        context.sizes.screenPadding,
-        context.sizes.sm,
-        context.sizes.screenPadding,
-        context.sizes.sm,
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            SecondaryButton(
-              label: AppStrings.tr(AppStrings.trashRestoreAll),
-              icon: AppIcons.undo,
-              onPressed: onRestoreAll,
-              isLoading: controller.isBusy.value,
-            ),
-            SizedBox(height: context.sizes.sm),
-            SizedBox(
-              height: context.sizes.hitArea,
-              width: double.infinity,
-              child: Center(
-                child: SizedBox(
-                  height: context.sizes.buttonCompact,
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: context.palette.error,
-                    ),
-                    onPressed: controller.isBusy.value ? null : onEmptyTrash,
-                    icon: Icon(AppIcons.trash, size: context.sizes.iconSm),
-                    label: Text(AppStrings.tr(AppStrings.trashEmpty)),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 /// Shows the review delete's arrival snackbar once, on the first
 /// frame after the Trash screen appears, then clears it so rebuilds
 /// never repeat it.

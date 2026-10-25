@@ -7,10 +7,10 @@ import '../../../core/strings/app_strings.dart';
 import '../../../core/utils/app_haptics.dart';
 import '../../../core/utils/result.dart';
 import '../../../services/local/local_service.dart';
-import '../../../services/local/protection.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/media/media_service.dart';
 import '../../../services/trash/trash_service.dart';
+import 'review_delete.dart';
 
 /// Outcome of [ReviewController.deleteSelected], for the view's
 /// post-delete handling and for tests (navigation itself is not
@@ -38,8 +38,11 @@ enum ReviewDeleteOutcome { trashed, denied, failed, serviceError }
 /// failed ids keep their delete marks so they reappear there for
 /// another review). A pure trashed run navigates to Trash; a run with
 /// trashed + failed ids stays on screen with the failed items and an
-/// error state. Trashed MB is never reported as freed: the history
-/// record carries it as trashed with freed 0 (requirements §4).
+/// error state. Phase 3B: the winning outcome no longer hides the
+/// rest — [lastTrashedCount]/[lastFailedCount]/[deniedIds] let the
+/// view explain every part of a mixed run. Trashed MB is never
+/// reported as freed: the history record carries it as trashed with
+/// freed 0 (requirements §4).
 class ReviewController extends GetxController {
   ReviewController({
     required this.media,
@@ -86,6 +89,14 @@ class ReviewController extends GetxController {
   /// (they stay in the grid, protected, and are never sent to
   /// trash). The view shows this count as a banner.
   final RxInt protectedExcludedCount = 0.obs;
+
+  /// Phase 3B mixed-outcome counts for the view's dialog/snackbar:
+  /// how many of the last run were actually trashed, and how many
+  /// failed to resolve at all. Denied count is [deniedIds].length.
+  /// A pure run leaves the other count at 0, so the view can tell
+  /// a pure outcome from a mixed one without re-deriving it.
+  final RxInt lastTrashedCount = 0.obs;
+  final RxInt lastFailedCount = 0.obs;
 
   /// Shared recoverable-until date for a trashed run (trashedAt +
   /// 30 days, from the controller's clock — the service records the
@@ -251,41 +262,17 @@ class ReviewController extends GetxController {
     trashedUntil.value = null;
     lastOutcome.value = null;
     protectedExcludedCount.value = 0;
-    List<MediaAsset> toDelete = items.toList();
-    final Result<AppSettings> settingsResult = await local.loadSettings();
-    final bool protectionOn = settingsResult.fold(
-      onSuccess: (AppSettings value) => value.protection,
-      onFailure: (_) => false,
+    lastTrashedCount.value = 0;
+    lastFailedCount.value = 0;
+    // Phase 3B: protection filtering lives in review_delete.dart
+    // (extracted to hold the controller's line budget).
+    final ReviewDeletePlan plan = await planReviewDelete(
+      items: items.toList(),
+      local: local,
+      filterKey: _filterKey,
     );
-    if (protectionOn) {
-      final Set<String> klaraFavourites = await loadAllKlaraFavouriteIds(local);
-      final Result<DeckSession?> sessionResult = await local.loadSession(
-        _filterKey,
-      );
-      sessionResult.fold(
-        onSuccess: (DeckSession? session) {
-          if (session != null) {
-            klaraFavourites.addAll(session.favouriteIds);
-          }
-        },
-        onFailure: (_) {},
-      );
-      final List<MediaAsset> protected = toDelete
-          .where(
-            (MediaAsset asset) =>
-                isProtected(asset, klaraFavourites: klaraFavourites),
-          )
-          .toList();
-      if (protected.isNotEmpty) {
-        protectedExcludedCount.value = protected.length;
-        final Set<String> protectedIds = protected
-            .map((MediaAsset a) => a.id)
-            .toSet();
-        toDelete = toDelete
-            .where((MediaAsset asset) => !protectedIds.contains(asset.id))
-            .toList();
-      }
-    }
+    protectedExcludedCount.value = plan.protectedCount;
+    final List<MediaAsset> toDelete = plan.toDelete;
     if (toDelete.isEmpty) {
       isDeleting.value = false;
       return null;
@@ -299,6 +286,11 @@ class ReviewController extends GetxController {
       return ReviewDeleteOutcome.serviceError;
     }
     final TrashOutcome outcome = (result as Success<TrashOutcome>).value;
+    // Phase 3B: record the split before branching, so the view can
+    // explain mixed runs (trashed + denied, trashed + failed) instead
+    // of reporting only the winning outcome and hiding the rest.
+    lastTrashedCount.value = outcome.trashedIds.length;
+    lastFailedCount.value = outcome.failedIds.length;
     if (outcome.trashedIds.isNotEmpty) {
       await _applyTrashed(outcome.trashedIds);
       // Phase 3A haptics (design.md §8): medium click when a

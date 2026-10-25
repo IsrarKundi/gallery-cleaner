@@ -87,6 +87,11 @@ class MaybePileRow extends StatelessWidget {
   }
 }
 
+/// Phase 3B accessibility fix (design.md §9): the old 40dp button
+/// was a hit-area violation. Note the pattern matters: a 40dp
+/// button centred inside a 48dp box does NOT enlarge the tap
+/// target (proven by a tap test — edge taps miss), so the button
+/// itself is 48dp tall here, exactly like SecondaryButton.
 class _SnoozeButton extends StatelessWidget {
   const _SnoozeButton({required this.label, required this.onPressed});
 
@@ -96,7 +101,7 @@ class _SnoozeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: context.sizes.buttonCompact,
+      height: context.sizes.hitArea,
       child: OutlinedButton(onPressed: onPressed, child: Text(label)),
     );
   }

@@ -59,6 +59,8 @@ class _Body extends StatelessWidget {
             message: AppStrings.tr(AppStrings.permissionDeniedMessage),
             ctaLabel: AppStrings.tr(AppStrings.permissionAllowAccess),
             onCta: controller.retry,
+            secondaryCtaLabel: AppStrings.tr(AppStrings.permissionOpenSettings),
+            onSecondaryCta: controller.openPermissionSettings,
           );
         case DecksStatus.error:
           return ErrorView(
@@ -100,6 +102,15 @@ class _HubBody extends StatelessWidget {
           onCta: controller.retry,
         );
       }
+      // Phase 3B: builder form, so a large Maybe pile (user-marked,
+      // unbounded) builds rows lazily instead of all at once. The
+      // section layout is identical to the old eager list; only
+      // the construction is lazy. Sections: 0 progress, 1 Maybe
+      // header, 2.. Maybe rows (or one empty line), then
+      // projection, decks header, and one row per smart deck.
+      final List<MaybePileItem> maybeItems = controller.maybeItems;
+      final int maybeCount = maybeItems.isEmpty ? 1 : maybeItems.length;
+      final int itemCount = 1 + 1 + maybeCount + 1 + 1 + smartDeckOrder.length;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -126,88 +137,92 @@ class _HubBody extends StatelessWidget {
               ),
             ),
           Expanded(
-            child: ListView(
-              children: <Widget>[
-                Padding(
-                  padding: EdgeInsets.all(context.sizes.screenPadding),
-                  child: ProgressSection(
-                    goalTargetMb: controller.goalTargetMb.value,
-                    weekFreedMb: controller.weekFreedMbValue,
-                    goalProgress: controller.goalProgress,
-                    streakCurrent: controller.streak.current,
-                    streakBest: controller.streak.best,
-                    onGoalSelected: controller.setGoal,
-                  ),
-                ),
-                Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: context.sizes.screenPadding,
-                  ),
-                  child: SectionHeader(
-                    title: AppStrings.tr(AppStrings.retentionMaybeTitle),
-                    subtitle: AppStrings.tr(AppStrings.retentionMaybeHint),
-                  ),
-                ),
-                ..._maybeRows(context, controller),
-                Padding(
-                  padding: EdgeInsets.all(context.sizes.screenPadding),
-                  child: ProjectionBar(
-                    freeMb: controller.freeMb.value,
-                    projectedFreeMb: controller.projectedFreeMbValue,
-                    inTrashMb: controller.inTrashMb,
-                    markedMb: controller.markedMb,
-                  ),
-                ),
-                Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: context.sizes.screenPadding,
-                  ),
-                  child: SectionHeader(
-                    title: AppStrings.tr(AppStrings.decksTitle),
-                    subtitle: AppStrings.tr(AppStrings.decksSubtitle),
-                  ),
-                ),
-                for (final SmartDeckId id in smartDeckOrder)
-                  DeckRow(
-                    deckId: id,
-                    count: controller.assetsFor(id).length,
-                    totalBytes: controller.totalBytesFor(id),
-                    ready: controller.deckReady(id),
-                    onTap: controller.assetsFor(id).isNotEmpty
-                        ? () => controller.openDeck(id)
-                        : null,
-                  ),
-              ],
+            child: ListView.builder(
+              itemCount: itemCount,
+              itemBuilder: (BuildContext context, int index) {
+                if (index == 0) {
+                  return Padding(
+                    padding: EdgeInsets.all(context.sizes.screenPadding),
+                    child: ProgressSection(
+                      goalTargetMb: controller.goalTargetMb.value,
+                      weekFreedMb: controller.weekFreedMbValue,
+                      goalProgress: controller.goalProgress,
+                      streakCurrent: controller.streak.current,
+                      streakBest: controller.streak.best,
+                      onGoalSelected: controller.setGoal,
+                    ),
+                  );
+                }
+                if (index == 1) {
+                  return Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: context.sizes.screenPadding,
+                    ),
+                    child: SectionHeader(
+                      title: AppStrings.tr(AppStrings.retentionMaybeTitle),
+                      subtitle: AppStrings.tr(AppStrings.retentionMaybeHint),
+                    ),
+                  );
+                }
+                final int maybeIndex = index - 2;
+                if (maybeIndex < maybeCount) {
+                  if (maybeItems.isEmpty) {
+                    return Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: context.sizes.screenPadding,
+                        vertical: context.sizes.sm,
+                      ),
+                      child: Text(
+                        AppStrings.tr(AppStrings.retentionMaybeEmpty),
+                        style: context.textStyles.bodyMedium,
+                      ),
+                    );
+                  }
+                  final MaybePileItem item = maybeItems[maybeIndex];
+                  return MaybePileRow(
+                    item: item,
+                    onSnooze: (int days) => controller.snoozeItem(item, days),
+                    onClearSnooze: () => controller.clearSnoozeItem(item),
+                  );
+                }
+                final int afterMaybe = index - 2 - maybeCount;
+                if (afterMaybe == 0) {
+                  return Padding(
+                    padding: EdgeInsets.all(context.sizes.screenPadding),
+                    child: ProjectionBar(
+                      freeMb: controller.freeMb.value,
+                      projectedFreeMb: controller.projectedFreeMbValue,
+                      inTrashMb: controller.inTrashMb,
+                      markedMb: controller.markedMb,
+                    ),
+                  );
+                }
+                if (afterMaybe == 1) {
+                  return Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: context.sizes.screenPadding,
+                    ),
+                    child: SectionHeader(
+                      title: AppStrings.tr(AppStrings.decksTitle),
+                      subtitle: AppStrings.tr(AppStrings.decksSubtitle),
+                    ),
+                  );
+                }
+                final SmartDeckId id = smartDeckOrder[afterMaybe - 2];
+                return DeckRow(
+                  deckId: id,
+                  count: controller.assetsFor(id).length,
+                  totalBytes: controller.totalBytesFor(id),
+                  ready: controller.deckReady(id),
+                  onTap: controller.assetsFor(id).isNotEmpty
+                      ? () => controller.openDeck(id)
+                      : null,
+                );
+              },
             ),
           ),
         ],
       );
     });
-  }
-
-  List<Widget> _maybeRows(BuildContext context, DecksController controller) {
-    final List<MaybePileItem> items = controller.maybeItems;
-    if (items.isEmpty) {
-      return <Widget>[
-        Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: context.sizes.screenPadding,
-            vertical: context.sizes.sm,
-          ),
-          child: Text(
-            AppStrings.tr(AppStrings.retentionMaybeEmpty),
-            style: context.textStyles.bodyMedium,
-          ),
-        ),
-      ];
-    }
-    return <Widget>[
-      for (final MaybePileItem item in items)
-        MaybePileRow(
-          item: item,
-          onSnooze: (int days) => controller.snoozeItem(item, days),
-          onClearSnooze: () => controller.clearSnoozeItem(item),
-        ),
-    ];
   }
 }

@@ -8,6 +8,7 @@ import '../../../core/theme/theme_ext.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_dialog.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/empty_view.dart';
 import '../../../core/widgets/error_banner.dart';
 import '../../../core/widgets/info_banner.dart';
@@ -43,14 +44,65 @@ class ReviewView extends GetView<ReviewController> {
           arguments: until == null ? null : Formatters.formatDate(until),
         );
       case ReviewDeleteOutcome.denied:
-        await AppDialog.showConfirmation(
-          context,
-          title: AppStrings.tr(AppStrings.deniedConfirmTitle),
-          message: AppStrings.tr(AppStrings.deniedConfirmMessage),
-          confirmLabel: AppStrings.tr(AppStrings.actionOk),
-        );
-        controller.goToDeck();
+        // Phase 3B mixed runs: a denied run may also have trashed
+        // some photos and failed others. The pure-denied dialog
+        // would hide both, so a mixed run gets a counted dialog
+        // (and, when anything was trashed, a View trash choice —
+        // the trashed photos are in Trash, not on the deck).
+        if (controller.lastTrashedCount.value > 0 ||
+            controller.lastFailedCount.value > 0) {
+          final bool backToDeck = await AppDialog.showConfirmation(
+            context,
+            title: AppStrings.tr(AppStrings.deniedConfirmTitle),
+            message: AppStrings.tr(
+              AppStrings.deniedConfirmMixedMessage,
+              <String, String>{
+                'trashed': '${controller.lastTrashedCount.value}',
+                'denied': '${controller.deniedIds.length}',
+                'failed': '${controller.lastFailedCount.value}',
+              },
+            ),
+            confirmLabel: AppStrings.tr(AppStrings.actionBackToDeck),
+            cancelLabel: controller.lastTrashedCount.value > 0
+                ? AppStrings.tr(AppStrings.actionViewTrash)
+                : null,
+          );
+          if (!context.mounted) {
+            return;
+          }
+          if (backToDeck) {
+            controller.goToDeck();
+          } else {
+            final DateTime? until = controller.trashedUntil.value;
+            Get.offAllNamed<dynamic>(
+              AppRoutes.trash,
+              arguments: until == null ? null : Formatters.formatDate(until),
+            );
+          }
+        } else {
+          await AppDialog.showConfirmation(
+            context,
+            title: AppStrings.tr(AppStrings.deniedConfirmTitle),
+            message: AppStrings.tr(AppStrings.deniedConfirmMessage),
+            confirmLabel: AppStrings.tr(AppStrings.actionOk),
+          );
+          if (context.mounted) {
+            controller.goToDeck();
+          }
+        }
       case ReviewDeleteOutcome.failed:
+        // Phase 3B: trashed + failed runs stay on screen with the
+        // failed items and the error banner — but the trashed part
+        // was previously invisible. Say it, with a count.
+        if (controller.lastTrashedCount.value > 0) {
+          AppSnackbar.show(
+            context,
+            message: AppStrings.tr(
+              AppStrings.snackMovedToTrashMany,
+              <String, String>{'count': '${controller.lastTrashedCount.value}'},
+            ),
+          );
+        }
       case ReviewDeleteOutcome.serviceError:
       case null:
         // The error state renders inline with a retry action.

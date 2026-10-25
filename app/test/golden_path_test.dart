@@ -50,6 +50,16 @@ MediaAsset _asset(String id, int sizeBytes) {
 }
 
 class _Media implements MediaService {
+  @override
+  Future<Result<void>> presentLimitedSelection() async {
+    return const Success<void>(null);
+  }
+
+  @override
+  Future<Result<void>> openAppSettings() async {
+    return const Success<void>(null);
+  }
+
   final List<MediaAsset> assets = <MediaAsset>[
     _asset('a1', 1000000),
     _asset('a2', 2000000),

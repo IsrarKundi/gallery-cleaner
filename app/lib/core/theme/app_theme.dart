@@ -133,7 +133,13 @@ class AppTheme {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: palette.primary,
+          // Phase 3B accessibility (design.md §9): a text button
+          // is plain text on the background, so it needs 4.5:1 —
+          // and light primary #4285F4 on white is only 3.56:1.
+          // Text ink passes in both themes (16.1:1 light,
+          // 13.83:1 dark). Filled buttons keep primary fills:
+          // their white labels are UI components at the 3:1 bar.
+          foregroundColor: palette.textPrimary,
           textStyle: styles.labelMedium,
         ),
       ),

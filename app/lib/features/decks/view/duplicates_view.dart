@@ -53,6 +53,8 @@ class _Body extends StatelessWidget {
             message: AppStrings.tr(AppStrings.permissionDeniedMessage),
             ctaLabel: AppStrings.tr(AppStrings.permissionAllowAccess),
             onCta: controller.retry,
+            secondaryCtaLabel: AppStrings.tr(AppStrings.permissionOpenSettings),
+            onSecondaryCta: controller.openPermissionSettings,
           );
         case DecksStatus.error:
         case DecksStatus.scanning:
@@ -146,8 +148,10 @@ class _ReadyBody extends StatelessWidget {
                     padding: EdgeInsets.only(top: context.sizes.sm),
                     child: Text(
                       AppStrings.tr(controller.errorKey.value),
+                      // Phase 3B: same 4.29:1 light-error fix as the
+                      // deck's share error text (design.md §9).
                       style: context.textStyles.bodySmall.copyWith(
-                        color: context.palette.error,
+                        color: context.palette.textPrimary,
                       ),
                     ),
                   ),

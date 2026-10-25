@@ -13,10 +13,12 @@ import '../../../services/share/share_service.dart';
 import '../../../services/trash/trash_entry.dart';
 import '../../../services/trash/trash_service.dart';
 import '../model/deck_filter.dart';
+import '../model/deck_queue.dart';
 import '../model/deck_status.dart';
 import '../model/retention.dart';
 import '../model/space_meter.dart';
 import '../model/thumbnail_preloader.dart';
+import 'deck_access.dart';
 import 'deck_protection.dart';
 import 'deck_retention.dart';
 
@@ -45,6 +47,7 @@ class DeckController extends GetxController {
     ShareService? share,
   }) : _preloader = ThumbnailPreloader(media: media),
        retention = DeckRetention(local: local, share: share),
+       access = DeckAccess(media: media),
        meterState = DeckMeter(trash: trash, local: local);
 
   final MediaService media;
@@ -89,6 +92,9 @@ class DeckController extends GetxController {
 
   /// Phase 3A favourites protection (see DeckProtection).
   final DeckProtection protection = DeckProtection();
+
+  /// Phase 3B partial-access + denied-mark helper (see DeckAccess).
+  final DeckAccess access;
 
   Future<void>? _initFuture;
   bool _hasMore = true;
@@ -146,6 +152,19 @@ class DeckController extends GetxController {
   Future<void> retry() async {
     _initFuture = null;
     await init();
+  }
+
+  /// Phase 3B: system picker to add photos to a limited grant,
+  /// then reload against the new grant (see DeckAccess).
+  Future<void> expandPartialAccess() async {
+    await access.expandPartialAccess();
+    await retry();
+  }
+
+  /// Phase 3B: opens system Settings ("Allow all photos" lives
+  /// there); on return, "Add more photos" re-checks and reloads.
+  Future<void> openPermissionSettings() async {
+    await access.openPermissionSettings();
   }
 
   Future<void> _init() async {
@@ -209,7 +228,7 @@ class DeckController extends GetxController {
     // Phase 3A protection, loaded with the session so a toggle
     // change in Settings applies on the next deck load.
     await protection.load(local);
-    currentIndex.value = _firstUndecidedIndex();
+    currentIndex.value = firstUndecidedIndex(queue, marks);
     status.value = DeckStatus.ready;
     _preloader.preloadAround(queue, currentIndex.value);
   }
@@ -254,15 +273,6 @@ class DeckController extends GetxController {
     months.assignAll(monthKeysFor(queue));
   }
 
-  int _firstUndecidedIndex() {
-    for (int i = 0; i < queue.length; i++) {
-      if (!marks.containsKey(queue[i].id)) {
-        return i;
-      }
-    }
-    return queue.length;
-  }
-
   /// Records [mark] for the current card and advances. No-op with
   /// no current card (empty or finished deck).
   void markCurrent(DeckMark mark) {
@@ -298,17 +308,11 @@ class DeckController extends GetxController {
   /// Pops the last decision and returns to that card. Disabled (a
   /// no-op) when the undo stack is empty.
   void undo() {
-    if (undoStack.isEmpty) {
+    final int? index = access.undo(marks, favouriteIds, undoStack, queue);
+    if (index == null) {
       return;
     }
-    final String id = undoStack.removeLast();
-    final bool wasFavourite = marks[id] == DeckMark.favourite;
-    marks.remove(id);
-    if (wasFavourite) {
-      favouriteIds.remove(id);
-    }
-    final int index = queue.indexWhere((MediaAsset asset) => asset.id == id);
-    currentIndex.value = index >= 0 ? index : _firstUndecidedIndex();
+    currentIndex.value = index >= 0 ? index : firstUndecidedIndex(queue, marks);
     _preloader.preloadAround(queue, currentIndex.value);
     _persist();
   }
@@ -317,16 +321,8 @@ class DeckController extends GetxController {
   /// after a denied native confirmation, requirements §5) so the deck
   /// re-shows them instead of silently dropping them from the queue.
   void clearDeleteMarks(List<String> ids) {
-    bool changed = false;
-    for (final String id in ids) {
-      if (marks[id] == DeckMark.delete) {
-        marks.remove(id);
-        undoStack.remove(id);
-        changed = true;
-      }
-    }
-    if (changed) {
-      currentIndex.value = _firstUndecidedIndex();
+    if (access.rewindDenied(marks, undoStack, ids)) {
+      currentIndex.value = firstUndecidedIndex(queue, marks);
       _preloader.preloadAround(queue, currentIndex.value);
       _persist();
     }

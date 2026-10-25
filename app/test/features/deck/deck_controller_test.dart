@@ -52,6 +52,16 @@ List<MediaAsset> defaultAssets() {
 }
 
 class FakeMedia implements MediaService {
+  @override
+  Future<Result<void>> presentLimitedSelection() async {
+    return const Success<void>(null);
+  }
+
+  @override
+  Future<Result<void>> openAppSettings() async {
+    return const Success<void>(null);
+  }
+
   FakeMedia({
     this.permission = MediaPermission.grantedFull,
     this.failPermission = false,

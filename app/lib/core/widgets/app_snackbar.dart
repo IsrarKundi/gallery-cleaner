@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import '../theme/theme_ext.dart';
 
 /// The ONLY snackbar path (AGENTS.md: no ad hoc snackbars in features).
-/// Dark bar with white text; an optional action label renders in the
-/// primary colour, which passes 4.5:1 on the dark bar.
+/// The bar is ink in the light theme and light ink in dark, so the
+/// action label uses the matching inverse colour (onPrimary):
+/// Phase 3B fix — the old primary action was 1.75:1 on the dark
+/// theme's light bar (and only 4.52:1 on the light bar); onPrimary
+/// is 16.1:1 light and 13.36:1 dark.
 class AppSnackbar {
   AppSnackbar._();
 
@@ -24,7 +27,7 @@ class AppSnackbar {
               ? null
               : SnackBarAction(
                   label: actionLabel,
-                  textColor: context.palette.primary,
+                  textColor: context.palette.onPrimary,
                   onPressed: () {
                     onAction?.call();
                   },

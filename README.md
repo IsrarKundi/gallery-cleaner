@@ -307,6 +307,102 @@ on a real phone.
   monotonically and would need a locale split, not a Phase 3A
   change. Deck controller is 399 lines, review controller 400.
 
+## Phase 3B status (denied/partial polish, 50k performance, accessibility, 25 Oct 2026)
+
+Host checks pass (`flutter analyze` clean — zero issues — full
+`flutter test` suite green: 272 tests, up from 240). No new
+permission, no new dependency, no monetization/ad code. On-device
+verification is still the owner's job, as in every phase — the
+host numbers below prove the algorithms scale, not that a phone
+does, and he may not own a 50k library.
+
+- **Denied / partial-access polish (every path audited, gaps
+  fixed, tests for each):** media denied states (deck, hub,
+  duplicates) now offer "Allow access" + "Open settings" (the
+  permanent-denial loop — retrying a grant Android will never
+  re-prompt — is closed; the settings action is the one
+  deliberate exception to the one-CTA empty-state rule).
+  Partial (Android 14 limited) access gets a banner with honest
+  copy plus "Add more photos" (`presentLimited` + reload — the
+  system picker that ADDS photos, never a faked full grant)
+  and "Open settings", with a hint explaining the
+  Settings → "Allow all photos" → return → "Add more photos"
+  round trip (the system gives no callback on return).
+  Native trash-confirmation mixed runs are no longer hidden
+  behind a single outcome: trashed+denied+failed gets a counted
+  dialog ("{trashed} moved to trash, {denied} returned to the
+  deck, {failed} could not be moved") with a "View trash"
+  choice when anything was trashed; trashed+failed shows the
+  error banner plus a moved-to-trash snackbar; denied photos
+  have their session marks cleared so the deck re-shows them
+  undecided, failed photos keep delete marks for retry. Native
+  restore/empty partial denials likewise report counts/bytes
+  instead of hiding partial success. Verified already correct
+  (not duplicated): notification-permission denial leaves the
+  weekly-nudge toggle OFF with an error key; share failure
+  falls back to the same numbers as text.
+- **50,000+ photo performance:** duplicate grouping was
+  O(n·g) — quadratic on a mostly-distinct library. Now:
+  threshold 0 (exact duplicates) is a one-pass Map bucket,
+  O(n), with output identical to the old greedy scan (proven
+  by an equivalence test against a re-implementation of the
+  old scan); threshold > 0 keeps the greedy scan but caps
+  representative comparisons per asset at 512, so worst case
+  is O(n·512) instead of O(n²). Stated trade-off: a partner
+  whose representative sits beyond the cap is missed and
+  starts its own group — a safe split, never a wrong merge,
+  and grouping only ever suggests a keeper (deletion still
+  flows through review + native confirmation). Corollary: a
+  pair entirely beyond the cap vanishes as a group (both
+  members stay singletons and are dropped from duplicates) —
+  the photos stay ungrouped in the library, never deleted.
+  Hub scan is now incremental per page (deck byte totals,
+  marked MB, asset-by-id map accumulated once, not rebuilt
+  per rebuild), and the hub list is a `ListView.builder`
+  (settings' fixed list and the filter sheet stay eager by
+  design — see the code comments). Host benchmarks (this VM):
+  grouping 5k distinct 215ms, 10k distinct 393ms, 10k with
+  duplicates (bucket) 68ms; hub scan over 5k cached analyses
+  265ms with correct totals. Residual, documented: the
+  scanner still returns the full asset list (bursts/duplicates
+  need list-level results) and decodes one thumbnail per
+  uncached image on the UI isolate; later scans are cheap via
+  the hash cache. Deck thumbnails stay bounded (64-entry
+  eviction cache); review/duplicates thumbnail maps grow only
+  with the user-marked/grouped subset, not the library.
+- **Accessibility audit (table in the Phase 3B report):**
+  TalkBack labels added where tiles/rows announced nothing
+  (hub deck rows, duplicate thumbnails, review tiles — all
+  with photo names or a "Photo" fallback). Hit-area fixes:
+  SecondaryButton, Maybe snooze buttons, and the trash
+  Empty-trash button are now 48dp buttons themselves (the old
+  40dp-in-48dp-box pattern failed edge taps — proven by tap
+  tests). Contrast fixes within the locked palette: TextButton
+  foreground is text ink (light primary was 3.56:1 on white),
+  snackbar action is inverse ink (old primary was 1.75:1 on
+  the dark bar), plain error text replaced by ink text in the
+  two places it appeared (light error is 4.29:1 on white).
+  One documented constraint: dark tertiary #80868B fails on
+  surfaceVariant (3.79:1) — unused by any widget today, and
+  must not be used on elevated dark surfaces until the token
+  changes. Goal preset chips wrap instead of overflowing at
+  the 1.30 text-scale cap. Text-scale clamp 0.85–1.30 and
+  reduced-motion handling (system + toggle) re-verified
+  unchanged.
+- **Line-budget extractions (same precedent as Phase 3A):**
+  `DeckAccess` + `deck_queue.dart` (deck controller),
+  `ReviewDeletePlan` (review controller),
+  `TrashBottomBar` (trash view), `maybeItemsFor` (hub
+  controller). Every hand-written file is back under ~400
+  lines except the `app_strings.dart` registry (unchanged
+  exception — it grows monotonically and needs a locale
+  split, not a Phase 3B change).
+- **Honest gaps / owner checks:** real 50k on-device timing,
+  the Android 14 limited-grant picker flow, and TalkBack
+  behaviour on a real phone all need his eyes; host tests
+  prove state and labels, not device timing or TalkBack
+  delivery.
+
 ## Tests
 
 - Unit + widget tests live in `app/test/` (211 tests plus

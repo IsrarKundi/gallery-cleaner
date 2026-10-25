@@ -18,6 +18,23 @@ abstract class MediaService {
   /// exactly those photos and says so) or [MediaPermission.denied].
   Future<Result<MediaPermission>> requestPermission();
 
+  /// Phase 3B partial-access recovery (photo_manager 3.12.0
+  /// `PhotoManager.presentLimited`, Android 14+): shows the system
+  /// photo picker so the user can ADD photos to a limited grant.
+  /// This is honest re-selection, not a full-access grant: only the
+  /// system Settings page can switch a grant to "Allow all photos"
+  /// (see [openAppSettings]). Completes when the picker dismisses;
+  /// the caller re-checks permission and reloads afterwards.
+  Future<Result<void>> presentLimitedSelection();
+
+  /// Phase 3B denied/permanent-denial recovery (photo_manager
+  /// 3.12.0 `PhotoManager.openSetting`): opens this app's system
+  /// Settings page, where the user can change photo access to
+  /// "Allow all photos". The system gives no result callback, so
+  /// the caller must re-check permission when the user returns
+  /// (the deck's "Add more photos" action does exactly that).
+  Future<Result<void>> openAppSettings();
+
   /// Album/folder list with asset counts, including the whole-library
   /// ("Recent") album. Type filter is not applied here: album counts
   /// are for the filter picker, which then filters in [getAssets].

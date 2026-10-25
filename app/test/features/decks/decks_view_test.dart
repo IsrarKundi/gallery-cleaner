@@ -51,6 +51,16 @@ Uint8List _png() {
 }
 
 class _Media implements MediaService {
+  @override
+  Future<Result<void>> presentLimitedSelection() async {
+    return const Success<void>(null);
+  }
+
+  @override
+  Future<Result<void>> openAppSettings() async {
+    return const Success<void>(null);
+  }
+
   _Media({List<MediaAsset>? assets})
     : assets =
           assets ??

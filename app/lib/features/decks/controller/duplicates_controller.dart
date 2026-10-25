@@ -103,6 +103,13 @@ class DuplicatesController extends GetxController {
 
   Future<void> retry() => init();
 
+  /// Phase 3B: opens this app's system Settings page (see
+  /// DecksController.openPermissionSettings for why the denied
+  /// state needs a second action).
+  Future<void> openPermissionSettings() async {
+    await media.openAppSettings();
+  }
+
   /// Slider handler: regroup from cached hashes only. No thumbnail
   /// download, no re-scan — only tile thumbnails for members that
   /// newly appear in a group are fetched.

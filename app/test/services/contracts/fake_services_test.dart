@@ -218,6 +218,16 @@ class FakeTrashGateway implements TrashGateway {
 
 /// Minimal [MediaService] fake with success and failure modes.
 class FakeMediaService implements MediaService {
+  @override
+  Future<Result<void>> presentLimitedSelection() async {
+    return const Success<void>(null);
+  }
+
+  @override
+  Future<Result<void>> openAppSettings() async {
+    return const Success<void>(null);
+  }
+
   FakeMediaService({this.fail = false});
 
   final bool fail;

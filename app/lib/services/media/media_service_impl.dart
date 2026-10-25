@@ -35,6 +35,30 @@ class MediaServiceImpl implements MediaService {
   }
 
   @override
+  Future<Result<void>> presentLimitedSelection() async {
+    try {
+      await PhotoManager.presentLimited(type: RequestType.common);
+      return const Success<void>(null);
+    } catch (_) {
+      return const Failure<void>(
+        AppFailure(messageKey: AppStrings.errorMediaPermission),
+      );
+    }
+  }
+
+  @override
+  Future<Result<void>> openAppSettings() async {
+    try {
+      await PhotoManager.openSetting();
+      return const Success<void>(null);
+    } catch (_) {
+      return const Failure<void>(
+        AppFailure(messageKey: AppStrings.errorGeneric),
+      );
+    }
+  }
+
+  @override
   Future<Result<List<MediaAlbum>>> getAlbums() async {
     try {
       final List<AssetPathEntity> paths = await PhotoManager.getAssetPathList(

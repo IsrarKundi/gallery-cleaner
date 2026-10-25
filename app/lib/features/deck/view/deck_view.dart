@@ -127,6 +127,12 @@ class _Body extends StatelessWidget {
             message: AppStrings.tr(AppStrings.permissionDeniedMessage),
             ctaLabel: AppStrings.tr(AppStrings.permissionAllowAccess),
             onCta: controller.retry,
+            // Phase 3B: a permanently denied grant makes the system
+            // prompt a no-op, so the denied state also offers the
+            // Settings page (the EmptyView's one documented
+            // two-action exception).
+            secondaryCtaLabel: AppStrings.tr(AppStrings.permissionOpenSettings),
+            onSecondaryCta: controller.openPermissionSettings,
           );
         case DeckStatus.error:
           return ErrorView(
@@ -201,8 +207,13 @@ class _ReadyBody extends StatelessWidget {
                   padding: EdgeInsets.only(top: context.sizes.sm),
                   child: Text(
                     AppStrings.tr(controller.retention.shareErrorKey.value),
+                    // Phase 3B: light error #DB4437 on white is
+                    // 4.29:1, below the 4.5:1 text bar — the message
+                    // text itself carries the error, so it renders
+                    // in text ink (the error icon/badge elsewhere
+                    // stays error-coloured as a component).
                     style: context.textStyles.bodySmall.copyWith(
-                      color: context.palette.error,
+                      color: context.palette.textPrimary,
                     ),
                   ),
                 ),
@@ -227,34 +238,27 @@ class _ReadyBody extends StatelessWidget {
           '${current.albumName}';
       return Column(
         children: <Widget>[
-          if (controller.protection.blockedKey.value.isNotEmpty)
-            InfoBanner(
-              message: AppStrings.tr(controller.protection.blockedKey.value),
-              onDismiss: controller.protection.clearNotice,
-            ),
-          if (controller.isPartialAccess)
-            Container(
-              width: double.infinity,
-              color: context.palette.warningBg,
-              padding: EdgeInsets.symmetric(
-                horizontal: context.sizes.screenPadding,
-                vertical: context.sizes.sm,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    AppStrings.tr(AppStrings.permissionPartialTitle),
-                    style: context.textStyles.labelMedium,
+          // Phase 3B rebuild hygiene: banners and the meter sit in
+          // their own Obx widgets, so thumbnail preloads (which
+          // rebuild the card section below) do not rebuild them.
+          Obx(() {
+            final List<Widget> banners = <Widget>[];
+            if (controller.protection.blockedKey.value.isNotEmpty) {
+              banners.add(
+                InfoBanner(
+                  message: AppStrings.tr(
+                    controller.protection.blockedKey.value,
                   ),
-                  Text(
-                    AppStrings.tr(AppStrings.permissionPartialMessage),
-                    style: context.textStyles.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-          SpaceMeterBar(totals: controller.meter),
+                  onDismiss: controller.protection.clearNotice,
+                ),
+              );
+            }
+            if (controller.isPartialAccess) {
+              banners.add(_PartialBanner(controller: controller));
+            }
+            return Column(children: banners);
+          }),
+          Obx(() => SpaceMeterBar(totals: controller.meter)),
           Expanded(
             child: Padding(
               padding: EdgeInsets.symmetric(
@@ -284,5 +288,61 @@ class _ReadyBody extends StatelessWidget {
         ],
       );
     });
+  }
+}
+
+/// Phase 3B partial-access banner (requirements §5): honest copy
+/// plus both recovery actions. "Add more photos" shows the Android
+/// 14 system picker to ADD photos to the limited grant and reloads
+/// the deck when it dismisses; "Open settings" opens the system
+/// Settings page, the only place "Allow all photos" lives — the
+/// hint below the actions says so, and returning users re-check
+/// by tapping "Add more photos". Neither action claims a full
+/// grant the system did not give.
+class _PartialBanner extends StatelessWidget {
+  const _PartialBanner({required this.controller});
+
+  final DeckController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: context.palette.warningBg,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.sizes.screenPadding,
+        vertical: context.sizes.sm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            AppStrings.tr(AppStrings.permissionPartialTitle),
+            style: context.textStyles.labelMedium,
+          ),
+          Text(
+            AppStrings.tr(AppStrings.permissionPartialMessage),
+            style: context.textStyles.bodySmall,
+          ),
+          Text(
+            AppStrings.tr(AppStrings.permissionPartialSettingsHint),
+            style: context.textStyles.bodySmall,
+          ),
+          Row(
+            children: <Widget>[
+              TextButton(
+                onPressed: controller.expandPartialAccess,
+                child: Text(AppStrings.tr(AppStrings.permissionPartialAddMore)),
+              ),
+              SizedBox(width: context.sizes.sm),
+              TextButton(
+                onPressed: controller.openPermissionSettings,
+                child: Text(AppStrings.tr(AppStrings.permissionOpenSettings)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

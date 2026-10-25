@@ -34,39 +34,47 @@ class DeckRow extends StatelessWidget {
             'count': Formatters.formatCount(count),
             'size': Formatters.formatBytes(totalBytes),
           });
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: context.sizes.screenPadding,
-          vertical: context.sizes.md,
-        ),
-        child: Row(
-          children: <Widget>[
-            Icon(
-              smartDeckIcon(deckId),
-              size: context.sizes.iconMd,
-              color: context.palette.primary,
-            ),
-            SizedBox(width: context.sizes.lg),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    AppStrings.tr(smartDeckTitleKey(deckId)),
-                    style: context.textStyles.titleMedium,
-                  ),
-                  Text(
-                    subtitle,
-                    style: context.textStyles.bodySmall.copyWith(
-                      color: context.palette.textSecondary,
-                    ),
-                  ),
-                ],
+    // Phase 3B accessibility (design.md §9): the row is a button
+    // with no visible button text, so TalkBack gets one explicit
+    // label (title + subtitle) instead of the raw row fragments.
+    return Semantics(
+      button: true,
+      label: '${AppStrings.tr(smartDeckTitleKey(deckId))} · $subtitle',
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: context.sizes.screenPadding,
+            vertical: context.sizes.md,
+          ),
+          child: Row(
+            children: <Widget>[
+              Icon(
+                smartDeckIcon(deckId),
+                size: context.sizes.iconMd,
+                color: context.palette.primary,
               ),
-            ),
-          ],
+              SizedBox(width: context.sizes.lg),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      AppStrings.tr(smartDeckTitleKey(deckId)),
+                      style: context.textStyles.titleMedium,
+                    ),
+                    Text(
+                      subtitle,
+                      style: context.textStyles.bodySmall.copyWith(
+                        color: context.palette.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

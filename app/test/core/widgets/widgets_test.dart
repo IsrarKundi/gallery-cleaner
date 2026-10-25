@@ -57,7 +57,11 @@ void main() {
     },
   );
 
-  testWidgets('SecondaryButton keeps a 48dp hit area around a 40dp button', (
+  // Phase 3B: the button itself is 48dp tall. The old pattern
+  // (a 40dp button centred in a 48dp box) was proven NOT to give
+  // a 48dp tap target — taps at the box's top edge missed — so
+  // the old "40 inside 48" assertion is replaced by this one.
+  testWidgets('SecondaryButton is itself 48dp tall', (
     WidgetTester tester,
   ) async {
     await pumpKit(tester, SecondaryButton(label: 'Keep', onPressed: () {}));
@@ -72,7 +76,7 @@ void main() {
       find.byWidgetPredicate(
         (Widget widget) => widget is SizedBox && widget.height == 40,
       ),
-      findsOneWidget,
+      findsNothing,
     );
   });
 

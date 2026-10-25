@@ -83,6 +83,16 @@ class _Media implements MediaService {
   Future<Result<Uint8List>> getThumbnail(String assetId, int size) async {
     return Success<Uint8List>(_png);
   }
+
+  @override
+  Future<Result<void>> presentLimitedSelection() async {
+    return const Success<void>(null);
+  }
+
+  @override
+  Future<Result<void>> openAppSettings() async {
+    return const Success<void>(null);
+  }
 }
 
 class _Local implements LocalService {

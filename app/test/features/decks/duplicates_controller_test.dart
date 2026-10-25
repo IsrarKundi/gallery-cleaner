@@ -42,6 +42,16 @@ PhotoAnalysis _analysis(String id, int hash, double blur) {
 }
 
 class _Media implements MediaService {
+  @override
+  Future<Result<void>> presentLimitedSelection() async {
+    return const Success<void>(null);
+  }
+
+  @override
+  Future<Result<void>> openAppSettings() async {
+    return const Success<void>(null);
+  }
+
   int analysisThumbnailCalls = 0;
 
   @override
@@ -288,6 +298,16 @@ void main() {
 }
 
 class _DeniedMedia implements MediaService {
+  @override
+  Future<Result<void>> presentLimitedSelection() async {
+    return const Success<void>(null);
+  }
+
+  @override
+  Future<Result<void>> openAppSettings() async {
+    return const Success<void>(null);
+  }
+
   @override
   Future<Result<MediaPermission>> requestPermission() async {
     return const Success<MediaPermission>(MediaPermission.denied);

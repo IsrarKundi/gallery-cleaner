@@ -67,58 +67,75 @@ class ReviewGridTile extends StatelessWidget {
         child: image,
       );
     }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(context.sizes.radiusMd),
-      child: InkWell(
-        onTap: blurred ? (onReveal ?? onTap) : onTap,
-        child: Stack(
-          fit: StackFit.expand,
-          children: <Widget>[
-            image,
-            if (blurred)
-              Center(
-                child: Container(
-                  padding: EdgeInsets.all(context.sizes.sm),
-                  decoration: BoxDecoration(
-                    color: context.palette.scrim,
-                    borderRadius: BorderRadius.circular(context.sizes.radiusMd),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Icon(
-                        AppIcons.eye,
-                        size: context.sizes.iconMd,
-                        color: context.palette.onScrim,
+    // Phase 3B accessibility (design.md §9): a photo tile with no
+    // text gave TalkBack nothing to announce. The label names the
+    // photo (or "Photo" untitled) and its action; while blurred,
+    // the tap-to-reveal text below is the visible affordance and
+    // the label still describes the tile's action.
+    final String label = asset.title.isEmpty
+        ? AppStrings.tr(AppStrings.a11yReviewTileUntitled)
+        : AppStrings.tr(AppStrings.a11yReviewTile, <String, String>{
+            'name': asset.title,
+          });
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(context.sizes.radiusMd),
+        child: InkWell(
+          onTap: blurred ? (onReveal ?? onTap) : onTap,
+          child: Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              image,
+              if (blurred)
+                Center(
+                  child: Container(
+                    padding: EdgeInsets.all(context.sizes.sm),
+                    decoration: BoxDecoration(
+                      color: context.palette.scrim,
+                      borderRadius: BorderRadius.circular(
+                        context.sizes.radiusMd,
                       ),
-                      SizedBox(height: context.sizes.xs),
-                      Text(
-                        AppStrings.tr(AppStrings.blurTapToReveal),
-                        style: context.textStyles.labelMedium.copyWith(
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Icon(
+                          AppIcons.eye,
+                          size: context.sizes.iconMd,
                           color: context.palette.onScrim,
                         ),
-                      ),
-                    ],
+                        SizedBox(height: context.sizes.xs),
+                        Text(
+                          AppStrings.tr(AppStrings.blurTapToReveal),
+                          style: context.textStyles.labelMedium.copyWith(
+                            color: context.palette.onScrim,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              Positioned(
+                top: context.sizes.xs,
+                right: context.sizes.xs,
+                child: Container(
+                  padding: EdgeInsets.all(context.sizes.xs),
+                  decoration: BoxDecoration(
+                    color: context.palette.error,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    AppIcons.delete,
+                    size: context.sizes.iconSm,
+                    color: context.palette.onPrimary,
                   ),
                 ),
               ),
-            Positioned(
-              top: context.sizes.xs,
-              right: context.sizes.xs,
-              child: Container(
-                padding: EdgeInsets.all(context.sizes.xs),
-                decoration: BoxDecoration(
-                  color: context.palette.error,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  AppIcons.delete,
-                  size: context.sizes.iconSm,
-                  color: context.palette.onPrimary,
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

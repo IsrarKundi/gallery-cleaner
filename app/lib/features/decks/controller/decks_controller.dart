@@ -12,6 +12,16 @@
 // Failure handling: a denied permission shows the denied state; a
 // failed page keeps whatever arrived and flips to error only when
 // nothing arrived at all (partial results beat no results).
+//
+// Phase 3B performance (requirements §7, 50,000+ photos): the hub
+// used to rebuild O(library) structures on every scan page —
+// copying each deck list per asset (`[...assetsFor(id), asset]`),
+// rebuilding the asset-by-id map inside [maybeItems], and summing
+// every deck's bytes inside [totalBytesFor]. On a 50k library with
+// 1,000 pages that is quadratic. Now the scan accumulates deck
+// lists, byte totals, the by-id map and the marked-bytes total
+// incrementally per page, so a page costs O(page) and a hub rebuild
+// costs O(user marks), not O(library).
 
 import 'package:get/get.dart';
 
@@ -29,6 +39,7 @@ import '../../../services/storage/storage_service.dart';
 import '../../../services/trash/trash_entry.dart';
 import '../../deck/model/retention.dart';
 import '../model/decks_status.dart';
+import '../model/maybe_items.dart';
 import '../model/maybe_pile_item.dart';
 import '../model/smart_deck_launch.dart';
 
@@ -67,6 +78,16 @@ class DecksController extends GetxController {
 
   final List<MediaAsset> _allAssets = <MediaAsset>[];
 
+  /// Phase 3B incremental scan state (see the file doc): the by-id
+  /// map, per-deck byte totals, delete-marked ids (from retention,
+  /// loaded before the scan) and the marked-bytes total, all built
+  /// per page instead of recomputed per rebuild.
+  final Map<String, MediaAsset> _assetsById = <String, MediaAsset>{};
+  final Map<SmartDeckId, int> _deckBytes = <SmartDeckId, int>{};
+  final Set<String> _deleteMarkedIds = <String>{};
+  double _markedBytes = 0;
+  bool _markedAccumulated = false;
+
   /// 0-1 progress, or null when the library total is unknown.
   double? get progress {
     final int? total = estimatedTotal.value;
@@ -83,6 +104,12 @@ class DecksController extends GetxController {
   }
 
   int totalBytesFor(SmartDeckId id) {
+    // Phase 3B: the scan keeps this total incrementally; the fold
+    // is only a fallback for deck lists set without a scan (tests).
+    final int? cached = _deckBytes[id];
+    if (cached != null) {
+      return cached;
+    }
     return assetsFor(id).fold<int>(0, (int sum, MediaAsset a) {
       return sum + a.sizeBytes;
     });
@@ -122,15 +149,17 @@ class DecksController extends GetxController {
 
   /// MB marked delete across all saved sessions, for assets still
   /// in the scanned library ("to be freed", never freed).
+  /// Phase 3B: accumulated per scan page (see [_scan]); the loop
+  /// below is only the pre-scan fallback, when nothing is scanned.
   double get markedMb {
-    final Map<String, MediaAsset> byId = <String, MediaAsset>{
-      for (final MediaAsset asset in _allAssets) asset.id: asset,
-    };
+    if (_markedAccumulated) {
+      return _markedBytes / 1048576;
+    }
     int bytes = 0;
     for (final DeckSession session in sessions) {
       for (final MapEntry<String, DeckMark> mark in session.marks.entries) {
         if (mark.value == DeckMark.delete) {
-          bytes += byId[mark.key]?.sizeBytes ?? 0;
+          bytes += _assetsById[mark.key]?.sizeBytes ?? 0;
         }
       }
     }
@@ -158,29 +187,9 @@ class DecksController extends GetxController {
     if (scannedCount == 0 && _allAssets.isEmpty) {
       return <MaybePileItem>[];
     }
-    final Map<String, MediaAsset> byId = <String, MediaAsset>{
-      for (final MediaAsset asset in _allAssets) asset.id: asset,
-    };
-    final List<MaybePileItem> items = <MaybePileItem>[];
-    for (final DeckSession session in allSessions) {
-      for (final MapEntry<String, DeckMark> mark in session.marks.entries) {
-        if (mark.value != DeckMark.maybe) {
-          continue;
-        }
-        final MediaAsset? asset = byId[mark.key];
-        if (asset == null) {
-          continue;
-        }
-        items.add(
-          MaybePileItem(
-            asset: asset,
-            sessionKey: session.filterKey,
-            snoozeUntil: allSnoozes[mark.key],
-          ),
-        );
-      }
-    }
-    return items;
+    // Phase 3B: _assetsById is built per scan page, so this getter
+    // costs O(user Maybe marks), not O(library), per rebuild.
+    return maybeItemsFor(allSessions, allSnoozes, _assetsById);
   }
 
   /// List-level decks (bursts, duplicates) are ready only when the
@@ -205,6 +214,16 @@ class DecksController extends GetxController {
   Future<void> loadRetention() async {
     final Result<List<DeckSession>> sessionsResult = await local.listSessions();
     sessionsResult.fold(onSuccess: sessions.assignAll, onFailure: (_) {});
+    // Phase 3B: the delete-marked id set for incremental marked
+    // bytes during the scan (sessions load before the scan runs).
+    _deleteMarkedIds.clear();
+    for (final DeckSession session in sessions) {
+      for (final MapEntry<String, DeckMark> mark in session.marks.entries) {
+        if (mark.value == DeckMark.delete) {
+          _deleteMarkedIds.add(mark.key);
+        }
+      }
+    }
     final Result<Map<String, DateTime>> snoozesResult = await local
         .loadSnoozes();
     snoozesResult.fold(onSuccess: snoozes.assignAll, onFailure: (_) {});
@@ -282,6 +301,10 @@ class DecksController extends GetxController {
 
   Future<void> retry() async {
     _allAssets.clear();
+    _assetsById.clear();
+    _deckBytes.clear();
+    _markedBytes = 0;
+    _markedAccumulated = false;
     deckAssets.clear();
     analyses.clear();
     scanned.value = 0;
@@ -290,16 +313,35 @@ class DecksController extends GetxController {
     await init();
   }
 
+  /// Phase 3B: opens this app's system Settings page (the denied
+  /// state's second action — a permanently denied grant makes the
+  /// system prompt a no-op). Re-check on return via retry.
+  Future<void> openPermissionSettings() async {
+    await media.openAppSettings();
+  }
+
   Future<void> _scan() async {
     final DateTime now = DateTime.now();
+    _markedAccumulated = true;
+    // Phase 3B: deck lists accumulate here per page (one assignment
+    // per deck per page, not one list copy per asset per deck).
+    final Map<SmartDeckId, List<MediaAsset>> accumulated =
+        <SmartDeckId, List<MediaAsset>>{};
     final LibraryScanner scanner = LibraryScanner(media: media, local: local);
     final LibraryScan result = await scanner.scan(
       onPage: (List<MediaAsset> page, Map<String, PhotoAnalysis> found) {
         _allAssets.addAll(page);
         analyses.assignAll(found);
         for (final MediaAsset asset in page) {
+          _assetsById[asset.id] = asset;
+          if (_deleteMarkedIds.contains(asset.id)) {
+            _markedBytes += asset.sizeBytes;
+          }
           for (final SmartDeckId id in decksForAsset(asset, found, now)) {
-            deckAssets[id] = <MediaAsset>[...assetsFor(id), asset];
+            final List<MediaAsset> list = accumulated[id] ??= <MediaAsset>[];
+            list.add(asset);
+            _deckBytes[id] = (_deckBytes[id] ?? 0) + asset.sizeBytes;
+            deckAssets[id] = list;
           }
         }
         scanned.value = _allAssets.length;
@@ -312,23 +354,34 @@ class DecksController extends GetxController {
     scanComplete.value = true;
     // List-level decks resolve only over the full list.
     final Set<String> burstIds = burstAssetIds(_allAssets);
-    deckAssets[SmartDeckId.bursts] = _allAssets
-        .where((MediaAsset a) => burstIds.contains(a.id))
-        .toList();
+    _setDeck(
+      SmartDeckId.bursts,
+      _allAssets.where((MediaAsset a) => burstIds.contains(a.id)).toList(),
+    );
     final List<DuplicateGroup> groups = groupAssets(
       assets: _allAssets,
       analyses: result.analyses,
       threshold: duplicatesThreshold,
     );
-    deckAssets[SmartDeckId.duplicates] = <MediaAsset>[
+    _setDeck(SmartDeckId.duplicates, <MediaAsset>[
       for (final DuplicateGroup group in groups) ...group.assets,
-    ];
+    ]);
     if (result.pageFailed && _allAssets.isEmpty) {
       status.value = DecksStatus.error;
       errorKey.value = AppStrings.errorMediaLoad;
       return;
     }
     status.value = DecksStatus.ready;
+  }
+
+  /// Assigns a fully computed deck list with its byte total
+  /// (list-level decks: bursts, duplicates — see [_scan]).
+  void _setDeck(SmartDeckId id, List<MediaAsset> assets) {
+    deckAssets[id] = assets;
+    _deckBytes[id] = assets.fold<int>(
+      0,
+      (int sum, MediaAsset asset) => sum + asset.sizeBytes,
+    );
   }
 
   /// Opens a deck: duplicates go to their own screen; every other

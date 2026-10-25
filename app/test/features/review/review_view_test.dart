@@ -41,6 +41,16 @@ MediaAsset _asset(String id, int size) {
 
 class _Media implements MediaService {
   @override
+  Future<Result<void>> presentLimitedSelection() async {
+    return const Success<void>(null);
+  }
+
+  @override
+  Future<Result<void>> openAppSettings() async {
+    return const Success<void>(null);
+  }
+
+  @override
   Future<Result<MediaPermission>> requestPermission() async {
     return const Success<MediaPermission>(MediaPermission.grantedFull);
   }
