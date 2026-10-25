@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klara/services/media/media_asset.dart';
-import 'package:klara/services/media/media_service_impl.dart';
+import 'package:klara/services/media/media_mappings.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 void main() {
