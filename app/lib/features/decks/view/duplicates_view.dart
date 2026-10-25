@@ -134,8 +134,15 @@ class _ReadyBody extends StatelessWidget {
                       DuplicatesController.sliderMax -
                       DuplicatesController.sliderMin,
                   label: controller.threshold.value.toString(),
+                  // Phase 1.1: drag previews the value, release
+                  // regroups once — regrouping on every tick froze
+                  // the slider on large libraries.
                   onChanged: (double value) =>
-                      controller.setThreshold(value.round()),
+                      controller.previewThreshold(value.round()),
+                  onChangeEnd: (double value) {
+                    controller.previewThreshold(value.round());
+                    controller.commitThreshold();
+                  },
                 ),
                 Text(
                   AppStrings.tr(AppStrings.duplicatesSliderHint),

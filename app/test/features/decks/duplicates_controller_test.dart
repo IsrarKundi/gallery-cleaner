@@ -53,6 +53,7 @@ class _Media implements MediaService {
   }
 
   int analysisThumbnailCalls = 0;
+  int tileThumbnailCalls = 0;
 
   @override
   Future<Result<MediaPermission>> requestPermission() async {
@@ -90,6 +91,9 @@ class _Media implements MediaService {
     // 128px calls proves regrouping never re-downloads for analysis.
     if (size == 128) {
       analysisThumbnailCalls++;
+    }
+    if (size == 256) {
+      tileThumbnailCalls++;
     }
     return Success<Uint8List>(Uint8List.fromList(<int>[1, 2, 3]));
   }
@@ -253,6 +257,69 @@ void main() {
       controller.setThreshold(0);
       expect(controller.groups.first.assets.length, 2);
       expect(media.analysisThumbnailCalls, 0);
+    });
+
+    test(
+      'slider sweep previews without regrouping; release regroups once',
+      () async {
+        final _Media media = _Media();
+        final DuplicatesController controller = DuplicatesController(
+          media: media,
+          local: _Local(),
+        );
+        await controller.init();
+        // Let the initial tile thumbnails land.
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+        expect(controller.groups.first.assets.length, 2);
+        final int afterInit = media.tileThumbnailCalls;
+
+        // A drag across values previews only: the displayed value
+        // moves, but groups and thumbnail traffic do not.
+        controller.previewThreshold(6);
+        controller.previewThreshold(0);
+        controller.previewThreshold(6);
+        expect(controller.threshold.value, 6);
+        expect(controller.groups.first.assets.length, 2);
+        expect(media.tileThumbnailCalls, afterInit);
+
+        // Release regroups exactly once: 'c' (distance 6) joins, and
+        // its tile is the only new fetch.
+        controller.commitThreshold();
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+        expect(controller.groups.first.assets.length, 3);
+        expect(media.tileThumbnailCalls, afterInit + 1);
+
+        // The released groups match a direct set to the same value.
+        final DuplicatesController direct = DuplicatesController(
+          media: _Media(),
+          local: _Local(),
+        );
+        await direct.init();
+        direct.setThreshold(6);
+        expect(
+          controller.groups.first.assets.map((MediaAsset a) => a.id).toList(),
+          direct.groups.first.assets.map((MediaAsset a) => a.id).toList(),
+        );
+
+        // A second release with no change regroups nothing.
+        controller.commitThreshold();
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+        expect(media.tileThumbnailCalls, afterInit + 1);
+      },
+    );
+
+    test('preview clamps to 0-10 without regrouping', () async {
+      final DuplicatesController controller = DuplicatesController(
+        media: _Media(),
+        local: _Local(),
+      );
+      await controller.init();
+      controller.previewThreshold(99);
+      expect(controller.threshold.value, 10);
+      controller.previewThreshold(-5);
+      expect(controller.threshold.value, 0);
+      // Groups still reflect the initial threshold 5.
+      expect(controller.groups.first.assets.length, 2);
     });
 
     test('slider clamps to 0-10', () async {

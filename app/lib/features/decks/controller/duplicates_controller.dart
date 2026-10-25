@@ -65,6 +65,13 @@ class DuplicatesController extends GetxController {
   List<MediaAsset> _assets = <MediaAsset>[];
   Map<String, PhotoAnalysis> _analyses = <String, PhotoAnalysis>{};
 
+  /// Threshold the current groups were computed at. The slider's live
+  /// drag only previews ([previewThreshold]); [commitThreshold]
+  /// regroups once per release, and only when the previewed value
+  /// differs from this one — a drag that returns to its start value
+  /// costs no regroup at all.
+  int _groupedThreshold = defaultThreshold;
+
   @override
   void onInit() {
     super.onInit();
@@ -120,6 +127,23 @@ class DuplicatesController extends GetxController {
     }
     threshold.value = clamped;
     _regroup();
+  }
+
+  /// Phase 1.1: live slider drag — updates the displayed value only,
+  /// never regroups. The view calls this from `onChanged` so the
+  /// thumb and label follow the finger; the expensive regroup waits
+  /// for [commitThreshold] on release.
+  void previewThreshold(int value) {
+    threshold.value = value.clamp(sliderMin, sliderMax);
+  }
+
+  /// Phase 1.1: slider release — exactly one regroup per release,
+  /// and none when the drag ended where it started. The view calls
+  /// this from `onChangeEnd`.
+  void commitThreshold() {
+    if (threshold.value != _groupedThreshold) {
+      _regroup();
+    }
   }
 
   /// User picks another keeper in [groupIndex]. Only member ids are
@@ -212,6 +236,7 @@ class DuplicatesController extends GetxController {
   }
 
   void _regroup() {
+    _groupedThreshold = threshold.value;
     groups.assignAll(
       groupAssets(
         assets: _assets,
