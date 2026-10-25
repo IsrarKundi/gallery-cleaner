@@ -48,11 +48,14 @@ abstract class ScanRepository {
   /// Attaches page/progress callbacks. Past pages (of a running or
   /// memoised scan) replay immediately, in order, then live pages
   /// follow. The subscriber must [ScanSubscription.cancel] in
-  /// onClose.
+  /// onClose. [onDegraded] fires when a live run's analysis falls
+  /// back to the UI thread (solutions 5.1); it never fires for
+  /// memoised replays, which re-analyse nothing.
   ScanSubscription subscribe({
     void Function(List<MediaAsset> page, Map<String, PhotoAnalysis> fresh)?
     onPage,
     void Function(int scanned, int? estimatedTotal)? onProgress,
+    void Function()? onDegraded,
   });
 
   /// Ensures a scan is running and returns its result: the running

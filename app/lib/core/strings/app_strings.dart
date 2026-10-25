@@ -132,6 +132,7 @@ class AppStrings {
   static const String scanAgain = 'scanAgain';
   static const String clearFilters = 'clearFilters';
   static const String scanningPhotos = 'scanningPhotos';
+  static const String scanSlower = 'scanSlower';
   static const String resumeSession = 'resumeSession';
 
   // Deck filters and finished state (requirements §7, Phase 1 only:
@@ -516,6 +517,7 @@ class AppStrings {
     scanAgain: 'Scan again',
     clearFilters: 'Clear filters',
     scanningPhotos: 'Scanning photos…',
+    scanSlower: 'Scanning is slower than usual.',
     resumeSession: 'Resume where you left off',
     tutorialTitle: 'How swiping works',
     tutorialKeep: 'Swipe left to keep a photo.',

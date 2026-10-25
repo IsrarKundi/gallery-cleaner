@@ -18,6 +18,7 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_skeleton.dart';
 import '../../../core/widgets/empty_view.dart';
 import '../../../core/widgets/error_view.dart';
+import '../../../core/widgets/info_banner.dart';
 import '../../../services/detection/smart_decks.dart';
 import '../../../services/media/media_asset.dart';
 import '../controller/decks_controller.dart';
@@ -156,6 +157,11 @@ class _HubBody extends StatelessWidget {
               child: const HeroCardSkeleton(),
             ),
           ],
+          // Phase 5.1: visible "scanning slower" state, only while
+          // the degraded scan is still running. The flag resets on
+          // the next scan, so this never lingers after it ends.
+          if (scanning && controller.scanDegraded.value)
+            InfoBanner(message: AppStrings.tr(AppStrings.scanSlower)),
           SizedBox(height: context.sizes.md),
           // Timeline Section
           TimelineSection(

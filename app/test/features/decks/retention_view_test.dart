@@ -16,6 +16,8 @@ import 'package:klara/features/deck/model/retention.dart';
 import 'package:klara/features/deck/widgets/session_summary_card.dart';
 import 'package:klara/features/deck/widgets/swipe_card.dart';
 import 'package:klara/features/decks/binding/decks_binding.dart';
+import 'package:klara/features/decks/controller/decks_controller.dart';
+import 'package:klara/features/decks/model/decks_status.dart';
 import 'package:klara/features/decks/controller/smart_deck_controller.dart';
 import 'package:klara/features/decks/model/maybe_pile_item.dart';
 import 'package:klara/features/decks/model/smart_deck_launch.dart';
@@ -91,7 +93,11 @@ class _Media implements MediaService {
   }
 
   @override
-  Future<Result<Uint8List>> getThumbnail(String assetId, int size, {int quality = 85}) async {
+  Future<Result<Uint8List>> getThumbnail(
+    String assetId,
+    int size, {
+    int quality = 85,
+  }) async {
     return Success<Uint8List>(_png());
   }
 
@@ -303,6 +309,21 @@ void main() {
           ],
         ),
       );
+      // Phase 5.1: the hub scan analyses on a worker isolate, and
+      // isolate replies are real async events that starve under
+      // testWidgets' fake-async pumps — so wait for the scan in
+      // real async (bounded; a broken scan fails the expects
+      // below instead of hanging).
+      await tester.runAsync(() async {
+        final DecksController controller = Get.find<DecksController>();
+        int waits = 0;
+        while ((controller.status.value == DecksStatus.loading ||
+                controller.status.value == DecksStatus.scanning) &&
+            waits < 500) {
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          waits++;
+        }
+      });
       await tester.pumpAndSettle();
       final Finder metricPill = find.byKey(const Key('decks_metric_pill'));
       if (metricPill.evaluate().isNotEmpty) {

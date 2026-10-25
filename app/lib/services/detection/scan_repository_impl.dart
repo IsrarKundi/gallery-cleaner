@@ -57,11 +57,17 @@ class ScanCancelToken {
 }
 
 class _Subscriber {
-  _Subscriber({this.onPage, this.onProgress});
+  _Subscriber({this.onPage, this.onProgress, this.onDegraded});
 
   final void Function(List<MediaAsset> page, Map<String, PhotoAnalysis> fresh)?
   onPage;
   final void Function(int scanned, int? estimatedTotal)? onProgress;
+
+  /// Fired when the running scan's analysis falls back to the UI
+  /// thread (solutions 5.1). Never fired for memoised replays:
+  /// a replay re-analyses nothing, so a historical degraded flag
+  /// must not show a "slower" state for an instant replay.
+  final void Function()? onDegraded;
 }
 
 class _ScanSubscription implements ScanSubscription {
@@ -99,6 +105,11 @@ class _RunningScan {
   int scanned = 0;
   int? estimatedTotal;
   bool pageFailed = false;
+
+  /// True once this run's analysis has fallen back to the UI
+  /// thread (solutions 5.1). Late subscribers to a degraded live
+  /// run get the callback immediately on subscribe.
+  bool degraded = false;
 }
 
 class ScanRepositoryImpl implements ScanRepository {
@@ -139,10 +150,12 @@ class ScanRepositoryImpl implements ScanRepository {
     void Function(List<MediaAsset> page, Map<String, PhotoAnalysis> fresh)?
     onPage,
     void Function(int scanned, int? estimatedTotal)? onProgress,
+    void Function()? onDegraded,
   }) {
     final _Subscriber subscriber = _Subscriber(
       onPage: onPage,
       onProgress: onProgress,
+      onDegraded: onDegraded,
     );
     _subscribers.add(subscriber);
     // Replay past pages first (running or memoised), then live
@@ -153,6 +166,9 @@ class ScanRepositoryImpl implements ScanRepository {
         subscriber.onPage?.call(running.pages[i], running.pageFresh[i]);
       }
       subscriber.onProgress?.call(running.scanned, running.estimatedTotal);
+      if (running.degraded) {
+        subscriber.onDegraded?.call();
+      }
     } else if (_completed != null) {
       for (int i = 0; i < _completedPages.length; i++) {
         subscriber.onPage?.call(_completedPages[i], _completedFresh[i]);
@@ -253,6 +269,13 @@ class ScanRepositoryImpl implements ScanRepository {
     final LibraryScan result = await scanner.scan(
       isCancelled: () => token.isCancelled,
       waitIfPaused: () => _waitIfPaused(token),
+      onDegraded: () {
+        run.degraded = true;
+        final List<_Subscriber> listeners = List<_Subscriber>.of(_subscribers);
+        for (final _Subscriber subscriber in listeners) {
+          subscriber.onDegraded?.call();
+        }
+      },
       // NOTE: onPage below carries fresh analyses only (4.2), so
       // the full map (cached + fresh) is merged from the final
       // result after the scan — see below. Callers reading the
@@ -301,6 +324,7 @@ class ScanRepositoryImpl implements ScanRepository {
       scanned: run.scanned,
       pageFailed: run.pageFailed,
       cancelled: result.cancelled,
+      degraded: result.degraded,
     );
     if (!result.cancelled && !run.pageFailed && !_dirty) {
       _completed = outcome;

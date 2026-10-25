@@ -21,12 +21,12 @@
 // [LibraryScan.cancelled]. A paused scan resumes from the next
 // page, never restarts.
 //
-// Performance limitation, stated honestly (50,000+ tuning is
-// Phase 3): the scan holds the full asset list in memory, fetches
-// one thumbnail per uncached image, and decodes each on the UI
-// isolate. On a very large library the first scan takes a while
-// and uses memory proportional to the library; later scans are
-// cheap because the cache covers everything already analysed.
+// Performance limitation, stated honestly: the scan holds the
+// full asset list in memory, so memory stays proportional to the
+// library. Decode/scoring no longer runs on the UI isolate
+// (solutions 5.1: one worker batch per page, bounded-parallel
+// fetch); later scans are cheap because the cache covers
+// everything already analysed.
 // A single failed page stops the scan with an error (the hub
 // keeps whatever pages arrived); a single failed thumbnail only
 // skips analysis for that asset, never the page.
@@ -35,12 +35,14 @@
 // whole-library album is normally the largest). When albums fail,
 // progress reports the scanned count with no total.
 
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import '../../core/utils/result.dart';
 import '../local/local_service.dart';
 import '../media/media_asset.dart';
 import '../media/media_service.dart';
+import 'analysis_worker.dart';
 import 'photo_analysis.dart';
 import 'thumbnail_analysis.dart';
 
@@ -52,6 +54,7 @@ class LibraryScan {
     required this.scanned,
     required this.pageFailed,
     this.cancelled = false,
+    this.degraded = false,
   });
 
   /// Every asset seen, in scan order (newest first per page).
@@ -70,15 +73,33 @@ class LibraryScan {
   /// holds only fully delivered pages, and no checkpoint save was
   /// made for the partial page.
   final bool cancelled;
+
+  /// True when any page's analysis fell back to the UI thread
+  /// because the worker isolate could not spawn (solutions 5.1).
+  /// The scan still completes with identical results; it was only
+  /// slower, and the hub shows that state while it lasts.
+  final bool degraded;
 }
 
 class LibraryScanner {
-  LibraryScanner({required this.media, required this.local});
+  LibraryScanner({
+    required this.media,
+    required this.local,
+    this.analyzeBatch = analyzeBatchOnIsolate,
+  });
 
   final MediaService media;
   final LocalService local;
 
+  /// Batch analysis runner, injectable so tests can prove the
+  /// degraded fallback with a throwing runner. Production uses
+  /// the worker isolate ([analyzeBatchOnIsolate]).
+  final AnalyzeBatchRunner analyzeBatch;
+
   static const int pageSize = 50;
+
+  /// Thumbnail fetches in flight at once per page (solutions 5.1).
+  static const int fetchConcurrency = 8;
 
   /// Pages between analysis-cache checkpoints (solutions 4.2).
   static const int checkpointEveryPages = 20;
@@ -87,16 +108,20 @@ class LibraryScanner {
   /// and ONLY that page's fresh analyses (never the cumulative
   /// map); [onProgress] fires per page with (scanned,
   /// estimatedTotalOrNull). [isCancelled] is checked per page and
-  /// per asset; [waitIfPaused] is awaited per page and returns
-  /// false when cancelled while paused — either way a cancelled
-  /// scan returns a [LibraryScan.cancelled] result with no
-  /// checkpoint save and no onPage for the partial page.
+  /// between fetch chunks; [waitIfPaused] is awaited per page and
+  /// returns false when cancelled while paused — either way a
+  /// cancelled scan returns a [LibraryScan.cancelled] result with
+  /// no checkpoint save and no onPage for the partial page.
+  /// [onDegraded] fires the moment the worker isolate fails and
+  /// the scan falls back to UI-thread analysis (solutions 5.1);
+  /// the final result also carries [LibraryScan.degraded].
   Future<LibraryScan> scan({
     void Function(List<MediaAsset> page, Map<String, PhotoAnalysis> fresh)?
     onPage,
     void Function(int scanned, int? estimatedTotal)? onProgress,
     bool Function()? isCancelled,
     Future<bool> Function()? waitIfPaused,
+    void Function()? onDegraded,
     int checkpointEveryPages = checkpointEveryPages,
   }) async {
     bool cancelled() => isCancelled?.call() ?? false;
@@ -120,6 +145,11 @@ class LibraryScanner {
       onFailure: (_) {},
     );
 
+    // Phase 5.1: set once, the first time a page's analysis falls
+    // back to the UI thread. A cancelled scan still reports it:
+    // the fallback already happened, even if the run stops early.
+    bool degraded = false;
+
     LibraryScan cancelledResult(List<MediaAsset> done) {
       return LibraryScan(
         assets: done,
@@ -127,6 +157,7 @@ class LibraryScanner {
         scanned: done.length,
         pageFailed: false,
         cancelled: true,
+        degraded: degraded,
       );
     }
 
@@ -154,38 +185,60 @@ class LibraryScanner {
         break;
       }
       final Map<String, PhotoAnalysis> fresh = <String, PhotoAnalysis>{};
-      for (final MediaAsset asset in pageAssets) {
+      // Phase 5.1: thumbnails still arrive on the main isolate
+      // (platform channels live there), but every decode and
+      // score runs in ONE worker batch per page — never per
+      // photo, and never on the UI thread when the worker spawns.
+      final List<MediaAsset> toAnalyse = pageAssets
+          .where(
+            (MediaAsset asset) =>
+                asset.type == MediaAssetType.image &&
+                !analyses.containsKey(asset.id),
+          )
+          .toList();
+      if (toAnalyse.isNotEmpty) {
         if (cancelled()) {
           // Partial page: no checkpoint, no onPage, no stale write.
           return cancelledResult(all);
         }
-        if (asset.type != MediaAssetType.image) {
-          continue;
-        }
-        if (analyses.containsKey(asset.id)) {
-          continue;
-        }
-        // Phase 1.5: analysis keeps q100 — cached analyses were
-        // hashed from q100 thumbnails, and display quality (q85)
-        // must not silently mix hash versions (issues file F-12).
-        final Result<Uint8List> thumb = await media.getThumbnail(
-          asset.id,
-          analysisThumbnailSize,
-          quality: 100,
+        final List<Uint8List?> fetched = await _fetchThumbnails(
+          toAnalyse,
+          cancelled,
         );
-        final PhotoAnalysis? analysis = thumb.fold(
-          onSuccess: (Uint8List bytes) => analyzeThumbnail(
-            assetId: asset.id,
-            bytes: bytes,
-            width: asset.width,
-            height: asset.height,
-          ),
-          onFailure: (_) => null,
-        );
-        if (analysis != null) {
-          analyses[asset.id] = analysis;
-          fresh[asset.id] = analysis;
-          unsavedFresh.add(analysis);
+        if (cancelled()) {
+          return cancelledResult(all);
+        }
+        final List<MediaAsset> inputAssets = <MediaAsset>[];
+        final List<Uint8List> inputBytes = <Uint8List>[];
+        for (int i = 0; i < toAnalyse.length && i < fetched.length; i++) {
+          final Uint8List? bytes = fetched[i];
+          if (bytes == null) {
+            continue;
+          }
+          inputAssets.add(toAnalyse[i]);
+          inputBytes.add(bytes);
+        }
+        List<PhotoAnalysis?> results;
+        try {
+          results = await analyzeBatch(_inputsFor(inputAssets, inputBytes));
+        } catch (_) {
+          // Worker isolate failed to spawn (or died): degrade to
+          // the identical batch on the UI thread and keep
+          // scanning — never a hang. The slower state is reported
+          // once, on the first fallback page of this scan.
+          if (!degraded) {
+            degraded = true;
+            onDegraded?.call();
+          }
+          results = analyzeBatchSync(_inputsFor(inputAssets, inputBytes));
+        }
+        for (int i = 0; i < inputAssets.length && i < results.length; i++) {
+          final PhotoAnalysis? analysis = results[i];
+          if (analysis != null) {
+            analyses[analysis.assetId] = analysis;
+            fresh[analysis.assetId] = analysis;
+            unsavedFresh.add(analysis);
+          }
         }
       }
       if (cancelled()) {
@@ -218,6 +271,69 @@ class LibraryScanner {
       analyses: analyses,
       scanned: all.length,
       pageFailed: pageFailed,
+      degraded: degraded,
     );
+  }
+
+  /// Fetches thumbnails for [assets] in bounded-parallel chunks of
+  /// [fetchConcurrency], in order. A failed fetch yields null for
+  /// that asset (skipped, never a failed page). Cancellation is
+  /// checked between chunks; the caller re-checks afterwards, so
+  /// a short return here is never applied to a live page.
+  Future<List<Uint8List?>> _fetchThumbnails(
+    List<MediaAsset> assets,
+    bool Function() cancelled,
+  ) async {
+    final List<Uint8List?> out = <Uint8List?>[];
+    for (int start = 0; start < assets.length; start += fetchConcurrency) {
+      if (cancelled()) {
+        break;
+      }
+      final int end = (start + fetchConcurrency) < assets.length
+          ? start + fetchConcurrency
+          : assets.length;
+      final List<Future<Result<Uint8List>>> futures =
+          <Future<Result<Uint8List>>>[];
+      for (int i = start; i < end; i++) {
+        // Phase 1.5: analysis keeps q100 — cached analyses were
+        // hashed from q100 thumbnails, and display quality (q85)
+        // must not silently mix hash versions (issues file F-12).
+        futures.add(
+          media.getThumbnail(assets[i].id, analysisThumbnailSize, quality: 100),
+        );
+      }
+      final List<Result<Uint8List>> results = await Future.wait(futures);
+      for (final Result<Uint8List> result in results) {
+        out.add(
+          result.fold(
+            onSuccess: (Uint8List bytes) => bytes,
+            onFailure: (_) => null,
+          ),
+        );
+      }
+    }
+    return out;
+  }
+
+  /// Wraps parallel [assets]/[bytes] into transferable batch
+  /// inputs. Built fresh for each attempt: a transferred input
+  /// may be materialized exactly once, so the degraded fallback
+  /// rebuilds its own inputs from the same raw bytes.
+  List<AnalysisBatchInput> _inputsFor(
+    List<MediaAsset> assets,
+    List<Uint8List> bytes,
+  ) {
+    final List<AnalysisBatchInput> inputs = <AnalysisBatchInput>[];
+    for (int i = 0; i < assets.length; i++) {
+      inputs.add(
+        AnalysisBatchInput(
+          assetId: assets[i].id,
+          bytes: TransferableTypedData.fromList(<Uint8List>[bytes[i]]),
+          width: assets[i].width,
+          height: assets[i].height,
+        ),
+      );
+    }
+    return inputs;
   }
 }

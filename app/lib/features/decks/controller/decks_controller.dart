@@ -106,6 +106,13 @@ class DecksController extends GetxController {
   final RxInt scanned = 0.obs;
   final Rx<int?> estimatedTotal = Rx<int?>(null);
   final RxBool scanComplete = false.obs;
+
+  /// Phase 5.1: true while the running scan's analysis has fallen
+  /// back to the UI thread (worker isolate unavailable). The view
+  /// shows a "slower" line while scanning; the flag resets on the
+  /// next scan so a historical degraded run never paints a fresh
+  /// scan as slow.
+  final RxBool scanDegraded = false.obs;
   final RxMap<SmartDeckId, List<MediaAsset>> deckAssets =
       <SmartDeckId, List<MediaAsset>>{}.obs;
   final RxMap<String, PhotoAnalysis> analyses = <String, PhotoAnalysis>{}.obs;
@@ -479,6 +486,7 @@ class DecksController extends GetxController {
     scanned.value = 0;
     estimatedTotal.value = null;
     scanComplete.value = false;
+    scanDegraded.value = false;
     // Phase 4.3: reset the incremental timeline state with it.
     _timeline.clear();
 
@@ -519,6 +527,9 @@ class DecksController extends GetxController {
       onProgress: (int count, int? total) {
         scanned.value = count;
         estimatedTotal.value = total;
+      },
+      onDegraded: () {
+        scanDegraded.value = true;
       },
     );
     final LibraryScan result = await _scans.start();
