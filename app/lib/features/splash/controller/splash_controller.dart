@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
 import '../../../core/constants/app_sizes.dart';
+import '../../../core/utils/perf_log.dart';
 
 /// Splash completion contract (design.md §13).
 ///
@@ -73,6 +74,8 @@ class SplashController extends GetxController {
       return;
     }
     _completed = true;
+    // TEMPORARY Phase 0 baseline instrumentation (remove before release).
+    PerfLog.mark('splashComplete');
     cancelHoldTimer();
     onComplete?.call();
   }
