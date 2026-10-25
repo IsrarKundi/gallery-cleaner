@@ -201,4 +201,51 @@ void main() {
       );
     });
   });
+
+  group('LocalServiceImpl directory resolution (Phase 1.4)', () {
+    test(
+      'documents directory resolves exactly once across operations',
+      () async {
+        int resolutions = 0;
+        final LocalServiceImpl counting = LocalServiceImpl(
+          directoryResolver: () async {
+            resolutions++;
+            return temp;
+          },
+        );
+        // Pre-fix this paid one platform-channel round-trip per call
+        // (saveSession alone resolves twice: read + write).
+        await counting.loadSettings();
+        await counting.saveSession(
+          const DeckSession(
+            filterKey: 'all',
+            currentIndex: 0,
+            marks: <String, DeckMark>{},
+            favouriteIds: <String>{},
+          ),
+        );
+        await counting.loadSession('all');
+        await counting.loadTrashEntries();
+        await counting.loadAnalyses();
+        await counting.isTutorialSeen();
+        expect(resolutions, 1);
+      },
+    );
+
+    test('concurrent first calls share one resolution', () async {
+      int resolutions = 0;
+      final LocalServiceImpl counting = LocalServiceImpl(
+        directoryResolver: () async {
+          resolutions++;
+          return temp;
+        },
+      );
+      await Future.wait<void>(<Future<void>>[
+        counting.loadSettings().then((_) {}),
+        counting.loadTrashEntries().then((_) {}),
+        counting.loadAnalyses().then((_) {}),
+      ]);
+      expect(resolutions, 1);
+    });
+  });
 }

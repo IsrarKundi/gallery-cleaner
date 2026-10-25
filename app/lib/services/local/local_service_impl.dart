@@ -12,6 +12,7 @@
 // channels. Production uses path_provider's documents directory.
 // This is the ONLY local file importing path_provider.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -33,6 +34,12 @@ class LocalServiceImpl implements LocalService {
 
   final DirectoryResolver _directoryResolver;
 
+  /// Phase 1.4: the resolved documents directory, cached after the
+  /// first resolution. Every local operation previously paid its own
+  /// platform-channel round-trip (issues file F-06); concurrent first
+  /// callers share the single in-flight resolution.
+  Future<Directory>? _dirFuture;
+
   static const String _sessionsFile = 'klara_sessions.json';
   static const String _trashFile = 'klara_trash.json';
   static const String _historyFile = 'klara_history.json';
@@ -44,7 +51,29 @@ class LocalServiceImpl implements LocalService {
   /// Default weekly goal target (Phase 2B): 1 GB freed per week.
   static const double defaultGoalTargetMb = 1024;
 
-  Future<Directory> _dir() async {
+  Future<Directory> _dir() {
+    final Future<Directory>? cached = _dirFuture;
+    if (cached != null) {
+      return cached;
+    }
+    final Future<Directory> pending = _resolveDir();
+    _dirFuture = pending;
+    // A failed resolution must not poison the cache: drop it so a
+    // later call retries instead of replaying the same error.
+    unawaited(
+      pending.then<void>(
+        (_) {},
+        onError: (_) {
+          if (identical(_dirFuture, pending)) {
+            _dirFuture = null;
+          }
+        },
+      ),
+    );
+    return pending;
+  }
+
+  Future<Directory> _resolveDir() async {
     final Directory dir = await _directoryResolver();
     if (!await dir.exists()) {
       await dir.create(recursive: true);
