@@ -42,6 +42,7 @@ import 'package:klara/services/trash/trash_entry.dart';
 import 'analysis_store.dart';
 import 'completion_store.dart';
 import 'history_store.dart';
+import 'json_migration.dart';
 import 'json_file_store.dart';
 import 'meta_store.dart';
 import 'session_store.dart';
@@ -83,6 +84,17 @@ class LocalServiceDbImpl implements LocalService {
   Future<void>? _readyFuture;
   bool _downgraded = false;
 
+  /// True once the database is authoritative for migrated stores.
+  /// False until a migration verifies: until then methods serve
+  /// JSON, so a failed or interrupted migration costs nothing.
+  bool _dbMode = false;
+
+  /// Outcome of the last migration run, if one ran this launch.
+  /// Diagnostics for tests and logs; never user data.
+  JsonMigrationReport? _lastMigrationReport;
+
+  JsonMigrationReport? get lastMigrationReport => _lastMigrationReport;
+
   AppFailure get _failure =>
       const AppFailure(messageKey: AppStrings.errorLocal);
 
@@ -121,9 +133,11 @@ class LocalServiceDbImpl implements LocalService {
     );
   }
 
-  /// Opens the database and runs the downgrade guard. The 6.2
-  /// migration step lands here (before [_dbMode] is set) — until
-  /// then a fresh database is authoritative immediately.
+  /// Opens the database, runs the downgrade guard, then runs
+  /// the JSON migration once when no verified marker exists.
+  /// Until a migration verifies, [_dbMode] stays false and
+  /// migrated methods keep serving JSON — the app works
+  /// throughout, and the next launch retries the import.
   Future<void> get _ready {
     return _readyFuture ??= _init();
   }
@@ -135,7 +149,20 @@ class LocalServiceDbImpl implements LocalService {
       final int stored = int.tryParse(stamped ?? '') ?? 0;
       if (stored > kDbSchemaVersion) {
         _downgraded = true;
+        return;
       }
+      final String? migrated = await MetaStore(db)
+          .get(kDbMigrationCompletedKey);
+      if (migrated == '1') {
+        _dbMode = true;
+        return;
+      }
+      final JsonMigrationReport report = await JsonMigrationRunner(
+        _json,
+        db,
+      ).run();
+      _lastMigrationReport = report;
+      _dbMode = report.verified;
     } catch (_) {
       // A database that cannot even open is treated as a
       // downgrade-equivalent failure: migrated methods fail
@@ -146,13 +173,19 @@ class LocalServiceDbImpl implements LocalService {
 
   /// Runs [run] against the database after init, mapping every
   /// failure (including a database that cannot open) to a
-  /// [Failure] — service methods never throw.
+  /// [Failure] — service methods never throw. While the
+  /// database is not yet authoritative ([_dbMode] false),
+  /// [jsonFallback] serves the JSON files instead.
   Future<Result<T>> _guarded<T>(
     Future<T> Function(KlaraDatabase db) run,
+    Future<Result<T>> Function() jsonFallback,
   ) async {
     await _ready;
     if (_downgraded) {
       return Failure<T>(_failure);
+    }
+    if (!_dbMode) {
+      return jsonFallback();
     }
     try {
       final KlaraDatabase db = await _db;
@@ -164,32 +197,50 @@ class LocalServiceDbImpl implements LocalService {
 
   @override
   Future<Result<void>> saveSession(DeckSession session) async {
-    return _guarded((KlaraDatabase db) => SessionStore(db).save(session));
+    return _guarded(
+      (KlaraDatabase db) => SessionStore(db).save(session),
+      () => _json.saveSession(session),
+    );
   }
 
   @override
   Future<Result<DeckSession?>> loadSession(String filterKey) async {
-    return _guarded((KlaraDatabase db) => SessionStore(db).load(filterKey));
+    return _guarded(
+      (KlaraDatabase db) => SessionStore(db).load(filterKey),
+      () => _json.loadSession(filterKey),
+    );
   }
 
   @override
   Future<Result<List<DeckSession>>> listSessions() async {
-    return _guarded((KlaraDatabase db) => SessionStore(db).listAll());
+    return _guarded(
+      (KlaraDatabase db) => SessionStore(db).listAll(),
+      () => _json.listSessions(),
+    );
   }
 
   @override
   Future<Result<Map<String, DateTime>>> loadSnoozes() async {
-    return _guarded((KlaraDatabase db) => SnoozeStore(db).loadAll());
+    return _guarded(
+      (KlaraDatabase db) => SnoozeStore(db).loadAll(),
+      () => _json.loadSnoozes(),
+    );
   }
 
   @override
   Future<Result<void>> setSnooze(String assetId, DateTime? until) async {
-    return _guarded((KlaraDatabase db) => SnoozeStore(db).set(assetId, until));
+    return _guarded(
+      (KlaraDatabase db) => SnoozeStore(db).set(assetId, until),
+      () => _json.setSnooze(assetId, until),
+    );
   }
 
   @override
   Future<Result<void>> clearSnoozes(List<String> ids) async {
-    return _guarded((KlaraDatabase db) => SnoozeStore(db).clearBatch(ids));
+    return _guarded(
+      (KlaraDatabase db) => SnoozeStore(db).clearBatch(ids),
+      () => _json.clearSnoozes(ids),
+    );
   }
 
   @override
@@ -208,42 +259,66 @@ class LocalServiceDbImpl implements LocalService {
 
   @override
   Future<Result<List<DateTime>>> loadCompletionDays() async {
-    return _guarded((KlaraDatabase db) => CompletionStore(db).loadAll());
+    return _guarded(
+      (KlaraDatabase db) => CompletionStore(db).loadAll(),
+      () => _json.loadCompletionDays(),
+    );
   }
 
   @override
   Future<Result<void>> recordCompletionDay(DateTime day) async {
-    return _guarded((KlaraDatabase db) => CompletionStore(db).record(day));
+    return _guarded(
+      (KlaraDatabase db) => CompletionStore(db).record(day),
+      () => _json.recordCompletionDay(day),
+    );
   }
 
   @override
   Future<Result<void>> recordTrashed(List<TrashEntry> entries) async {
-    return _guarded((KlaraDatabase db) => TrashStore(db).appendAll(entries));
+    return _guarded(
+      (KlaraDatabase db) => TrashStore(db).appendAll(entries),
+      () => _json.recordTrashed(entries),
+    );
   }
 
   @override
   Future<Result<List<TrashEntry>>> loadTrashEntries() async {
-    return _guarded((KlaraDatabase db) => TrashStore(db).loadAll());
+    return _guarded(
+      (KlaraDatabase db) => TrashStore(db).loadAll(),
+      () => _json.loadTrashEntries(),
+    );
   }
 
   @override
   Future<Result<void>> removeTrashEntries(List<String> ids) async {
-    return _guarded((KlaraDatabase db) => TrashStore(db).removeByIds(ids));
+    return _guarded(
+      (KlaraDatabase db) => TrashStore(db).removeByIds(ids),
+      () => _json.removeTrashEntries(ids),
+    );
   }
 
   @override
   Future<Result<void>> clearTrashEntries() async {
-    return _guarded((KlaraDatabase db) => TrashStore(db).clearAll());
+    return _guarded(
+      (KlaraDatabase db) => TrashStore(db).clearAll(),
+      () => _json.clearTrashEntries(),
+    );
   }
 
   @override
   Future<Result<void>> appendHistory(HistoryRecord record) async {
-    return _guarded((KlaraDatabase db) => HistoryStore(db).append(record));
+    return _guarded(
+      (KlaraDatabase db) => HistoryStore(db).append(record),
+      () => _json.appendHistory(record),
+    );
   }
 
   @override
   Future<Result<List<HistoryRecord>>> loadHistory() async {
-    return _guarded((KlaraDatabase db) => HistoryStore(db).loadAll());
+    return _guarded(
+      (KlaraDatabase db) => HistoryStore(db).loadAll(),
+      () => _json.loadHistory(),
+    );
   }
 
   @override
@@ -262,17 +337,26 @@ class LocalServiceDbImpl implements LocalService {
 
   @override
   Future<Result<void>> saveAnalyses(List<PhotoAnalysis> analyses) async {
-    return _guarded((KlaraDatabase db) => AnalysisStore(db).saveAll(analyses));
+    return _guarded(
+      (KlaraDatabase db) => AnalysisStore(db).saveAll(analyses),
+      () => _json.saveAnalyses(analyses),
+    );
   }
 
   @override
   Future<Result<Map<String, PhotoAnalysis>>> loadAnalyses() async {
-    return _guarded((KlaraDatabase db) => AnalysisStore(db).loadAll());
+    return _guarded(
+      (KlaraDatabase db) => AnalysisStore(db).loadAll(),
+      () => _json.loadAnalyses(),
+    );
   }
 
   @override
   Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
-    return _guarded((KlaraDatabase db) => AnalysisStore(db).prune(liveIds));
+    return _guarded(
+      (KlaraDatabase db) => AnalysisStore(db).prune(liveIds),
+      () => _json.pruneAnalyses(liveIds),
+    );
   }
 
   /// Closes the database (if opened) and the JSON settings store.

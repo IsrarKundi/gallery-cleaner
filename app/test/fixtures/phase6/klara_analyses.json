@@ -1,0 +1,1 @@
+{"a1":{"algorithmVersion":1,"assetId":"a1","blurScore":50.0,"hash":123,"height":200,"meanLuminance":120.0,"modifiedDateMs":1700000000000,"sizeBytes":1000,"width":100},"a2":{"assetId":"a2","blurScore":10.0,"hash":456,"height":400,"meanLuminance":20.0,"width":300},"bad":{"assetId":"bad","blurScore":1.0,"hash":"not-an-int","height":1,"meanLuminance":1.0,"width":1}}
