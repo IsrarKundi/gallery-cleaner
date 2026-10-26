@@ -9,7 +9,7 @@ import '../../services/lifecycle/app_lifecycle.dart';
 import '../../services/lifecycle/app_lifecycle_impl.dart';
 import '../../services/media/library_change_source.dart';
 import '../../services/local/local_service.dart';
-import '../../services/local/local_service_impl.dart';
+import '../../services/local/local_service_db_impl.dart';
 import '../../services/media/media_service.dart';
 import '../../services/media/media_service_impl.dart';
 import '../../services/notifications/notification_service.dart';
@@ -46,7 +46,11 @@ import '../../services/warmup/deck_warm_up_impl.dart';
 class InitialBinding extends Bindings {
   @override
   void dependencies() {
-    Get.put<LocalService>(LocalServiceImpl(), permanent: true);
+    // Phase 6.3: the database implementation serves LocalService.
+    // First launch migrates the JSON files once (see
+    // json_migration.dart); fresh installs start empty. Settings
+    // still reads JSON through the same implementation.
+    Get.put<LocalService>(LocalServiceDbImpl(), permanent: true);
     Get.put<MediaService>(MediaServiceImpl(), permanent: true);
     // Phase 2.3: the single shared thumbnail cache for the app.
     // Controllers receive it through their bindings; the deck

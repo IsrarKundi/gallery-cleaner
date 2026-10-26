@@ -277,6 +277,42 @@ void main() {
     }
   });
 
+  test('post-migration database serves all stores with JSON '
+      'backups deleted', () async {
+    final Directory temp = await seededTemp();
+    final LocalServiceDbImpl first = openDb(temp);
+    await first.loadAnalyses();
+    await first.dispose();
+    // The 6.3 claim: after migration, no migrated store reads
+    // JSON. Deleting every backup must not lose a single row.
+    // (Settings is deliberately excluded: it stays JSON.)
+    for (final String name in _fixtureFiles) {
+      await File('${temp.path}/$name').delete();
+    }
+
+    final LocalServiceDbImpl second = openDb(temp);
+    try {
+      final Map<String, PhotoAnalysis> analyses = ok(
+        await second.loadAnalyses(),
+      );
+      // No migration ran on this launch: the marker path was
+      // taken, so the JSON files were never consulted.
+      expect(second.lastMigrationReport, isNull);
+      expect(analyses.length, 2);
+      expect(analyses['a1']!.hash, 123);
+      expect((ok(await second.loadSession('all'))!).currentIndex, 4);
+      expect(ok(await second.loadTrashEntries()).length, 2);
+      expect(ok(await second.loadHistory()).length, 2);
+      expect(ok(await second.loadSnoozes()).length, 2);
+      expect(ok(await second.loadCompletionDays()).length, 2);
+    } finally {
+      await second.dispose();
+      if (await temp.exists()) {
+        await temp.delete(recursive: true);
+      }
+    }
+  });
+
   test('failed migration keeps serving JSON', () async {
     final Directory temp = await seededTemp();
     final LocalServiceDbImpl service = LocalServiceDbImpl(
