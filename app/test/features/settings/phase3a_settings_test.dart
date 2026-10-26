@@ -1,7 +1,7 @@
 // Phase 3A settings tests (requirements §7, Phase 3): dark palette
 // pins + contrast reasoning witnesses, theme switching via tokens,
 // settings persistence + application, splash asset selection, the
-// blurred review tile, and the settings screen rendering.
+// review tile, and the settings screen rendering.
 //
 // Settings persistence uses the real [LocalServiceImpl] with a temp
 // directory (never platform channels): a saved setting must read
@@ -375,7 +375,7 @@ void main() {
     });
   });
 
-  group('ReviewGridTile blur', () {
+  group('ReviewGridTile', () {
     MediaAsset asset(String id) {
       return MediaAsset(
         id: id,
@@ -389,34 +389,7 @@ void main() {
       );
     }
 
-    testWidgets('blurred tile filters, reveals on tap, then unmarks', (
-      WidgetTester tester,
-    ) async {
-      bool revealed = false;
-      bool unmarked = false;
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: AppTheme.light,
-          home: Scaffold(
-            body: ReviewGridTile(
-              asset: asset('a'),
-              thumbnail: null,
-              thumbnailFailed: true,
-              blurred: true,
-              onReveal: () => revealed = true,
-              onTap: () => unmarked = true,
-            ),
-          ),
-        ),
-      );
-      expect(find.byType(ImageFiltered), findsOneWidget);
-      expect(find.text('Tap to reveal'), findsOneWidget);
-      await tester.tap(find.byType(ReviewGridTile));
-      expect(revealed, isTrue);
-      expect(unmarked, isFalse);
-    });
-
-    testWidgets('unblurred tile has no filter and taps unmark', (
+    testWidgets('tile has no filter and taps unmark', (
       WidgetTester tester,
     ) async {
       bool unmarked = false;

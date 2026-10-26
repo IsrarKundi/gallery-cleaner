@@ -1,10 +1,8 @@
 import 'dart:typed_data';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/app_icons.dart';
-import '../../../core/constants/app_sizes.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../core/utils/decode_size.dart';
@@ -12,22 +10,21 @@ import '../controller/review_controller.dart';
 import '../../../services/media/media_asset.dart';
 
 /// One cell of the review grid: the photo thumbnail with a delete-mark
-/// badge. Tapping unmarks the photo (it leaves the grid and returns
-/// to the deck as undecided). A failed thumbnail shows placeholder
-/// art, never a stale image.
+/// badge. Photos are always shown revealed (owner decision 26 Oct
+/// 2026: no blur, no tap-to-reveal).
 ///
-/// Phase 3A private blur: when [blurred] is true the thumbnail
-/// renders through an [ImageFiltered] blur (sigma from AppSizes, so
-/// the subject is not recognisable at grid size) with a tap-to-reveal
-/// affordance; tapping calls [onReveal] instead of [onTap]. Once
-/// revealed, the tile behaves exactly as before until blur is
-/// toggled or the screen is left.
+/// Outside selection mode, tapping unmarks the photo (it leaves the
+/// grid and returns to the deck as undecided). In selection mode
+/// (entered by long-press or the header's Select button), tapping
+/// toggles selection instead, and a checkbox marks the state:
+/// filled check when selected, outlined circle when not (design.md
+/// §9: selection always carries checkmark + border, never colour
+/// alone). A failed thumbnail shows placeholder art, never a stale
+/// image.
 ///
-/// Phase 3.3: the blur filter is one shared instance (the old code
-/// allocated a new ImageFilter per tile per build), pending tiles
-/// use a static placeholder (no per-tile shimmer), and a failed
-/// tile with [onRetry] shows a retry button — tapping the tile
-/// itself still unmarks.
+/// Phase 3.3: pending tiles use a static placeholder (no per-tile
+/// shimmer), and a failed tile with [onRetry] shows a retry button
+/// — tapping the tile itself still unmarks (or toggles).
 class ReviewGridTile extends StatelessWidget {
   const ReviewGridTile({
     super.key,
@@ -35,8 +32,9 @@ class ReviewGridTile extends StatelessWidget {
     required this.thumbnail,
     required this.thumbnailFailed,
     required this.onTap,
-    this.blurred = false,
-    this.onReveal,
+    this.selected = false,
+    this.selectionMode = false,
+    this.onLongPress,
     this.onRetry,
   });
 
@@ -45,25 +43,22 @@ class ReviewGridTile extends StatelessWidget {
   final bool thumbnailFailed;
   final VoidCallback onTap;
 
-  /// True when this tile must render blurred (blur ON, not revealed).
-  final bool blurred;
+  /// True when this tile is selected in selection mode.
+  final bool selected;
 
-  /// Called instead of [onTap] while [blurred] is true.
-  final VoidCallback? onReveal;
+  /// True while the grid is in selection mode (checkbox shown).
+  final bool selectionMode;
+
+  /// Long-press handler (enters selection mode / toggles in mode).
+  final VoidCallback? onLongPress;
 
   /// Called by the retry button on a failed tile. Null hides the
   /// button (the tile still shows placeholder art).
   final VoidCallback? onRetry;
 
-  static final ImageFilter _blurFilter = ImageFilter.blur(
-    sigmaX: const AppSizes().privateBlurSigma,
-    sigmaY: const AppSizes().privateBlurSigma,
-  );
-
   @override
   Widget build(BuildContext context) {
     final Uint8List? thumbnail = this.thumbnail;
-    final bool blurred = this.blurred;
     Widget image;
     if (thumbnail != null) {
       // Phase 1.6: decode at display size, never larger than the
@@ -96,66 +91,65 @@ class ReviewGridTile extends StatelessWidget {
     } else {
       image = Container(color: context.palette.surfaceVariant);
     }
-    if (blurred) {
-      image = ImageFiltered(imageFilter: _blurFilter, child: image);
-    }
     // Phase 3B accessibility (design.md §9): a photo tile with no
     // text gave TalkBack nothing to announce. The label names the
-    // photo (or "Photo" untitled) and its action; while blurred,
-    // the tap-to-reveal text below is the visible affordance and
-    // the label still describes the tile's action.
+    // photo (or "Photo" untitled) and its action; in selection
+    // mode it also announces the selected state.
     final String label = asset.title.isEmpty
         ? AppStrings.tr(AppStrings.a11yReviewTileUntitled)
         : AppStrings.tr(AppStrings.a11yReviewTile, <String, String>{
             'name': asset.title,
           });
+    final String semanticsLabel = selected
+        ? '$label, ${AppStrings.tr(AppStrings.a11ySelected)}'
+        : label;
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
         Semantics(
           button: true,
-          label: label,
+          label: semanticsLabel,
           excludeSemantics: true,
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(context.sizes.radiusMd),
               border: Border.all(
-                color: context.palette.border.withValues(alpha: 0.6),
-                width: 1,
+                color: selected
+                    ? context.palette.primary
+                    : context.palette.border.withValues(alpha: 0.6),
+                width: selected ? 2 : 1,
               ),
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(context.sizes.radiusMd - 1),
               child: InkWell(
-                onTap: blurred ? (onReveal ?? onTap) : onTap,
+                onTap: onTap,
+                onLongPress: onLongPress,
                 child: Stack(
                   fit: StackFit.expand,
                   children: <Widget>[
                     image,
-                    if (blurred)
-                      Positioned.fill(
+                    if (selectionMode)
+                      Positioned(
+                        top: context.sizes.xs,
+                        left: context.sizes.xs,
                         child: Container(
-                          color: context.palette.scrim.withValues(alpha: 0.45),
-                          child: Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: <Widget>[
-                                Icon(
-                                  AppIcons.eye,
-                                  size: context.sizes.iconMd,
-                                  color: context.palette.onScrim,
-                                ),
-                                SizedBox(height: context.sizes.xs),
-                                Text(
-                                  AppStrings.tr(AppStrings.blurTapToReveal),
-                                  style: context.textStyles.labelSmall.copyWith(
-                                    color: context.palette.onScrim,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
+                          width: context.sizes.iconMd,
+                          height: context.sizes.iconMd,
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? context.palette.primary
+                                : context.palette.scrim.withValues(alpha: 0.45),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.5),
                           ),
+                          child: selected
+                              ? Icon(
+                                  AppIcons.check,
+                                  size: context.sizes.md,
+                                  color: context.palette.onPrimary,
+                                )
+                              : null,
                         ),
                       ),
                     Positioned(
@@ -190,10 +184,13 @@ class ReviewGridTile extends StatelessWidget {
         ),
         // Outside the tile's Semantics (which excludes children)
         // so TalkBack can reach it as its own action. Tapping it
-        // retries the fetch; it does not unmark the tile.
+        // retries the fetch; it does not unmark the tile. In
+        // selection mode it moves to the bottom-left so it never
+        // covers the top-left selection checkbox.
         if (thumbnailFailed && onRetry != null)
           Positioned(
-            top: context.sizes.xs,
+            top: selectionMode ? null : context.sizes.xs,
+            bottom: selectionMode ? context.sizes.xs : null,
             left: context.sizes.xs,
             child: Container(
               decoration: BoxDecoration(

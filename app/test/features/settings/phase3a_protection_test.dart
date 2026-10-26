@@ -355,7 +355,7 @@ void main() {
     });
   });
 
-  group('review protection and blur', () {
+  group('review protection', () {
     test('delete excludes Klara favourites and system favourites', () async {
       final LocalServiceImpl local = await _tempLocal();
       await local.saveSettings(const AppSettings(protection: true));
@@ -409,29 +409,6 @@ void main() {
       expect(await controller.deleteSelected(), isNull);
       expect(trash.trashCalls, isEmpty);
       expect(controller.items.length, 1);
-    });
-
-    test('blur state, reveal, and toggle clearing', () async {
-      final LocalServiceImpl local = await _tempLocal();
-      await local.saveSettings(const AppSettings(privateBlur: true));
-      final ReviewController controller = ReviewController(
-        media: _Media(<MediaAsset>[]),
-        trash: _Trash(),
-        local: local,
-        initialAssets: <MediaAsset>[_asset('a')],
-        filterKeyOverride: 'all',
-      );
-      controller.onInit();
-      for (int i = 0; i < 50 && !controller.privateBlur.value; i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
-      expect(controller.privateBlur.value, isTrue);
-      expect(controller.isBlurred(_asset('a')), isTrue);
-      controller.reveal('a');
-      expect(controller.isBlurred(_asset('a')), isFalse);
-      await controller.toggleBlur();
-      expect(controller.privateBlur.value, isFalse);
-      expect(controller.revealedIds, isEmpty);
     });
   });
 

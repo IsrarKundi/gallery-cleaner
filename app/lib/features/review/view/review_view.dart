@@ -26,16 +26,31 @@ import '../widgets/review_loading_skeleton.dart';
 /// retained shell when one is alive — the AppBar back control, the
 /// system back gesture (via [PopScope]) and the bottom nav all pop
 /// back to the shell's tabs instead of rebuilding them; standalone
-/// Review falls back to a stack reset. A successful delete still
-/// goes to Trash with a stack reset carrying the recoverable-until
-/// date as route arguments, so the Trash screen can show the
-/// "Moved to Trash" snackbar on arrival and the post-delete state
-/// loads fresh.
+/// Review falls back to a stack reset. A successful whole-set
+/// delete still goes to Trash with a stack reset carrying the
+/// recoverable-until date as route arguments, so the Trash screen
+/// can show the "Moved to Trash" snackbar on arrival and the
+/// post-delete state loads fresh.
+///
+/// Selection (owner decision 26 Oct 2026): photos are always
+/// shown revealed. Outside selection mode a tile tap unmarks the
+/// photo; in selection mode (long-press or the header's Select
+/// button) taps toggle selection, and the bottom bar acts on the
+/// selection (Keep X / Delete X) instead of the whole set. The
+/// back control first cancels an active selection, and only then
+/// leaves the screen.
 class ReviewView extends GetView<ReviewController> {
   const ReviewView({super.key});
 
   Future<void> _delete(BuildContext context) async {
-    final ReviewDeleteOutcome? outcome = await controller.deleteSelected();
+    // A selection scopes the run to those photos; without one the
+    // whole set is deleted, as before.
+    final List<String>? onlyIds = controller.hasSelection
+        ? controller.selectedItems.map((a) => a.id).toList()
+        : null;
+    final ReviewDeleteOutcome? outcome = await controller.deleteSelected(
+      onlyIds: onlyIds,
+    );
     if (!context.mounted) {
       return;
     }
@@ -51,53 +66,20 @@ class ReviewView extends GetView<ReviewController> {
     ReviewDeleteOutcome? outcome,
   ) async {
     switch (outcome) {
-      case ReviewDeleteOutcome.documentGuard:
-        // Phase 4 document guard: warn first, then honour the
-        // user's explicit choice — delete anyway (the deliberate
-        // override, still via the native sheet) or keep the
-        // document-like photos (they leave the grid, undecided).
-        final bool deleteAnyway = await AppDialog.showConfirmation(
-          context,
-          title: AppStrings.tr(AppStrings.documentGuardTitle),
-          message: AppStrings.tr(
-            AppStrings.documentGuardMessage,
-            <String, String>{
-              'count': '${controller.documentGuardPending.length}',
-            },
-          ),
-          confirmLabel: AppStrings.tr(AppStrings.documentGuardDeleteAnyway),
-          cancelLabel: AppStrings.tr(AppStrings.documentGuardKeep),
-          isDestructive: true,
-        );
-        if (!context.mounted) {
-          return;
-        }
-        if (deleteAnyway) {
-          final ReviewDeleteOutcome? next = await controller.deleteSelected(
-            overrideDocumentGuard: true,
-          );
-          if (!context.mounted) {
-            return;
-          }
-          await _handleOutcome(context, next);
-        } else {
-          await controller.keepDocumentGuarded();
-          if (!context.mounted) {
-            return;
-          }
-          if (controller.documentGuardKeptCount.value > 0) {
-            AppSnackbar.show(
-              context,
-              message: AppStrings.tr(
-                AppStrings.documentGuardKept,
-                <String, String>{
-                  'count': '${controller.documentGuardKeptCount.value}',
-                },
-              ),
-            );
-          }
-        }
       case ReviewDeleteOutcome.trashed:
+        // A partial run (a selection was deleted) stays on screen
+        // with the rest of the set — only a whole-set run goes to
+        // the Trash screen, as before.
+        if (controller.items.isNotEmpty) {
+          AppSnackbar.show(
+            context,
+            message: AppStrings.tr(
+              AppStrings.snackMovedToTrashMany,
+              <String, String>{'count': '${controller.lastTrashedCount.value}'},
+            ),
+          );
+          break;
+        }
         final DateTime? until = controller.trashedUntil.value;
         Get.offAllNamed<dynamic>(
           AppRoutes.trash,
@@ -170,13 +152,22 @@ class ReviewView extends GetView<ReviewController> {
     }
   }
 
+  /// Back control shared by the AppBar button and the system
+  /// gesture: an active selection is cancelled first (the pop is
+  /// swallowed); only a second back leaves the screen.
+  void _onBack() {
+    if (!controller.selection.cancel()) {
+      controller.goToDeck();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (bool didPop, Object? result) {
         if (!didPop) {
-          controller.goToDeck();
+          _onBack();
         }
       },
       child: Obx(() {
@@ -186,24 +177,9 @@ class ReviewView extends GetView<ReviewController> {
           leading: IconButton(
             icon: Icon(AppIcons.back, size: context.sizes.iconMd),
             tooltip: AppStrings.tr(AppStrings.actionBackToDeck),
-            onPressed: controller.goToDeck,
+            onPressed: _onBack,
           ),
-          // Phase 3A quick eye toggle: same global private-blur
-          // setting as Settings. Icon shows the CURRENT state:
-          // eyeSlash while blurred (tap to show), eye while shown.
           actions: <Widget>[
-            IconButton(
-              icon: Icon(
-                controller.privateBlur.value ? AppIcons.eyeSlash : AppIcons.eye,
-                size: context.sizes.iconMd,
-              ),
-              tooltip: AppStrings.tr(
-                controller.privateBlur.value
-                    ? AppStrings.blurShowPhotos
-                    : AppStrings.blurHidePhotos,
-              ),
-              onPressed: controller.toggleBlur,
-            ),
             IconButton(
               icon: Icon(AppIcons.trash, size: context.sizes.iconMd),
               tooltip: AppStrings.tr(AppStrings.screenTrash),
@@ -256,15 +232,6 @@ class ReviewView extends GetView<ReviewController> {
                     // Phase 3.3: the count is a controller aggregate
                     // refreshed on items-change, not a title scan
                     // per build.
-                    if (controller.documentLikeCount.value > 0)
-                      InfoBanner(
-                        message: AppStrings.tr(
-                          AppStrings.documentGuardBanner,
-                          <String, String>{
-                            'count': '${controller.documentLikeCount.value}',
-                          },
-                        ),
-                      ),
                     if (controller.errorKey.value.isNotEmpty)
                       ErrorBanner(
                         message: AppStrings.tr(controller.errorKey.value),
@@ -291,14 +258,21 @@ class ReviewView extends GetView<ReviewController> {
                           // tile's Obx fires per arrival; the
                           // scaffold no longer does.)
                           return Obx(() {
+                            final bool mode = controller.selection.mode.value;
+                            final bool selected = controller.selection
+                                .isSelected(asset.id);
                             return ReviewGridTile(
                               asset: asset,
                               thumbnail: controller.thumbnails[asset.id],
                               thumbnailFailed: controller.failedThumbnails
                                   .contains(asset.id),
-                              blurred: controller.isBlurred(asset),
-                              onReveal: () => controller.reveal(asset.id),
-                              onTap: () => controller.unmark(asset),
+                              selected: selected,
+                              selectionMode: mode,
+                              onTap: () => mode
+                                  ? controller.selection.toggle(asset.id)
+                                  : controller.unmark(asset),
+                              onLongPress: () =>
+                                  controller.selection.longPress(asset.id),
                               onRetry: () =>
                                   controller.retryThumbnail(asset.id),
                             );
@@ -382,11 +356,37 @@ class _Header extends StatelessWidget {
             ],
           ),
           SizedBox(height: context.sizes.xs),
-          Text(
-            AppStrings.tr(AppStrings.reviewUnmarkHint),
-            style: context.textStyles.bodySmall.copyWith(
-              color: context.palette.textSecondary,
-            ),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  AppStrings.tr(AppStrings.reviewUnmarkHint),
+                  style: context.textStyles.bodySmall.copyWith(
+                    color: context.palette.textSecondary,
+                  ),
+                ),
+              ),
+              // Select text button: enters selection mode, then
+              // becomes Select all. The label observes the mode
+              // so it flips without rebuilding the grid.
+              Obx(() {
+                final bool mode = controller.selection.mode.value;
+                return TextButton(
+                  onPressed: () => mode
+                      ? controller.selection.selectAll(
+                          controller.items.map((a) => a.id),
+                        )
+                      : controller.selection.enter(),
+                  child: Text(
+                    AppStrings.tr(
+                      mode
+                          ? AppStrings.actionSelectAll
+                          : AppStrings.actionSelect,
+                    ),
+                  ),
+                );
+              }),
+            ],
           ),
         ],
       ),

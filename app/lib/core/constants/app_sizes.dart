@@ -81,11 +81,4 @@ class AppSizes {
   // fallback would be the whole wait. A short hold lets the brand
   // mark register, then the splash exits — far below the fallback.
   Duration get splashReducedMotionHold => const Duration(milliseconds: 800);
-
-  // Private blur (Phase 3A): the Gaussian sigma for blurred
-  // thumbnails on Review (Trash rows are metadata-only, so there is
-  // nothing to blur there). 16 is strong enough that a photo's
-  // subject is not recognisable at grid size, while the tile still
-  // reads as a photo placeholder rather than a blank box.
-  double get privateBlurSigma => 16;
 }

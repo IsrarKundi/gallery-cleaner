@@ -1,6 +1,6 @@
 // Phase 4 extraction from [ReviewController] (which sits at its
 // ~400-line budget): the session-mark write shared by unmark,
-// keep-all, delete, denied handling and the document-guard keep.
+// keep-all, keep-selected, delete and denied handling.
 //
 // Loads the deck session for [filterKey], applies [updates]
 // (null removes a mark), and saves it back preserving the stored

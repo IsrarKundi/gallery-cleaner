@@ -48,6 +48,8 @@ class AppStrings {
   static const String actionRestore = 'actionRestore';
   static const String actionHistory = 'actionHistory';
   static const String actionKeepAll = 'actionKeepAll';
+  static const String actionSelect = 'actionSelect';
+  static const String actionSelectAll = 'actionSelectAll';
   static const String actionSkip = 'actionSkip';
   static const String actionAddToAlbum = 'actionAddToAlbum';
   static const String actionShare = 'actionShare';
@@ -67,6 +69,7 @@ class AppStrings {
 
   // Review.
   static const String reviewDeleteCount = 'reviewDeleteCount';
+  static const String reviewKeepCount = 'reviewKeepCount';
   static const String reviewEmptyTitle = 'reviewEmptyTitle';
   static const String reviewEmptyMessage = 'reviewEmptyMessage';
   static const String reviewUnmarkHint = 'reviewUnmarkHint';
@@ -273,7 +276,6 @@ class AppStrings {
   static const String protectionReviewExcluded = 'protectionReviewExcluded';
   static const String protectionDuplicatesExcluded =
       'protectionDuplicatesExcluded';
-  static const String blurTapToReveal = 'blurTapToReveal';
   static const String blurShowPhotos = 'blurShowPhotos';
   static const String blurHidePhotos = 'blurHidePhotos';
   static const String trashAutoEmptyPromptTitle = 'trashAutoEmptyPromptTitle';
@@ -301,6 +303,7 @@ class AppStrings {
   static const String a11yThumbUntitled = 'a11yThumbUntitled';
   static const String a11yReviewTile = 'a11yReviewTile';
   static const String a11yReviewTileUntitled = 'a11yReviewTileUntitled';
+  static const String a11ySelected = 'a11ySelected';
 
   // Phase 4 Android (requirements §7, Phase 4): video compression
   // (preview + keep original until the user confirms) and the
@@ -327,13 +330,6 @@ class AppStrings {
   static const String compressCancelled = 'compressCancelled';
   static const String errorCompress = 'errorCompress';
   static const String errorCompressNotVideo = 'errorCompressNotVideo';
-  static const String documentGuardBanner = 'documentGuardBanner';
-  static const String documentGuardTitle = 'documentGuardTitle';
-  static const String documentGuardMessage = 'documentGuardMessage';
-  static const String documentGuardDeleteAnyway = 'documentGuardDeleteAnyway';
-  static const String documentGuardKeep = 'documentGuardKeep';
-  static const String documentGuardKept = 'documentGuardKept';
-
   // Confirmations and feedback.
   static const String snackMovedToTrash = 'snackMovedToTrash';
   static const String snackMovedToTrashUntil = 'snackMovedToTrashUntil';
@@ -409,6 +405,8 @@ class AppStrings {
     actionRestore: 'Restore',
     actionHistory: 'History',
     actionKeepAll: 'Keep all',
+    actionSelect: 'Select',
+    actionSelectAll: 'Select all',
     actionSkip: 'Skip',
     actionAddToAlbum: 'Add to album',
     actionShare: 'Share',
@@ -421,6 +419,7 @@ class AppStrings {
     meterInTrash: 'In trash until {date}',
     meterFreed: 'Freed',
     reviewDeleteCount: 'Delete {count} photos',
+    reviewKeepCount: 'Keep {count} photos',
     reviewEmptyTitle: 'Nothing to review',
     reviewEmptyMessage:
         'Every marked photo is decided. Go back to the deck to keep cleaning.',
@@ -595,7 +594,6 @@ class AppStrings {
     protectionDuplicatesExcluded:
         '{count} favourited photos were kept as keepers instead of '
         'being marked for deletion.',
-    blurTapToReveal: 'Tap to reveal',
     blurShowPhotos: 'Show photos',
     blurHidePhotos: 'Hide photos',
     trashAutoEmptyPromptTitle: 'Trash has expired photos',
@@ -632,6 +630,7 @@ class AppStrings {
     a11yThumbUntitled: 'Photo, tap to make this photo the keeper',
     a11yReviewTile: '{name}, tap to remove from review',
     a11yReviewTileUntitled: 'Photo, tap to remove from review',
+    a11ySelected: 'selected',
     screenCompress: 'Compress video',
     compressEmptyTitle: 'No videos found',
     compressEmptyMessage:
@@ -665,21 +664,6 @@ class AppStrings {
     compressCancelled: 'Compression cancelled. The original is untouched.',
     errorCompress: 'Compression did not complete. The original is untouched.',
     errorCompressNotVideo: 'Only videos can be compressed.',
-    documentGuardBanner:
-        '{count} photos here look like documents (screenshots, or '
-        'filenames like receipts, tickets or IDs). Klara cannot read '
-        'what they show — check them before deleting.',
-    documentGuardTitle: 'These may be documents',
-    documentGuardMessage:
-        '{count} photos you marked look like documents — screenshots, '
-        'or filenames like receipts, tickets, IDs or QR codes. Klara '
-        'cannot read what they show, so check them first. Deleting '
-        'them anyway still goes through the system confirmation and '
-        'they stay recoverable in trash for 30 days.',
-    documentGuardDeleteAnyway: 'Delete anyway',
-    documentGuardKeep: 'Keep these documents',
-    documentGuardKept:
-        '{count} document-like photos were kept and removed from this list.',
     snackRestored: 'Photo restored',
     snackRestoredMany: '{count} photos restored',
     snackTrashEmptied: 'Trash emptied. {size} freed.',

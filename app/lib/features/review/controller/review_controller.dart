@@ -11,30 +11,20 @@ import '../../../core/strings/app_strings.dart';
 import '../../shell/controller/shell_controller.dart';
 import '../../../core/utils/app_haptics.dart';
 import '../../../core/utils/result.dart';
-import '../../../services/detection/document_guard.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/media/media_service.dart';
 import '../../../services/thumbnail/thumbnail_service.dart';
 import '../../../services/thumbnail/thumbnail_service_impl.dart';
 import '../../../services/trash/trash_service.dart';
-import 'review_blur.dart';
+import 'review_selection.dart';
 import 'review_session.dart';
 import 'review_delete.dart';
 
 /// Outcome of [ReviewController.deleteSelected], for the view's
 /// post-delete handling and for tests (navigation itself is not
 /// asserted — see the navigation contract below).
-enum ReviewDeleteOutcome {
-  trashed,
-  denied,
-  failed,
-  serviceError,
-
-  /// Phase 4 guard blocked the run: document-like items pend in
-  /// [ReviewController.documentGuardPending] for the override.
-  documentGuard,
-}
+enum ReviewDeleteOutcome { trashed, denied, failed, serviceError }
 
 /// Review screen state (requirements §4): editable grid of delete-marked photos.
 /// Navigation: exits return to the retained shell when one is alive
@@ -86,31 +76,26 @@ class ReviewController extends GetxController {
   /// view shows the denied explanation, then the stack resets.
   final RxList<String> deniedIds = <String>[].obs;
 
-  /// Phase 3A private blur, extracted to [ReviewBlur] (Phase 4)
-  /// to hold this controller's line budget; forwarded so the
-  /// view's contract is unchanged.
-  final ReviewBlur blur = ReviewBlur();
+  /// Selection state for the grid (owner decision 26 Oct 2026):
+  /// photos are always shown revealed, and the user selects the
+  /// ones to keep or delete instead of acting on the whole set.
+  /// See [ReviewSelection] for the mode rules.
+  final ReviewSelection selection = ReviewSelection();
 
-  RxBool get privateBlur => blur.privateBlur;
-  RxSet<String> get revealedIds => blur.revealedIds;
+  /// True while the grid is in selection mode.
+  bool get selectionMode => selection.mode.value;
 
-  /// Phase 4 guard: document-like items in the current run
-  /// awaiting override or keeping (empty unless the last run
-  /// was blocked with [ReviewDeleteOutcome.documentGuard]).
-  final RxList<MediaAsset> documentGuardPending = <MediaAsset>[].obs;
+  /// True when at least one photo is selected.
+  bool get hasSelection => selection.hasSelection;
 
-  /// Phase 4: items [keepDocumentGuarded] last kept, for the
-  /// view's confirmation snackbar.
-  final RxInt documentGuardKeptCount = 0.obs;
+  /// Photos currently selected (empty outside selection mode).
+  List<MediaAsset> get selectedItems =>
+      items.where((MediaAsset a) => selection.isSelected(a.id)).toList();
 
   /// Phase 3A: favourited items kept out of the last delete run
   /// (they stay in the grid, protected, and are never sent to
   /// trash). The view shows this count as a banner.
   final RxInt protectedExcludedCount = 0.obs;
-
-  /// Document-like count, computed once per items-change
-  /// (Phase 3.3: the view no longer scans titles on every build).
-  final RxInt documentLikeCount = 0.obs;
 
   /// Phase 3B mixed-outcome counts for the view's dialog/snackbar:
   /// how many of the last run were actually trashed, and how many
@@ -143,16 +128,7 @@ class ReviewController extends GetxController {
       isLoading.value = true;
       _loadFromSession();
     }
-    // Phase 3.3: aggregates refresh on items-change only, so the
-    // view never recomputes them per build.
-    ever<List<MediaAsset>>(items, (_) => _refreshDocumentLikeCount());
-    _refreshDocumentLikeCount();
     _loadThumbnails();
-    _loadBlurSetting();
-  }
-
-  void _refreshDocumentLikeCount() {
-    documentLikeCount.value = documentLikeItems(items).length;
   }
 
   Future<void> _loadFromSession() async {
@@ -169,49 +145,6 @@ class ReviewController extends GetxController {
     } finally {
       isLoading.value = false;
     }
-  }
-
-  /// Reads the persisted blur setting (defaults OFF).
-  Future<void> _loadBlurSetting() => blur.load(local);
-
-  /// Flips private blur and persists it (the same setting the
-  /// Settings screen toggles). Toggling clears all reveals, so
-  /// turning blur back on never inherits a stale revealed set.
-  Future<void> toggleBlur() async {
-    errorKey.value = await blur.toggle(local) ?? '';
-  }
-
-  /// Reveals one blurred thumbnail until blur is toggled off or
-  /// this screen is left (see [ReviewBlur.revealedIds]).
-  void reveal(String assetId) => blur.reveal(assetId);
-
-  /// True when [asset]'s tile must render blurred: blur ON and
-  /// this item not yet tapped to reveal.
-  bool isBlurred(MediaAsset asset) => blur.isBlurred(asset);
-
-  /// Phase 4 guard, the "keep" side: unmarks every pending
-  /// document-like item (back to the deck, undecided). Deletes
-  /// nothing itself.
-  Future<void> keepDocumentGuarded() async {
-    if (documentGuardPending.isEmpty) {
-      return;
-    }
-    final List<MediaAsset> guarded = documentGuardPending.toList();
-    final bool saved = await updateSessionMarks(
-      local: local,
-      filterKey: _filterKey,
-      updates: <String, DeckMark?>{
-        for (final MediaAsset asset in guarded) asset.id: null,
-      },
-    );
-    if (!saved) {
-      errorKey.value = AppStrings.errorLocal;
-      return;
-    }
-    final Set<String> ids = guarded.map((MediaAsset a) => a.id).toSet();
-    items.removeWhere((MediaAsset item) => ids.contains(item.id));
-    documentGuardPending.clear();
-    documentGuardKeptCount.value = guarded.length;
   }
 
   /// Reads the asset list the deck passed as route arguments.
@@ -283,6 +216,7 @@ class ReviewController extends GetxController {
       return;
     }
     items.removeWhere((MediaAsset item) => item.id == asset.id);
+    _syncSelection();
   }
 
   /// Sets every delete mark in the set to keep in the session
@@ -306,30 +240,68 @@ class ReviewController extends GetxController {
       return;
     }
     items.clear();
+    selection.clear();
     goToDeck();
   }
 
-  /// Moves the review set to Trash through the native confirmation
-  /// sheet and returns the outcome for the view to act on (snackbar
-  /// + Trash navigation, denied dialog + deck navigation, or the
-  /// error state with retry). Returns null when there is nothing to
-  /// delete or a delete is already running.
+  /// Keeps only the selected photos: their marks become keep in
+  /// the session (decided, so they do not reappear in the deck)
+  /// and they leave the grid. The rest stay marked. When the
+  /// selection covered the whole set the grid is empty, so this
+  /// lands on the deck like [keepAll]. Never called with an empty
+  /// selection (the Keep button falls back to [keepAll] then).
+  Future<void> keepSelected() async {
+    if (selectedItems.isEmpty) {
+      return;
+    }
+    errorKey.value = '';
+    final Map<String, DeckMark?> updates = <String, DeckMark?>{
+      for (final MediaAsset asset in selectedItems) asset.id: DeckMark.keep,
+    };
+    final bool saved = await updateSessionMarks(
+      local: local,
+      filterKey: _filterKey,
+      updates: updates,
+    );
+    if (!saved) {
+      errorKey.value = AppStrings.errorLocal;
+      return;
+    }
+    final Set<String> kept = selectedItems.map((MediaAsset a) => a.id).toSet();
+    items.removeWhere((MediaAsset item) => kept.contains(item.id));
+    _syncSelection();
+    if (items.isEmpty) {
+      goToDeck();
+    }
+  }
+
+  /// Drops selection ids that left the grid (unmarked, kept,
+  /// trashed) and ends selection mode when nothing remains.
+  void _syncSelection() {
+    selection.sync(items.map((MediaAsset a) => a.id));
+  }
+
+  /// Moves photos to Trash through the native confirmation sheet
+  /// and returns the outcome for the view to act on (snackbar +
+  /// Trash navigation, denied dialog + deck navigation, or the
+  /// error state with retry). Returns null when there is nothing
+  /// to delete or a delete is already running.
+  ///
+  /// [onlyIds] scopes the run to the selection: only those photos
+  /// are deleted and the rest stay in the grid (the view shows a
+  /// snackbar and stays for a partial trashed run). Without it the
+  /// whole set is deleted, as before.
   ///
   /// Phase 3A protection: when ON, favourited items (Klara or
   /// system) are EXCLUDED from the trash run — they stay in the
   /// grid and [protectedExcludedCount] explains how many. When
   /// every item is protected, nothing is sent and null returns
   /// (the banner is the whole outcome; no native sheet appears).
-  ///
-  /// Phase 4 guard: unless [overrideDocumentGuard] is true, a
-  /// run with document-like items stops BEFORE any native sheet
-  /// with [ReviewDeleteOutcome.documentGuard] and fills
-  /// [documentGuardPending]; the view then asks: delete anyway
-  /// (re-call with the override) or keep those items.
-  Future<ReviewDeleteOutcome?> deleteSelected({
-    bool overrideDocumentGuard = false,
-  }) async {
-    if (items.isEmpty || isDeleting.value) {
+  Future<ReviewDeleteOutcome?> deleteSelected({List<String>? onlyIds}) async {
+    final List<MediaAsset> scope = onlyIds == null
+        ? items.toList()
+        : items.where((MediaAsset a) => onlyIds.contains(a.id)).toList();
+    if (scope.isEmpty || isDeleting.value) {
       return null;
     }
     isDeleting.value = true;
@@ -340,26 +312,15 @@ class ReviewController extends GetxController {
     protectedExcludedCount.value = 0;
     lastTrashedCount.value = 0;
     lastFailedCount.value = 0;
-    documentGuardKeptCount.value = 0;
     // Phase 3B: protection filtering lives in review_delete.dart
     // (extracted to hold the controller's line budget).
     final ReviewDeletePlan plan = await planReviewDelete(
-      items: items.toList(),
+      items: scope,
       local: local,
       filterKey: _filterKey,
     );
     protectedExcludedCount.value = plan.protectedCount;
     final List<MediaAsset> toDelete = plan.toDelete;
-    // Phase 4 guard (requirements §7): warn, never silently
-    // delete — no native sheet until the user overrides.
-    final List<MediaAsset> guarded = documentLikeItems(toDelete);
-    if (guarded.isNotEmpty && !overrideDocumentGuard) {
-      documentGuardPending.assignAll(guarded);
-      isDeleting.value = false;
-      lastOutcome.value = ReviewDeleteOutcome.documentGuard;
-      return ReviewDeleteOutcome.documentGuard;
-    }
-    documentGuardPending.clear();
     if (toDelete.isEmpty) {
       isDeleting.value = false;
       return null;
@@ -427,6 +388,7 @@ class ReviewController extends GetxController {
       }
     }
     items.removeWhere((MediaAsset asset) => trashed.contains(asset.id));
+    _syncSelection();
     await local.appendHistory(
       HistoryRecord(
         date: DateTime.now(),

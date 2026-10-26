@@ -1,6 +1,6 @@
 // Phase 3.3 tests: bounded-concurrency review loads, per-tile
 // observers (visible window only), aggregates, static placeholders,
-// shared blur filter, and tile/controller retry. No device.
+// and tile/controller retry. No device.
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -210,24 +210,6 @@ void main() {
       controller.onClose();
     });
 
-    test('documentLikeCount tracks the set and follows unmarks', () async {
-      final ReviewController controller = _controller(
-        media: _CountingMedia(delay: Duration.zero),
-        local: _Local(),
-        items: <MediaAsset>[
-          _asset('r1', title: 'receipt.jpg'),
-          _asset('p1', title: 'passport.png'),
-          _asset('b1', title: 'beach.jpg'),
-        ],
-      );
-      await _waitUntil(() => controller.thumbnails.length == 3);
-      expect(controller.documentLikeCount.value, 2);
-      await controller.unmark(_asset('r1', title: 'receipt.jpg'));
-      expect(controller.items.length, 2);
-      expect(controller.documentLikeCount.value, 1);
-      controller.onClose();
-    });
-
     test('unmark x20 shrinks the set and its totals', () async {
       final List<MediaAsset> items = <MediaAsset>[
         for (int i = 0; i < 30; i++) _asset('u$i', size: 1000),
@@ -292,49 +274,6 @@ void main() {
       );
       expect(find.byType(Skeletonizer), findsNothing);
       expect(find.byType(ReviewGridTile), findsOneWidget);
-    });
-
-    testWidgets('blurred tiles share one blur filter instance', (
-      WidgetTester tester,
-    ) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: AppTheme.light,
-          home: Scaffold(
-            body: Column(
-              children: <Widget>[
-                SizedBox(
-                  width: 200,
-                  height: 200,
-                  child: ReviewGridTile(
-                    asset: _asset('a'),
-                    thumbnail: null,
-                    thumbnailFailed: true,
-                    blurred: true,
-                    onTap: () {},
-                  ),
-                ),
-                SizedBox(
-                  width: 200,
-                  height: 200,
-                  child: ReviewGridTile(
-                    asset: _asset('b'),
-                    thumbnail: null,
-                    thumbnailFailed: true,
-                    blurred: true,
-                    onTap: () {},
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-      final List<ImageFiltered> filters = tester
-          .widgetList<ImageFiltered>(find.byType(ImageFiltered))
-          .toList();
-      expect(filters.length, 2);
-      expect(identical(filters[0].imageFilter, filters[1].imageFilter), isTrue);
     });
 
     testWidgets('retry button retries without unmarking', (

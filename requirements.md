@@ -38,6 +38,11 @@ related work starts. This file is the single source of truth for the build; the 
 
 1. Swipe only MARKS a photo (keep / delete / maybe / favourite). No swipe ever deletes anything.
 2. Review screen: editable grid of marked photos with counts and MB. User can unmark here.
+   Photos are always shown revealed (no blur, no tap-to-reveal, no document guard). Long-press
+   or the Select text button enters selection mode: taps then toggle selection, Select becomes
+   Select all, and Keep/Delete act on the selection with its count (Keep X / Delete X); without
+   a selection they act on the whole set (Keep all / Delete N). Back first cancels an active
+   selection, then leaves the screen.
 3. Android native confirmation: the system delete/trash sheet (MediaStore request) is the only path
    to Trash. The app must never claim a photo is deleted before this confirmation.
 4. Trash: 30 days, recoverable. Restore (single + multi) must be visible and working.
@@ -93,7 +98,8 @@ storage projection bar (device storage before → after).
 
 ### Phase 3 — Trust and polish
 
-Private blur mode for trash/review thumbnails; favourites / edited / starred protection toggle;
+Private blur mode for trash thumbnails (review thumbnails are always revealed); favourites /
+edited / starred protection toggle;
 denied-confirmation and partial-access polish; large-library performance (50,000+ photos);
 settings (theme, dark mode, notifications — one gentle weekly nudge only, haptics, reduced motion,
 trash auto-empty preference); accessibility (buttons for every gesture, large tap targets);
@@ -101,8 +107,7 @@ no mid-session ads ever (applies whenever ads exist).
 
 ### Phase 4 — Later
 
-Video compression (preview + keep original until user confirms); document guard (warn before
-deleting screenshots that look like receipts, IDs, tickets, QR codes); localization to multiple
+Video compression (preview + keep original until user confirms); localization to multiple
 languages; monetization implementation (once decided, see §8); iOS port.
 
 ## 8. Monetization — DEFERRED (user decision 25 Oct 2026)
