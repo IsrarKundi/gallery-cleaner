@@ -152,30 +152,31 @@ class ReviewGridTile extends StatelessWidget {
                               : null,
                         ),
                       ),
-                    Positioned(
-                      top: context.sizes.xs,
-                      right: context.sizes.xs,
-                      child: Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                          color: context.palette.error,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 1.5),
-                          boxShadow: const <BoxShadow>[
-                            BoxShadow(
-                              color: Colors.black26,
-                              blurRadius: 4,
-                              offset: Offset(0, 1),
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          AppIcons.delete,
-                          size: context.sizes.md,
-                          color: context.palette.onPrimary,
-                        ),
-                      ),
-                    ),
+
+                    // Positioned(
+                    //   top: context.sizes.xs,
+                    //   right: context.sizes.xs,
+                    //   child: Container(
+                    //     padding: const EdgeInsets.all(5),
+                    //     decoration: BoxDecoration(
+                    //       color: context.palette.error,
+                    //       shape: BoxShape.circle,
+                    //       border: Border.all(color: Colors.white, width: 1.5),
+                    //       boxShadow: const <BoxShadow>[
+                    //         BoxShadow(
+                    //           color: Colors.black26,
+                    //           blurRadius: 4,
+                    //           offset: Offset(0, 1),
+                    //         ),
+                    //       ],
+                    //     ),
+                    //     child: Icon(
+                    //       AppIcons.delete,
+                    //       size: context.sizes.md,
+                    //       color: context.palette.onPrimary,
+                    //     ),
+                    //   ),
+                    // ),
                   ],
                 ),
               ),

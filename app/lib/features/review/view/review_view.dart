@@ -180,11 +180,21 @@ class ReviewView extends GetView<ReviewController> {
             onPressed: _onBack,
           ),
           actions: <Widget>[
-            IconButton(
-              icon: Icon(AppIcons.trash, size: context.sizes.iconMd),
-              tooltip: AppStrings.tr(AppStrings.screenTrash),
-              onPressed: () => Get.toNamed<dynamic>(AppRoutes.trash),
-            ),
+            Obx(() {
+              final bool mode = controller.selection.mode.value;
+              return TextButton(
+                onPressed: () => mode
+                    ? controller.selection.selectAll(
+                        controller.items.map((a) => a.id),
+                      )
+                    : controller.selection.enter(),
+                child: Text(
+                  AppStrings.tr(
+                    mode ? AppStrings.actionSelectAll : AppStrings.actionSelect,
+                  ),
+                ),
+              );
+            }),
           ],
           bottomBar: isEmpty
               ? null
@@ -212,7 +222,8 @@ class ReviewView extends GetView<ReviewController> {
                       ))
               : Column(
                   children: <Widget>[
-                    _Header(controller: controller),
+                    const SizedBox(height: 10),
+                    // _Header(controller: controller),
                     if (controller.protectedExcludedCount.value > 0)
                       InfoBanner(
                         message: AppStrings.tr(
@@ -240,7 +251,9 @@ class ReviewView extends GetView<ReviewController> {
                       ),
                     Expanded(
                       child: GridView.builder(
-                        padding: EdgeInsets.all(context.sizes.screenPadding),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: context.sizes.screenPadding,
+                        ),
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 3,
                           crossAxisSpacing: context.sizes.sm,
@@ -297,75 +310,78 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return Container(
+      color: Colors.amber,
       padding: EdgeInsets.fromLTRB(
         context.sizes.screenPadding,
-        context.sizes.sm,
+        0,
         context.sizes.screenPadding,
         context.sizes.xs,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          // Row(
+          //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          //   children: <Widget>[
+          //     // Phase 3.3: the count text observes items itself,
+          //     // so it never rides the scaffold's rebuilds.
+          //     Obx(() {
+          //       return Text(
+          //         '${Formatters.formatCount(controller.items.length)} · '
+          //         '${Formatters.formatBytes(controller.totalBytes)}',
+          //         style: context.textStyles.titleLarge.copyWith(
+          //           fontWeight: FontWeight.w800,
+          //         ),
+          //       );
+          //     }),
+          //     Container(
+          //       padding: EdgeInsets.symmetric(
+          //         horizontal: context.sizes.sm,
+          //         vertical: context.sizes.xxs,
+          //       ),
+          //       decoration: BoxDecoration(
+          //         color: context.palette.error.withValues(alpha: 0.12),
+          //         borderRadius: BorderRadius.circular(context.sizes.pill),
+          //         border: Border.all(
+          //           color: context.palette.error.withValues(alpha: 0.25),
+          //           width: 1,
+          //         ),
+          //       ),
+          //       child: Row(
+          //         mainAxisSize: MainAxisSize.min,
+          //         children: <Widget>[
+          //           Icon(
+          //             AppIcons.delete,
+          //             size: context.sizes.md,
+          //             color: context.palette.error,
+          //           ),
+          //           SizedBox(width: context.sizes.xs),
+          //           Text(
+          //             AppStrings.tr(AppStrings.edgeDelete),
+          //             style: context.textStyles.labelSmall.copyWith(
+          //               color: context.palette.error,
+          //               fontWeight: FontWeight.w700,
+          //             ),
+          //           ),
+          //         ],
+          //       ),
+          //     ),
+          //   ],
+          // ),
+
+          // SizedBox(height: context.sizes.xs),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
-              // Phase 3.3: the count text observes items itself,
-              // so it never rides the scaffold's rebuilds.
-              Obx(() {
-                return Text(
-                  '${Formatters.formatCount(controller.items.length)} · '
-                  '${Formatters.formatBytes(controller.totalBytes)}',
-                  style: context.textStyles.titleLarge.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                );
-              }),
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: context.sizes.sm,
-                  vertical: context.sizes.xxs,
-                ),
-                decoration: BoxDecoration(
-                  color: context.palette.error.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(context.sizes.pill),
-                  border: Border.all(
-                    color: context.palette.error.withValues(alpha: 0.25),
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Icon(
-                      AppIcons.delete,
-                      size: context.sizes.md,
-                      color: context.palette.error,
-                    ),
-                    SizedBox(width: context.sizes.xs),
-                    Text(
-                      AppStrings.tr(AppStrings.edgeDelete),
-                      style: context.textStyles.labelSmall.copyWith(
-                        color: context.palette.error,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: context.sizes.xs),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  AppStrings.tr(AppStrings.reviewUnmarkHint),
-                  style: context.textStyles.bodySmall.copyWith(
-                    color: context.palette.textSecondary,
-                  ),
-                ),
-              ),
+              // Expanded(
+              //   child: Text(
+              //     AppStrings.tr(AppStrings.reviewUnmarkHint),
+              //     style: context.textStyles.bodySmall.copyWith(
+              //       color: context.palette.textSecondary,
+              //     ),
+              //   ),
+              // ),
+              const Spacer(),
               // Select text button: enters selection mode, then
               // becomes Select all. The label observes the mode
               // so it flips without rebuilding the grid.
