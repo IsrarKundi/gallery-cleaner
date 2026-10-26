@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_icons.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
-import '../../../core/widgets/app_svg_icon.dart';
 import '../../../services/local/local_service.dart';
 
 /// Bottom-anchored deck action bar (design.md §7): buttons for all
@@ -76,11 +75,6 @@ class DeckActionBar extends StatelessWidget {
                       ),
                       _CircleActionButton(
                         icon: AppIcons.addToAlbum,
-                        iconWidget: AppSvgIcon(
-                          asset: AppIcons.addToAlbumAsset,
-                          size: context.sizes.iconMd,
-                          color: context.palette.textPrimary,
-                        ),
                         tooltip: AppStrings.tr(AppStrings.actionAddToAlbum),
                         onPressed: onAddToAlbum,
                       ),
@@ -249,16 +243,12 @@ class _CircleActionButton extends StatelessWidget {
     required this.tooltip,
     required this.onPressed,
     this.iconColor,
-    this.iconWidget,
   });
 
   final IconData icon;
   final String tooltip;
   final VoidCallback? onPressed;
   final Color? iconColor;
-
-  /// Renders instead of [icon] when set (custom SVG actions).
-  final Widget? iconWidget;
 
   @override
   Widget build(BuildContext context) {
@@ -277,13 +267,11 @@ class _CircleActionButton extends StatelessWidget {
             child: Center(
               child: Opacity(
                 opacity: isEnabled ? 1.0 : context.sizes.disabledOpacity,
-                child:
-                    iconWidget ??
-                    Icon(
-                      icon,
-                      size: context.sizes.iconMd,
-                      color: iconColor ?? context.palette.textPrimary,
-                    ),
+                child: Icon(
+                  icon,
+                  size: context.sizes.iconMd,
+                  color: iconColor ?? context.palette.textPrimary,
+                ),
               ),
             ),
           ),

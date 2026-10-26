@@ -325,10 +325,7 @@ void main() {
       expect(find.byType(SwipeCard), findsOneWidget);
       expect(find.byIcon(AppIcons.undo), findsOneWidget);
       expect(find.byIcon(AppIcons.favourite), findsOneWidget);
-      expect(
-        find.byTooltip(AppStrings.tr(AppStrings.actionAddToAlbum)),
-        findsOneWidget,
-      );
+      expect(find.byIcon(AppIcons.addToAlbum), findsOneWidget);
       expect(find.byIcon(AppIcons.share), findsOneWidget);
     });
 

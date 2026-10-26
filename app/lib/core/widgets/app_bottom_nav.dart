@@ -5,7 +5,6 @@ import '../constants/app_icons.dart';
 import '../routes/app_routes.dart';
 import '../strings/app_strings.dart';
 import '../theme/theme_ext.dart';
-import 'app_svg_icon.dart';
 
 /// App bottom navigation bar (design.md §6).
 ///
@@ -54,11 +53,6 @@ class AppBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Colours match what NavigationBar gave the old font icons:
-    // selected = onSecondaryContainer, unselected = onSurfaceVariant.
-    Color navColor(int index) => index == currentIndex
-        ? context.palette.textPrimary
-        : context.palette.textSecondary;
     return Container(
       decoration: BoxDecoration(
         color: context.palette.surface,
@@ -73,35 +67,19 @@ class AppBottomNav extends StatelessWidget {
         indicatorColor: context.palette.primaryContainer,
         destinations: <NavigationDestination>[
           NavigationDestination(
-            icon: AppSvgIcon(
-              asset: AppIcons.navCleanAsset,
-              size: context.sizes.iconMd,
-              color: navColor(0),
-            ),
+            icon: Icon(AppIcons.clean, size: context.sizes.iconMd),
             label: AppStrings.tr(AppStrings.navClean),
           ),
           NavigationDestination(
-            icon: AppSvgIcon(
-              asset: AppIcons.navAlbumsAsset,
-              size: context.sizes.iconMd,
-              color: navColor(1),
-            ),
+            icon: Icon(AppIcons.decks, size: context.sizes.iconMd),
             label: AppStrings.tr(AppStrings.navDecks),
           ),
           NavigationDestination(
-            icon: AppSvgIcon(
-              asset: AppIcons.navTrashAsset,
-              size: context.sizes.iconMd,
-              color: navColor(2),
-            ),
+            icon: Icon(AppIcons.trash, size: context.sizes.iconMd),
             label: AppStrings.tr(AppStrings.navTrash),
           ),
           NavigationDestination(
-            icon: AppSvgIcon(
-              asset: AppIcons.navSettingsAsset,
-              size: context.sizes.iconMd,
-              color: navColor(3),
-            ),
+            icon: Icon(AppIcons.settings, size: context.sizes.iconMd),
             label: AppStrings.tr(AppStrings.navSettings),
           ),
         ],
