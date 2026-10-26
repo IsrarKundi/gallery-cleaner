@@ -99,22 +99,28 @@ class _SplashViewState extends State<SplashView>
           behavior: HitTestBehavior.opaque,
           onTap: _splashController.skip,
           child: Center(
-            child: reducedMotion
-                ? SvgPicture.asset(
-                    splashLogoAsset(isDark),
-                    width: context.sizes.splashLogoWidth,
-                  )
-                : Lottie.asset(
-                    splashLottieAsset(isDark),
-                    controller: _lottieController,
-                    width: context.sizes.splashLogoWidth,
-                    height: context.sizes.splashLogoHeight,
-                    onLoaded: (LottieComposition composition) {
-                      _lottieController
-                        ..duration = composition.duration
-                        ..forward();
-                    },
-                  ),
+            child: SvgPicture.asset(
+              'assets/icons/wipe_logo.svg',
+              height: context.sizes.splashLogoWidth,
+              theme: SvgTheme(currentColor: context.palette.textPrimary),
+              semanticsLabel: AppStrings.tr(AppStrings.appTitle),
+            ),
+            // reducedMotion
+            //     ? SvgPicture.asset(
+            //         splashLogoAsset(isDark),
+            //         width: context.sizes.splashLogoWidth,
+            //       )
+            //     : Lottie.asset(
+            //         splashLottieAsset(isDark),
+            //         controller: _lottieController,
+            //         width: context.sizes.splashLogoWidth,
+            //         height: context.sizes.splashLogoHeight,
+            //         onLoaded: (LottieComposition composition) {
+            //           _lottieController
+            //             ..duration = composition.duration
+            //             ..forward();
+            //         },
+            //       ),
           ),
         ),
       ),

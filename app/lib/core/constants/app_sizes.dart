@@ -73,7 +73,7 @@ class AppSizes {
   // Splash (design.md §13): logo width on the splash screen, and the
   // hold-timer fallback. The Lottie itself is ~1.67s, so the timer only
   // fires if Lottie playback fails; it is cancelled on Lottie finish.
-  double get splashLogoWidth => 200;
+  double get splashLogoWidth => 150;
   // Height matching the generated logo aspect (755:200 viewBox).
   double get splashLogoHeight => 53;
   Duration get splashHold => const Duration(milliseconds: 3000);
