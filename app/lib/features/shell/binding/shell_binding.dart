@@ -1,5 +1,7 @@
 import 'package:get/get.dart';
 
+import '../../../services/local/local_service.dart';
+import '../../../services/media/media_service.dart';
 import '../../deck/binding/deck_binding.dart';
 import '../../decks/binding/decks_binding.dart';
 import '../../settings/binding/settings_binding.dart';
@@ -21,7 +23,17 @@ class ShellBinding extends Bindings {
     DeckBinding().dependencies();
     DecksBinding().dependencies();
     SettingsBinding().dependencies();
-    Get.put<ShellController>(ShellController(initialNavIndex: _initialTab()));
+    Get.put<ShellController>(
+      ShellController(
+        initialNavIndex: _initialTab(),
+        local: Get.isRegistered<LocalService>()
+            ? Get.find<LocalService>()
+            : null,
+        media: Get.isRegistered<MediaService>()
+            ? Get.find<MediaService>()
+            : null,
+      ),
+    );
   }
 
   /// Initial tab from the route arguments (Review/Trash bottom-nav

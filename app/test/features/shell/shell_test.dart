@@ -19,6 +19,7 @@ import 'package:klara/features/deck/widgets/swipe_card.dart';
 import 'package:klara/features/decks/controller/decks_controller.dart';
 import 'package:klara/features/decks/model/decks_status.dart';
 import 'package:klara/features/review/binding/review_binding.dart';
+import 'package:klara/features/review/controller/review_controller.dart';
 import 'package:klara/features/review/view/review_view.dart';
 import 'package:klara/features/review/widgets/review_loading_skeleton.dart';
 import 'package:klara/features/shell/binding/shell_binding.dart';
@@ -562,5 +563,42 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(SwipeCard), findsOneWidget);
     expect(deck.marks['a1'], DeckMark.delete);
+  });
+
+  testWidgets('Trash tab shows union of Clean deck and smart deck deletes', (
+    WidgetTester tester,
+  ) async {
+    final _Media media = _Media();
+    final _Local local = _Local();
+    final MediaAsset s1 = _asset('s1');
+    media.assets.add(s1);
+
+    // Persisted smart deck session with delete mark on s1
+    local.sessions['smart:screenshots'] = DeckSession(
+      filterKey: 'smart:screenshots',
+      currentIndex: 1,
+      marks: <String, DeckMark>{'s1': DeckMark.delete},
+      favouriteIds: const <String>{},
+    );
+
+    await _pumpShell(tester, media, local, _Trash());
+    final DeckController deck = Get.find<DeckController>();
+
+    // Swipe delete 1 photo on Clean deck
+    await tester.drag(find.byType(SwipeCard), const Offset(200, 0));
+    await tester.pumpAndSettle();
+    expect(deck.marks['a1'], DeckMark.delete);
+
+    // Tap Trash tab
+    await tester.tap(_navItem('Trash'));
+    await tester.pumpAndSettle();
+
+    // Review must show both: a1 (from Clean deck) and s1 (from smart deck)
+    expect(find.text('Delete 2 photos'), findsOneWidget);
+    final ReviewController review = Get.find<ReviewController>();
+    expect(review.items.map((MediaAsset a) => a.id).toList(), <String>[
+      'a1',
+      's1',
+    ]);
   });
 }

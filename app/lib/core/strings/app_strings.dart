@@ -248,6 +248,14 @@ class AppStrings {
   static const String settingsSectionFeedback = 'settingsSectionFeedback';
   static const String settingsSectionTrash = 'settingsSectionTrash';
   static const String settingsSectionAbout = 'settingsSectionAbout';
+  static const String settingsSectionPreferences = 'settingsSectionPreferences';
+  static const String settingsSectionPrivacySecurity =
+      'settingsSectionPrivacySecurity';
+  static const String settingsThemes = 'settingsThemes';
+  static const String settingsNotifications = 'settingsNotifications';
+  static const String settingsSoundHaptics = 'settingsSoundHaptics';
+  static const String settingsPrivacyPolicy = 'settingsPrivacyPolicy';
+  static const String settingsTermsOfService = 'settingsTermsOfService';
   static const String settingsThemeTitle = 'settingsThemeTitle';
   static const String settingsThemeSystem = 'settingsThemeSystem';
   static const String settingsThemeLight = 'settingsThemeLight';
@@ -546,6 +554,13 @@ class AppStrings {
     settingsSectionFeedback: 'Feedback',
     settingsSectionTrash: 'Trash',
     settingsSectionAbout: 'About',
+    settingsSectionPreferences: 'Preferences',
+    settingsSectionPrivacySecurity: 'Privacy & Security',
+    settingsThemes: 'Themes',
+    settingsNotifications: 'Notifications',
+    settingsSoundHaptics: 'Sound & Haptics',
+    settingsPrivacyPolicy: 'Privacy Policy',
+    settingsTermsOfService: 'Terms of Service',
     settingsThemeTitle: 'Theme',
     settingsThemeSystem: 'System',
     settingsThemeLight: 'Light',

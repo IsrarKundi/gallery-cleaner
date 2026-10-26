@@ -1,7 +1,11 @@
 import 'package:get/get.dart';
 
 import '../../../core/routes/app_routes.dart';
+import '../../../services/local/local_service.dart';
+import '../../../services/media/media_service.dart';
 import '../../deck/controller/deck_controller.dart';
+import '../../decks/controller/smart_deck_controller.dart';
+import '../../review/controller/review_union.dart';
 
 /// Bottom-nav shell state (solutions 7.1): the shell keeps the deck,
 /// hub and settings tabs alive across tab switches (F-26), instead
@@ -24,10 +28,13 @@ import '../../deck/controller/deck_controller.dart';
 /// feature bindings — the shell owns no feature state itself, it
 /// only asks the deck whether a card exit is in flight. See ADR-007.
 class ShellController extends GetxController {
-  ShellController({int initialNavIndex = 0})
+  ShellController({int initialNavIndex = 0, this.local, this.media})
     : initialNavIndex = _validatedNav(initialNavIndex),
       navIndex = _validatedNav(initialNavIndex).obs,
       visitedStacks = <int>{stackIndexForNav(_validatedNav(initialNavIndex))};
+
+  final LocalService? local;
+  final MediaService? media;
 
   /// Validates an initial tab: only Clean, Decks and Settings are
   /// tabs (Trash is an action, never an initial tab).
@@ -105,16 +112,31 @@ class ShellController extends GetxController {
   /// recorded during a gated wait is included. When the deck is
   /// unresolvable the plain push stands and Review falls back to
   /// the session path, skeleton included, as before.
-  void _pushReview() {
+  Future<void> _pushReview() async {
     if (Get.currentRoute == AppRoutes.review) {
       return;
     }
     try {
-      final DeckController deck = Get.find<DeckController>();
+      final LocalService localService = local ?? Get.find<LocalService>();
+      final MediaService mediaService = media ?? Get.find<MediaService>();
+      final DeckController? deck = Get.isRegistered<DeckController>()
+          ? Get.find<DeckController>()
+          : null;
+      final SmartDeckController? smart = Get.isRegistered<SmartDeckController>()
+          ? Get.find<SmartDeckController>()
+          : null;
+
+      final ReviewLaunch launch = await buildReviewUnion(
+        local: localService,
+        media: mediaService,
+        deck: deck,
+        liveSmartDeck: smart,
+      );
+
       Get.toNamed<dynamic>(
         AppRoutes.review,
-        arguments: deck.deleteMarkedAssets,
-        parameters: <String, String>{'filterKey': deck.filter.value.filterKey},
+        arguments: launch,
+        parameters: <String, String>{'filterKey': 'union'},
       );
     } catch (_) {
       Get.toNamed<dynamic>(AppRoutes.review);

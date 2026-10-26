@@ -99,38 +99,40 @@ class TimelineSection extends StatelessWidget {
           child: Row(
             children: <Widget>[
               // Sort toggle button (matches ⇅ in pill)
-              Material(
-                color: context.palette.surface,
-                borderRadius: BorderRadius.circular(context.sizes.pill),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(context.sizes.pill),
-                  onTap: onToggleSort,
-                  child: Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: context.sizes.md,
-                      vertical: context.sizes.xs,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(context.sizes.pill),
-                      border: Border.all(
-                        color: context.palette.border,
-                        width: 1,
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        '⇅',
-                        style: context.textStyles.labelMedium.copyWith(
-                          color: context.palette.textPrimary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(width: context.sizes.xs),
+              // Material(
+              //   color: context.palette.surface,
+              //   borderRadius: BorderRadius.circular(context.sizes.pill),
+              //   child: InkWell(
+              //     borderRadius: BorderRadius.circular(context.sizes.pill),
+              //     onTap: onToggleSort,
+              //     child: Container(
+              //       padding: EdgeInsets.symmetric(
+              //         horizontal: context.sizes.md,
+              //         vertical: context.sizes.xs,
+              //       ),
+              //       decoration: BoxDecoration(
+              //         color: context.palette.surfaceVariant,
+              //         borderRadius: BorderRadius.circular(context.sizes.pill),
+              //         // border: Border.all(
+              //         //   color: context.palette.border,
+              //         //   width: 1,
+              //         // ),
+              //       ),
+              //       child: Center(
+              //         child: Text(
+              //           '⇅',
+              //           style: context.textStyles.labelMedium.copyWith(
+              //             color: context.palette.textPrimary,
+              //             fontWeight: FontWeight.w700,
+              //             fontSize: 14,
+              //           ),
+              //         ),
+              //       ),
+              //     ),
+              //   ),
+              // ),
+
+              // SizedBox(width: context.sizes.xs),
               for (final int y in years) ...<Widget>[
                 _YearChip(
                   year: y,
@@ -238,14 +240,24 @@ class _YearChip extends StatelessWidget {
             vertical: context.sizes.xs,
           ),
           decoration: BoxDecoration(
+            color: selected
+                ? context.palette.primary
+                : context.palette.surfaceVariant,
+
             borderRadius: BorderRadius.circular(context.sizes.pill),
-            border: Border.all(
-              color: selected
-                  ? context.palette.primary
-                  : context.palette.border,
-              width: 1,
-            ),
+            // border: Border.all(
+            //   color: selected ? Colors.transparent : context.palette.border,
+            //   width: 1,
+            // ),
           ),
+          // decoration: BoxDecoration(
+          //             color: selected ? context.palette.primary : Colors.transparent,
+          //             borderRadius: BorderRadius.circular(context.sizes.pill),
+          //             // border: Border.all(
+          //             //   color: context.palette.border,
+          //             //   width: 1,
+          //             // ),
+          //           ),
           child: Text(
             year.toString(),
             style: context.textStyles.labelMedium.copyWith(

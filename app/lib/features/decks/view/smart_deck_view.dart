@@ -9,6 +9,8 @@
 // main deck's space meter (the meter lives on the main deck; this
 // screen's job is deciding this deck's photos).
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -17,19 +19,69 @@ import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_scaffold.dart';
+import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/empty_view.dart';
 import '../../../core/widgets/info_banner.dart';
+import '../../../features/deck/widgets/album_picker_sheet.dart';
 import '../../../features/deck/widgets/deck_action_bar.dart';
 import '../../../features/deck/widgets/deck_card_stack.dart';
 import '../../../features/deck/widgets/deck_home_skeleton.dart';
 import '../../../features/deck/widgets/session_summary_card.dart';
 import '../../../services/detection/smart_decks.dart';
+import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
 import '../controller/smart_deck_controller.dart';
 import '../model/smart_deck_meta.dart';
 
 class SmartDeckView extends GetView<SmartDeckController> {
   const SmartDeckView({super.key});
+
+  Future<void> _openAlbumPickerWithAlbums(
+    BuildContext context,
+    SmartDeckController controller,
+  ) async {
+    await controller.ensureAlbums();
+    if (context.mounted) {
+      _openAlbumPicker(context, controller);
+    }
+  }
+
+  void _shareCurrentAsset(SmartDeckController controller) {
+    final MediaAsset? asset = controller.currentAsset;
+    if (asset == null) {
+      return;
+    }
+    final Uint8List? thumb = controller.thumbnails[asset.id];
+    controller.retention.share?.shareSummary(
+      text:
+          '${asset.title.isEmpty ? 'Photo' : asset.title} · ${Formatters.formatBytes(asset.sizeBytes)}',
+      imagePng: thumb,
+    );
+  }
+
+  void _openAlbumPicker(BuildContext context, SmartDeckController controller) {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(context.sizes.radiusSheet),
+        ),
+      ),
+      builder: (BuildContext sheetContext) {
+        return AlbumPickerSheet(
+          albums: controller.albums,
+          onAlbumSelected: (MediaAlbum album) {
+            Navigator.of(sheetContext).pop();
+            AppSnackbar.show(
+              context,
+              message:
+                  '${AppStrings.tr(AppStrings.actionAddToAlbum)}: ${album.name}',
+            );
+          },
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +91,9 @@ class SmartDeckView extends GetView<SmartDeckController> {
       final SmartDeckId? deckId = controller.deckId;
       final int decided = controller.marks.length;
       final int total = controller.queue.length;
+      final MediaAsset? current = controller.currentAsset;
+      final bool isFav =
+          current != null && controller.favouriteIds.contains(current.id);
 
       return AppScaffold(
         title: deckId == null
@@ -70,6 +125,11 @@ class SmartDeckView extends GetView<SmartDeckController> {
                 canUndo: controller.canUndo,
                 onReview: controller.goToReview,
                 isCleanScreen: true,
+                isFavourite: isFav,
+                onFavorite: () => controller.markCurrent(DeckMark.favourite),
+                onAddToAlbum: () =>
+                    _openAlbumPickerWithAlbums(context, controller),
+                onShare: () => _shareCurrentAsset(controller),
               )
             : null,
         body: _Body(controller: controller),

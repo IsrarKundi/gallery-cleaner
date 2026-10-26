@@ -4,11 +4,6 @@ import 'package:get/get.dart';
 
 import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
-// Composition exception (AGENTS.md): mirroring the shell's
-// DeckController import, Review coordinates tab return and
-// syncs awaiting trash entries with DeckController when the shell
-// is alive underneath it — it owns no shell state. See ADR-009.
-import '../../deck/controller/deck_controller.dart';
 import '../../shell/controller/shell_controller.dart';
 import '../../../core/utils/app_haptics.dart';
 import '../../../core/utils/result.dart';
@@ -21,6 +16,7 @@ import '../../../services/trash/trash_service.dart';
 import 'review_selection.dart';
 import 'review_session.dart';
 import 'review_delete.dart';
+import 'review_union.dart';
 
 /// Outcome of [ReviewController.deleteSelected], for the view's
 /// post-delete handling and for tests (navigation itself is not
@@ -40,13 +36,28 @@ class ReviewController extends GetxController {
     required this.trash,
     required this.local,
     this.initialAssets,
+    Map<String, String>? initialOriginSessionKeys,
     this.filterKeyOverride,
     ThumbnailService? thumbnailService,
-  }) : _thumbnails = thumbnailService ?? ThumbnailServiceImpl(media: media);
+  }) : _thumbnails = thumbnailService ?? ThumbnailServiceImpl(media: media),
+       originSessionKeys = initialOriginSessionKeys != null
+           ? Map<String, String>.of(initialOriginSessionKeys)
+           : <String, String>{} {
+    if (initialAssets != null) {
+      items.assignAll(initialAssets!);
+    }
+    if (filterKeyOverride != null) {
+      _filterKey = filterKeyOverride!;
+    }
+  }
 
   final MediaService media;
   final TrashService trash;
   final LocalService local;
+
+  /// Mapping of asset id -> origin deck session key, preserving
+  /// independent sessions across the union set (requirements §4).
+  final Map<String, String> originSessionKeys;
 
   /// Thumbnail edge in pixels for grid tiles (solutions 3.1: grid
   /// standard 256–320 px, top of the range so 3×-DPR tiles stay
@@ -122,10 +133,16 @@ class ReviewController extends GetxController {
   void onInit() {
     super.onInit();
     final List<MediaAsset>? fromArgs = initialAssets ?? _routeAssets();
-    if (fromArgs != null) {
+    if (fromArgs != null && items.isEmpty) {
       items.assignAll(fromArgs);
     }
-    _filterKey = filterKeyOverride ?? _routeFilterKey();
+    final Map<String, String>? fromLaunch = _routeOriginSessions();
+    if (fromLaunch != null && originSessionKeys.isEmpty) {
+      originSessionKeys.addAll(fromLaunch);
+    }
+    if (filterKeyOverride == null) {
+      _filterKey = _routeFilterKey();
+    }
     if (items.isEmpty) {
       isLoading.value = true;
       _loadFromSession();
@@ -135,14 +152,26 @@ class ReviewController extends GetxController {
 
   Future<void> _loadFromSession() async {
     try {
-      final List<MediaAsset> loaded = await loadDeleteMarkedAssets(
-        local: local,
-        media: media,
-        filterKey: _filterKey,
-      );
-      if (loaded.isNotEmpty && items.isEmpty) {
-        items.assignAll(loaded);
-        _loadThumbnails();
+      if (_filterKey == 'union') {
+        final ReviewLaunch launch = await buildReviewUnion(
+          local: local,
+          media: media,
+        );
+        if (launch.assets.isNotEmpty && items.isEmpty) {
+          items.assignAll(launch.assets);
+          originSessionKeys.addAll(launch.originSessionKeys);
+          _loadThumbnails();
+        }
+      } else {
+        final List<MediaAsset> loaded = await loadDeleteMarkedAssets(
+          local: local,
+          media: media,
+          filterKey: _filterKey,
+        );
+        if (loaded.isNotEmpty && items.isEmpty) {
+          items.assignAll(loaded);
+          _loadThumbnails();
+        }
       }
     } finally {
       isLoading.value = false;
@@ -158,8 +187,23 @@ class ReviewController extends GetxController {
       if (args is List<MediaAsset>) {
         return args;
       }
+      if (args is ReviewLaunch) {
+        return args.assets;
+      }
     } catch (_) {
       // No route in this context; the constructor list (if any) wins.
+    }
+    return null;
+  }
+
+  Map<String, String>? _routeOriginSessions() {
+    try {
+      final dynamic args = Get.arguments;
+      if (args is ReviewLaunch) {
+        return args.originSessionKeys;
+      }
+    } catch (_) {
+      // No route in this context; constructor map (if any) wins.
     }
     return null;
   }
@@ -208,10 +252,11 @@ class ReviewController extends GetxController {
   /// and the error state shows instead of silently dropping it.
   Future<void> unmark(MediaAsset asset) async {
     errorKey.value = '';
-    final bool saved = await updateSessionMarks(
+    final String sessionKey = originSessionKeys[asset.id] ?? _filterKey;
+    final bool saved = await syncReviewUnmark(
       local: local,
-      filterKey: _filterKey,
-      updates: <String, DeckMark?>{asset.id: null},
+      asset: asset,
+      sessionKey: sessionKey,
     );
     if (!saved) {
       errorKey.value = AppStrings.errorLocal;
@@ -219,9 +264,6 @@ class ReviewController extends GetxController {
     }
     items.removeWhere((MediaAsset item) => item.id == asset.id);
     _syncSelection();
-    if (Get.isRegistered<DeckController>()) {
-      Get.find<DeckController>().cancelAwaiting(asset);
-    }
   }
 
   /// Sets every delete mark in the set to keep in the session
@@ -232,13 +274,11 @@ class ReviewController extends GetxController {
       return;
     }
     errorKey.value = '';
-    final Map<String, DeckMark?> updates = <String, DeckMark?>{
-      for (final MediaAsset asset in items) asset.id: DeckMark.keep,
-    };
-    final bool saved = await updateSessionMarks(
+    final bool saved = await syncReviewKept(
       local: local,
-      filterKey: _filterKey,
-      updates: updates,
+      assets: items.toList(),
+      originSessionKeys: originSessionKeys,
+      defaultFilterKey: _filterKey,
     );
     if (!saved) {
       errorKey.value = AppStrings.errorLocal;
@@ -246,9 +286,6 @@ class ReviewController extends GetxController {
     }
     items.clear();
     selection.clear();
-    if (Get.isRegistered<DeckController>()) {
-      Get.find<DeckController>().markAssetsKept(updates.keys);
-    }
     goToDeck();
   }
 
@@ -263,24 +300,20 @@ class ReviewController extends GetxController {
       return;
     }
     errorKey.value = '';
-    final Map<String, DeckMark?> updates = <String, DeckMark?>{
-      for (final MediaAsset asset in selectedItems) asset.id: DeckMark.keep,
-    };
-    final bool saved = await updateSessionMarks(
+    final List<MediaAsset> toKeep = selectedItems.toList();
+    final bool saved = await syncReviewKept(
       local: local,
-      filterKey: _filterKey,
-      updates: updates,
+      assets: toKeep,
+      originSessionKeys: originSessionKeys,
+      defaultFilterKey: _filterKey,
     );
     if (!saved) {
       errorKey.value = AppStrings.errorLocal;
       return;
     }
-    final Set<String> kept = selectedItems.map((MediaAsset a) => a.id).toSet();
+    final Set<String> kept = toKeep.map((MediaAsset a) => a.id).toSet();
     items.removeWhere((MediaAsset item) => kept.contains(item.id));
     _syncSelection();
-    if (Get.isRegistered<DeckController>()) {
-      Get.find<DeckController>().markAssetsKept(kept);
-    }
     if (items.isEmpty) {
       goToDeck();
     }
@@ -352,28 +385,18 @@ class ReviewController extends GetxController {
     lastFailedCount.value = outcome.failedIds.length;
     if (outcome.deletedIds.isNotEmpty) {
       await _applyDeleted(outcome.deletedIds);
-      if (Get.isRegistered<DeckController>()) {
-        Get.find<DeckController>().removeTrashedAssets(outcome.deletedIds);
-      }
       // Phase 3A haptics (design.md §8): medium click when a
       // delete is confirmed through the native sheet.
       AppHaptics.deleteConfirm();
     }
     if (outcome.deniedIds.isNotEmpty) {
-      // Denied marks clear best-effort: even if the write fails, the
-      // photos stay delete-marked and reappear in the deck for
-      // another review instead of vanishing.
-      await updateSessionMarks(
+      await syncReviewDenied(
         local: local,
-        filterKey: _filterKey,
-        updates: <String, DeckMark?>{
-          for (final String id in outcome.deniedIds) id: null,
-        },
+        deniedIds: outcome.deniedIds,
+        originSessionKeys: originSessionKeys,
+        defaultFilterKey: _filterKey,
       );
       deniedIds.assignAll(outcome.deniedIds);
-      if (Get.isRegistered<DeckController>()) {
-        Get.find<DeckController>().handleDeniedTrash(outcome.deniedIds);
-      }
       lastOutcome.value = ReviewDeleteOutcome.denied;
       return ReviewDeleteOutcome.denied;
     }
@@ -390,10 +413,11 @@ class ReviewController extends GetxController {
   /// from the grid, and appends the one history record for the run
   /// (mbFreed = bytes / 1048576, mbTrashed = 0 — permanently freed).
   Future<void> _applyDeleted(List<String> ids) async {
-    await updateSessionMarks(
+    await syncReviewDeleted(
       local: local,
-      filterKey: _filterKey,
-      updates: <String, DeckMark?>{for (final String id in ids) id: null},
+      deletedIds: ids,
+      originSessionKeys: originSessionKeys,
+      defaultFilterKey: _filterKey,
     );
     final Set<String> deleted = ids.toSet();
     int bytes = 0;

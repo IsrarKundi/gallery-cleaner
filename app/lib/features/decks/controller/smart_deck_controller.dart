@@ -28,6 +28,7 @@ import '../../../services/detection/smart_decks.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/media/media_service.dart';
+import '../../../services/share/share_service.dart';
 import '../../deck/controller/deck_protection.dart';
 import '../../deck/controller/deck_retention.dart';
 import '../../deck/model/retention.dart';
@@ -39,9 +40,24 @@ class SmartDeckController extends GetxController {
   SmartDeckController({
     required this.media,
     required this.local,
+    ShareService? share,
     this.initialLaunch,
     ThumbnailService? thumbnailService,
-  }) : _thumbnails = thumbnailService ?? ThumbnailServiceImpl(media: media);
+  }) : _thumbnails = thumbnailService ?? ThumbnailServiceImpl(media: media),
+       retention = DeckRetention(
+         local: local,
+         share:
+             share ??
+             (Get.isRegistered<ShareService>()
+                 ? Get.find<ShareService>()
+                 : null),
+       ) {
+    if (initialLaunch != null) {
+      _launch = initialLaunch;
+      _sessionKey = initialLaunch!.sessionKey;
+      queue.assignAll(initialLaunch!.assets);
+    }
+  }
 
   final MediaService media;
   final LocalService local;
@@ -51,9 +67,27 @@ class SmartDeckController extends GetxController {
   final ThumbnailService _thumbnails;
 
   /// Phase 2B retention glue, shared with the main deck controller
-  /// (summary, snooze expiry, completion days). No share backend:
-  /// smart-deck finishes show counts without a share button.
-  late final DeckRetention retention = DeckRetention(local: local);
+  /// (summary, snooze expiry, completion days, sharing).
+  final DeckRetention retention;
+
+  /// Cached album list for the add-to-album sheet.
+  final RxList<MediaAlbum> albums = <MediaAlbum>[].obs;
+  bool _albumsLoaded = false;
+
+  /// Loads albums once on demand for the album picker sheet.
+  Future<void> ensureAlbums() async {
+    if (_albumsLoaded) {
+      return;
+    }
+    final Result<List<MediaAlbum>> albumResult = await media.getAlbums();
+    albumResult.fold(
+      onSuccess: (List<MediaAlbum> value) {
+        albums.assignAll(value);
+        _albumsLoaded = true;
+      },
+      onFailure: (_) => albums.clear(),
+    );
+  }
 
   /// Thumbnail edge for swipe cards, matching the deck's preload size
   /// (solutions 3.1: deck-card surface, capped at 1080 px).
@@ -80,6 +114,7 @@ class SmartDeckController extends GetxController {
 
   SmartDeckLaunch? _launch;
   String _sessionKey = 'smart:unknown';
+  String get sessionKey => _sessionKey;
 
   SmartDeckId? get deckId => _launch?.deckId;
 
@@ -97,9 +132,19 @@ class SmartDeckController extends GetxController {
   bool get canUndo => undoStack.isNotEmpty;
 
   List<MediaAsset> get deleteMarkedAssets {
-    return queue
-        .where((MediaAsset asset) => marks[asset.id] == DeckMark.delete)
-        .toList();
+    final Map<String, MediaAsset> queueById = <String, MediaAsset>{
+      for (final MediaAsset a in queue) a.id: a,
+    };
+    final List<MediaAsset> result = <MediaAsset>[];
+    for (final MapEntry<String, DeckMark> entry in marks.entries) {
+      if (entry.value == DeckMark.delete) {
+        final MediaAsset? asset = queueById[entry.key];
+        if (asset != null) {
+          result.add(asset);
+        }
+      }
+    }
+    return result;
   }
 
   /// Finished-session summary (Phase 2B): same counts as the main
@@ -248,6 +293,48 @@ class SmartDeckController extends GetxController {
     _thumbnails.cancelOutside(<ThumbnailKey>{
       for (final String id in ids) (id: id, size: thumbnailSize, quality: 85),
     });
+  }
+
+  /// Called when Review unmarks an asset that came from this smart deck.
+  void unmarkAsset(String assetId) {
+    marks.remove(assetId);
+    favouriteIds.remove(assetId);
+    undoStack.removeWhere((String id) => id == assetId);
+    if (currentIndex.value >= queue.length) {
+      currentIndex.value = _firstUndecidedIndex();
+    }
+    _persist();
+  }
+
+  /// Called when Review marks assets kept that came from this smart deck.
+  void markAssetsKept(Iterable<String> assetIds) {
+    for (final String id in assetIds) {
+      marks[id] = DeckMark.keep;
+      favouriteIds.remove(id);
+    }
+    undoStack.removeWhere((String id) => assetIds.contains(id));
+    _persist();
+  }
+
+  /// Called when Review permanently deletes assets that came from this smart deck.
+  void removeTrashedAssets(Iterable<String> assetIds) {
+    final Set<String> ids = assetIds.toSet();
+    marks.removeWhere((String id, _) => ids.contains(id));
+    favouriteIds.removeWhere((String id) => ids.contains(id));
+    undoStack.removeWhere((String id) => ids.contains(id));
+    queue.removeWhere((MediaAsset a) => ids.contains(a.id));
+    if (currentIndex.value > queue.length) {
+      currentIndex.value = queue.length;
+    }
+    _persist();
+  }
+
+  /// Called when user denies delete confirmation for assets from this smart deck.
+  void handleDeniedTrash(Iterable<String> assetIds) {
+    final Set<String> ids = assetIds.toSet();
+    marks.removeWhere((String id, _) => ids.contains(id));
+    undoStack.removeWhere((String id) => ids.contains(id));
+    _persist();
   }
 
   void _persist() {

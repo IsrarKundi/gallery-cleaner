@@ -6,6 +6,7 @@ import '../../../services/media/media_service.dart';
 import '../../../services/thumbnail/thumbnail_service.dart';
 import '../../../services/trash/trash_service.dart';
 import '../controller/review_controller.dart';
+import '../controller/review_union.dart';
 
 /// Registers the review controller with constructor injection
 /// (AGENTS.md: controllers are registered ONLY in bindings). Services
@@ -22,6 +23,7 @@ class ReviewBinding extends Bindings {
         trash: Get.find<TrashService>(),
         local: Get.find<LocalService>(),
         initialAssets: _routeAssets(),
+        initialOriginSessionKeys: _routeOriginSessions(),
         filterKeyOverride: _routeFilterKey(),
         thumbnailService: Get.isRegistered<ThumbnailService>()
             ? Get.find<ThumbnailService>()
@@ -35,6 +37,21 @@ class ReviewBinding extends Bindings {
       final dynamic args = Get.arguments;
       if (args is List<MediaAsset>) {
         return args;
+      }
+      if (args is ReviewLaunch) {
+        return args.assets;
+      }
+    } catch (_) {
+      // No route yet; the controller falls back on init.
+    }
+    return null;
+  }
+
+  Map<String, String>? _routeOriginSessions() {
+    try {
+      final dynamic args = Get.arguments;
+      if (args is ReviewLaunch) {
+        return args.originSessionKeys;
       }
     } catch (_) {
       // No route yet; the controller falls back on init.

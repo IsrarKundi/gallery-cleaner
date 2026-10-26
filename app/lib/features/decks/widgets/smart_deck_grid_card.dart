@@ -64,9 +64,9 @@ class SmartDeckGridCard extends StatelessWidget {
                 height: cardHeight,
                 padding: EdgeInsets.all(context.sizes.sm),
                 decoration: BoxDecoration(
-                  color: context.palette.surface,
+                  color: context.palette.surfaceVariant,
                   borderRadius: BorderRadius.circular(context.sizes.radiusLg),
-                  border: Border.all(color: context.palette.border, width: 1),
+                  // border: Border.all(color: context.palette.border, width: 1),
                 ),
                 child: Column(
                   children: <Widget>[
@@ -116,7 +116,7 @@ class SmartDeckGridCard extends StatelessWidget {
                             child: overflow > 0
                                 ? Container(
                                     decoration: BoxDecoration(
-                                      color: context.palette.surfaceVariant,
+                                      color: context.palette.border,
                                       borderRadius: BorderRadius.circular(
                                         context.sizes.radiusMd,
                                       ),

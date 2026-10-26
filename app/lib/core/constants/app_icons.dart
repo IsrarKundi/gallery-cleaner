@@ -86,6 +86,11 @@ class AppIcons {
   static const IconData compress = PhosphorIconsRegular.filmStrip;
   static const IconData forward = PhosphorIconsRegular.caretRight;
   static const IconData camera = PhosphorIconsRegular.camera;
+  static const IconData palette = PhosphorIconsRegular.palette;
+  static const IconData bell = PhosphorIconsRegular.bell;
+  static const IconData waveform = PhosphorIconsRegular.waveform;
+  static const IconData shield = PhosphorIconsRegular.shieldCheck;
+  static const IconData fileText = PhosphorIconsRegular.fileText;
 
   /// Every constant, for tests that assert each one is a valid glyph.
   static const List<IconData> all = <IconData>[
@@ -127,5 +132,10 @@ class AppIcons {
     compress,
     forward,
     camera,
+    palette,
+    bell,
+    waveform,
+    shield,
+    fileText,
   ];
 }

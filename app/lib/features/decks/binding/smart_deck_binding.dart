@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_service.dart';
+import '../../../services/share/share_service.dart';
 import '../../../services/thumbnail/thumbnail_service.dart';
 import '../controller/smart_deck_controller.dart';
 import '../model/smart_deck_launch.dart';
@@ -19,6 +20,9 @@ class SmartDeckBinding extends Bindings {
       () => SmartDeckController(
         media: Get.find<MediaService>(),
         local: Get.find<LocalService>(),
+        share: Get.isRegistered<ShareService>()
+            ? Get.find<ShareService>()
+            : null,
         initialLaunch: _routeLaunch(),
         thumbnailService: Get.isRegistered<ThumbnailService>()
             ? Get.find<ThumbnailService>()

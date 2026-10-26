@@ -112,7 +112,7 @@ class ReviewGridTile extends StatelessWidget {
           excludeSemantics: true,
           child: Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(context.sizes.radiusMd),
+              borderRadius: BorderRadius.zero,
               border: Border.all(
                 color: selected
                     ? context.palette.primary
@@ -121,7 +121,7 @@ class ReviewGridTile extends StatelessWidget {
               ),
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(context.sizes.radiusMd - 1),
+              // borderRadius: BorderRadius.circular(context.sizes.radiusMd - 1),
               child: InkWell(
                 onTap: onTap,
                 onLongPress: onLongPress,

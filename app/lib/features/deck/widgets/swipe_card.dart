@@ -265,7 +265,6 @@ class _SwipeCardState extends State<SwipeCard>
                 // Labels ride the same transform + opacity as the
                 // photo, and highlight with the effective offset
                 // (drag, or exit flight toward the committed mark).
-                _EdgeLabels(drag: offset),
               ],
             ),
           ),

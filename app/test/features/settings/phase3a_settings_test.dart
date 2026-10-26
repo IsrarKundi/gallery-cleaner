@@ -441,19 +441,23 @@ void main() {
       );
       await tester.pumpAndSettle();
       for (final String label in <String>[
-        'Theme',
-        'Private blur',
-        'Protect favourites',
-        'Weekly nudge',
-        'Haptics',
-        'Reduced motion',
-        'Prompt to empty expired trash',
-        'Klara',
+        'Preferences',
+        'Themes',
+        'Notifications',
+        'Sound & Haptics',
+        'Privacy & Security',
+        'Privacy Policy',
+        'Terms of Service',
       ]) {
         expect(find.text(label), findsWidgets);
       }
-      expect(find.byType(SwitchListTile), findsNWidgets(6));
-      expect(find.byType(RadioListTile<ThemePreference>), findsNWidgets(3));
+      expect(find.byType(Switch), findsNWidgets(2));
+      // Tap Themes to verify modal sheet opens
+      await tester.tap(find.text('Themes'));
+      await tester.pumpAndSettle();
+      expect(find.text('System'), findsNWidgets(2));
+      expect(find.text('Light'), findsOneWidget);
+      expect(find.text('Dark'), findsOneWidget);
       await tester.runAsync(() async {
         if (await dir.exists()) {
           await dir.delete(recursive: true);

@@ -167,6 +167,11 @@ class ReviewView extends GetView<ReviewController> {
                   AppStrings.tr(
                     mode ? AppStrings.actionSelectAll : AppStrings.actionSelect,
                   ),
+                  style: context.textStyles.labelMedium.copyWith(
+                    color: context.palette.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
                 ),
               );
             }),
@@ -231,8 +236,8 @@ class ReviewView extends GetView<ReviewController> {
                         ),
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 3,
-                          crossAxisSpacing: context.sizes.sm,
-                          mainAxisSpacing: context.sizes.sm,
+                          crossAxisSpacing: .5,
+                          mainAxisSpacing: .5,
                         ),
                         itemCount: controller.items.length,
                         itemBuilder: (BuildContext context, int index) {
@@ -276,111 +281,3 @@ class ReviewView extends GetView<ReviewController> {
   }
 }
 
-/// Header: live count + total size of the marked set, and the tap-to-
-/// unmark hint. Trashed MB is never described as freed here.
-class _Header extends StatelessWidget {
-  const _Header({required this.controller});
-
-  final ReviewController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: Colors.amber,
-      padding: EdgeInsets.fromLTRB(
-        context.sizes.screenPadding,
-        0,
-        context.sizes.screenPadding,
-        context.sizes.xs,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          // Row(
-          //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          //   children: <Widget>[
-          //     // Phase 3.3: the count text observes items itself,
-          //     // so it never rides the scaffold's rebuilds.
-          //     Obx(() {
-          //       return Text(
-          //         '${Formatters.formatCount(controller.items.length)} · '
-          //         '${Formatters.formatBytes(controller.totalBytes)}',
-          //         style: context.textStyles.titleLarge.copyWith(
-          //           fontWeight: FontWeight.w800,
-          //         ),
-          //       );
-          //     }),
-          //     Container(
-          //       padding: EdgeInsets.symmetric(
-          //         horizontal: context.sizes.sm,
-          //         vertical: context.sizes.xxs,
-          //       ),
-          //       decoration: BoxDecoration(
-          //         color: context.palette.error.withValues(alpha: 0.12),
-          //         borderRadius: BorderRadius.circular(context.sizes.pill),
-          //         border: Border.all(
-          //           color: context.palette.error.withValues(alpha: 0.25),
-          //           width: 1,
-          //         ),
-          //       ),
-          //       child: Row(
-          //         mainAxisSize: MainAxisSize.min,
-          //         children: <Widget>[
-          //           Icon(
-          //             AppIcons.delete,
-          //             size: context.sizes.md,
-          //             color: context.palette.error,
-          //           ),
-          //           SizedBox(width: context.sizes.xs),
-          //           Text(
-          //             AppStrings.tr(AppStrings.edgeDelete),
-          //             style: context.textStyles.labelSmall.copyWith(
-          //               color: context.palette.error,
-          //               fontWeight: FontWeight.w700,
-          //             ),
-          //           ),
-          //         ],
-          //       ),
-          //     ),
-          //   ],
-          // ),
-
-          // SizedBox(height: context.sizes.xs),
-          Row(
-            children: <Widget>[
-              // Expanded(
-              //   child: Text(
-              //     AppStrings.tr(AppStrings.reviewUnmarkHint),
-              //     style: context.textStyles.bodySmall.copyWith(
-              //       color: context.palette.textSecondary,
-              //     ),
-              //   ),
-              // ),
-              const Spacer(),
-              // Select text button: enters selection mode, then
-              // becomes Select all. The label observes the mode
-              // so it flips without rebuilding the grid.
-              Obx(() {
-                final bool mode = controller.selection.mode.value;
-                return TextButton(
-                  onPressed: () => mode
-                      ? controller.selection.selectAll(
-                          controller.items.map((a) => a.id),
-                        )
-                      : controller.selection.enter(),
-                  child: Text(
-                    AppStrings.tr(
-                      mode
-                          ? AppStrings.actionSelectAll
-                          : AppStrings.actionSelect,
-                    ),
-                  ),
-                );
-              }),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
