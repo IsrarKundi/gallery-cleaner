@@ -32,12 +32,16 @@ import '../widgets/smart_deck_grid_card.dart';
 import '../widgets/timeline_section.dart';
 
 class DecksView extends GetView<DecksController> {
-  const DecksView({super.key});
+  const DecksView({super.key, this.showBottomNav = true});
+
+  /// Phase 7.1: the shell renders the one bottom nav, so shell
+  /// tabs hide their own. Standalone use keeps the nav.
+  final bool showBottomNav;
 
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      bottomNav: const AppBottomNav(currentIndex: 1),
+      bottomNav: showBottomNav ? const AppBottomNav(currentIndex: 1) : null,
       body: SafeArea(child: _Body(controller: controller)),
     );
   }

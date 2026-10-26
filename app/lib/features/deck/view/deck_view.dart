@@ -38,7 +38,12 @@ import '../widgets/tutorial_overlay.dart';
 /// first run only. Delete here only MARKS; confirmation lives on
 /// review, so there is no confirmation sheet on this screen.
 class DeckView extends GetView<DeckController> {
-  const DeckView({super.key});
+  const DeckView({super.key, this.showBottomNav = true});
+
+  /// Phase 7.1: the shell renders the one bottom nav, so shell
+  /// tabs hide their own. Standalone use (tests, direct routes)
+  /// keeps the nav.
+  final bool showBottomNav;
 
   /// RepaintBoundary key for the summary card capture (Phase 2B
   /// share). The view owns the key; the controller owns sharing.
@@ -147,7 +152,7 @@ class DeckView extends GetView<DeckController> {
                 onShare: _shareCurrentAsset,
               )
             : null,
-        bottomNav: const AppBottomNav(currentIndex: 0),
+        bottomNav: showBottomNav ? const AppBottomNav(currentIndex: 0) : null,
         body: Stack(
           children: <Widget>[
             _Body(controller: controller),
@@ -331,10 +336,19 @@ class _ReadyBody extends StatelessWidget {
                 ],
                 thumbnails: controller.thumbnails,
                 failedThumbnails: controller.failedThumbnails,
-                onSwiped: controller.markCurrent,
+                // Phase 7.1 settled-review gate: the gate releases
+                // when the swipe's mark RECORDS, not when the exit
+                // animation ends (the widget fires onExitEnd just
+                // before onSwiped, so releasing there would capture
+                // the review set before the in-flight mark lands).
+                // A refused mark still completes, so the gate can
+                // never wedge on a refused swipe.
+                onSwiped: (DeckMark mark) async {
+                  await controller.markCurrent(mark);
+                  controller.setCardExiting(false);
+                },
                 onRetry: controller.retryCurrentThumbnail,
                 onExitStart: () => controller.setCardExiting(true),
-                onExitEnd: () => controller.setCardExiting(false),
               ),
             ),
           ),

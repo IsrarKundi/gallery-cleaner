@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/constants/app_icons.dart';
+import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../core/utils/formatters.dart';
@@ -181,7 +182,14 @@ class TrashView extends GetView<TrashController> {
                   ),
                   onEmptyTrash: () => _emptyTrash(context),
                 ),
-          bottomNav: const AppBottomNav(currentIndex: 2),
+          // Phase 7.1: nav taps from Trash land back in the shell
+          // at the tapped tab (the shell route is '/'); Trash
+          // itself never fires here (it is the current tab).
+          bottomNav: AppBottomNav(
+            currentIndex: 2,
+            onDestinationSelected: (int index) =>
+                Get.offAllNamed<dynamic>(AppRoutes.deck, arguments: index),
+          ),
           body: _ArrivalSnack(
             controller: controller,
             child: _AutoEmptyPrompt(

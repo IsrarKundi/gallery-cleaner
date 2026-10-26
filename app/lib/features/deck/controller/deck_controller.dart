@@ -694,12 +694,17 @@ class DeckController extends GetxController {
     await local.setTutorialSeen(true);
   }
 
-  /// Phase 3.2 settled-review gate: while a card exit animation is
-  /// in flight its mark is unrecorded, so review navigation
-  /// requested then defers until the flight ends instead of opening
-  /// review with a stale mark set. The view drives this from the
-  /// card's exit callbacks; bottom-nav taps during a flight stay a
-  /// residual until the Phase 7 shell keeps the deck alive.
+  /// Phase 3.2 settled-review gate, closed by Phase 7.1: while a
+  /// card exit animation is in flight its mark is unrecorded, so
+  /// review navigation requested then defers until the mark
+  /// records instead of opening review with a stale mark set. The
+  /// view drives this from the card's exit callbacks — the gate
+  /// releases when the swipe's mark records (see the onSwiped
+  /// wiring in deck_view.dart), NOT when the exit animation ends:
+  /// releasing on exit-end would capture the review set before
+  /// the in-flight mark lands. Retained tab switches keep the
+  /// deck alive, so the flight always completes; the shell's
+  /// Trash-tab navigation defers through [runAfterCardExit].
   final DeferredAction _reviewGate = DeferredAction();
 
   /// True while a card exit animation is in flight.
@@ -707,6 +712,12 @@ class DeckController extends GetxController {
 
   /// Called by the view from the card's exit callbacks.
   void setCardExiting(bool exiting) => _reviewGate.setBusy(exiting);
+
+  /// Runs [action] once no card exit is in flight — immediately
+  /// when idle, deferred until the in-flight mark records when
+  /// busy. The shell's Trash-tab navigation uses this so Review
+  /// never opens with the in-flight mark missing.
+  void runAfterCardExit(void Function() action) => _reviewGate.run(action);
 
   /// Navigates to review with the delete-marked list + filter key,
   /// deferred while a card exit is in flight (see [_reviewGate]).

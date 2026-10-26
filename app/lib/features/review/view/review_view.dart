@@ -214,7 +214,14 @@ class ReviewView extends GetView<ReviewController> {
                   controller: controller,
                   onDelete: () => _delete(context),
                 ),
-          bottomNav: const AppBottomNav(currentIndex: 2),
+          // Phase 7.1: nav taps from Review land back in the shell
+          // at the tapped tab (the shell route is '/'); Trash
+          // itself never fires here (it is the current tab).
+          bottomNav: AppBottomNav(
+            currentIndex: 2,
+            onDestinationSelected: (int index) =>
+                Get.offAllNamed<dynamic>(AppRoutes.deck, arguments: index),
+          ),
           body: isEmpty
               ? (controller.isLoading.value
                     ? const ReviewLoadingSkeleton()

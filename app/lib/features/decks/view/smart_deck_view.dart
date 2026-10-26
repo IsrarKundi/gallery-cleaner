@@ -152,10 +152,17 @@ class _Body extends StatelessWidget {
                 ],
                 thumbnails: controller.thumbnails,
                 failedThumbnails: controller.failedThumbnails,
-                onSwiped: controller.markCurrent,
+                // Phase 7.1 settled-review gate, same contract as
+                // the main deck: the gate releases when the swipe's
+                // mark RECORDS (markCurrent is sync here), not when
+                // the exit animation ends (which fires just before
+                // onSwiped and would capture a stale review set).
+                onSwiped: (mark) {
+                  controller.markCurrent(mark);
+                  controller.setCardExiting(false);
+                },
                 onRetry: controller.retryCurrentThumbnail,
                 onExitStart: () => controller.setCardExiting(true),
-                onExitEnd: () => controller.setCardExiting(false),
               ),
             ),
           ),

@@ -1,7 +1,6 @@
 import 'package:get/get.dart';
 
 import '../../core/routes/app_routes.dart';
-import '../../features/deck/binding/deck_binding.dart';
 import '../../features/decks/binding/decks_binding.dart';
 import '../../features/decks/binding/duplicates_binding.dart';
 import '../../features/decks/binding/smart_deck_binding.dart';
@@ -15,11 +14,12 @@ import '../../features/review/view/review_view.dart';
 import '../../features/settings/binding/settings_binding.dart';
 import '../../features/settings/controller/settings_controller.dart';
 import '../../features/settings/view/settings_view.dart';
+import '../../features/shell/binding/shell_binding.dart';
+import '../../features/shell/view/shell_view.dart';
 import '../../features/splash/binding/splash_binding.dart';
 import '../../features/splash/view/splash_view.dart';
 import '../../features/compress/binding/compress_binding.dart';
 import '../../features/compress/view/compress_view.dart';
-import '../../features/deck/view/deck_view.dart';
 import '../../features/trash/binding/trash_binding.dart';
 import '../../features/trash/view/trash_view.dart';
 
@@ -51,10 +51,14 @@ class AppPages {
         },
       ),
     ),
+    // Phase 7.1: '/' is the shell, not the deck directly. The deck
+    // is the shell's first tab; its binding runs via ShellBinding.
+    // Standalone '/decks' and '/settings' pages below stay for
+    // direct/test navigation; production nav goes through the shell.
     GetPage<dynamic>(
       name: AppRoutes.deck,
-      page: DeckView.new,
-      binding: DeckBinding(),
+      page: ShellView.new,
+      binding: ShellBinding(),
     ),
     GetPage<dynamic>(
       name: AppRoutes.review,

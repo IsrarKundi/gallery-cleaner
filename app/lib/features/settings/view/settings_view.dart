@@ -25,14 +25,18 @@ import '../../../services/local/local_service.dart';
 import '../controller/settings_controller.dart';
 
 class SettingsView extends GetView<SettingsController> {
-  const SettingsView({super.key});
+  const SettingsView({super.key, this.showBottomNav = true});
+
+  /// Phase 7.1: the shell renders the one bottom nav, so shell
+  /// tabs hide their own. Standalone use keeps the nav.
+  final bool showBottomNav;
 
   @override
   Widget build(BuildContext context) {
     return Obx(() {
       return AppScaffold(
         title: AppStrings.tr(AppStrings.screenSettings),
-        bottomNav: const AppBottomNav(currentIndex: 3),
+        bottomNav: showBottomNav ? const AppBottomNav(currentIndex: 3) : null,
         body: ListView(
           padding: EdgeInsets.all(context.sizes.screenPadding),
           children: <Widget>[

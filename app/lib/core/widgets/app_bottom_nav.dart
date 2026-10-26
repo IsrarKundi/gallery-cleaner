@@ -16,12 +16,27 @@ import '../theme/theme_ext.dart';
 ///
 /// Material 3 NavigationBar with 24dp icons + labels and pill selection.
 class AppBottomNav extends StatelessWidget {
-  const AppBottomNav({super.key, required this.currentIndex});
+  const AppBottomNav({
+    super.key,
+    required this.currentIndex,
+    this.onDestinationSelected,
+  });
 
   final int currentIndex;
 
+  /// Phase 7.1: when the shell (or Review/Trash) drives navigation,
+  /// taps delegate to it instead of the legacy off-all mapping
+  /// below. Null keeps the legacy behaviour for standalone views
+  /// and tests that pump a tab view directly.
+  final void Function(int index)? onDestinationSelected;
+
   void _onDestinationSelected(int index) {
     if (index == currentIndex) {
+      return;
+    }
+    final void Function(int index)? handler = onDestinationSelected;
+    if (handler != null) {
+      handler(index);
       return;
     }
     switch (index) {
