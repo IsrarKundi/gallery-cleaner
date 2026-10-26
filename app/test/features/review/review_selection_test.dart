@@ -113,6 +113,19 @@ class _Local implements LocalService {
 
 class _Trash implements TrashService {
   final List<String> trashedIds = <String>[];
+  final List<String> deletedIds = <String>[];
+
+  @override
+  Future<Result<DeleteOutcome>> deletePermanently(List<String> ids) async {
+    deletedIds.addAll(ids);
+    return Success<DeleteOutcome>(
+      DeleteOutcome(
+        deletedIds: ids,
+        deniedIds: const <String>[],
+        failedIds: const <String>[],
+      ),
+    );
+  }
 
   @override
   Future<Result<TrashOutcome>> trashAssets(List<String> ids) async {
@@ -276,8 +289,8 @@ void main() {
         onlyIds: <String>['a'],
       );
 
-      expect(outcome, ReviewDeleteOutcome.trashed);
-      expect(trash.trashedIds, <String>['a']);
+      expect(outcome, ReviewDeleteOutcome.deleted);
+      expect(trash.deletedIds, <String>['a']);
       expect(controller.items.map((MediaAsset a) => a.id), <String>['b']);
       expect(controller.selectionMode, isFalse);
       controller.onClose();
@@ -392,7 +405,7 @@ void main() {
       await tester.tap(find.text('Delete 1 photos'));
       await tester.pumpAndSettle();
 
-      expect(trash.trashedIds, <String>['a']);
+      expect(trash.deletedIds, <String>['a']);
       expect(find.byType(ReviewGridTile), findsOneWidget);
       expect(controller.items.map((MediaAsset a) => a.id), <String>['b']);
     });

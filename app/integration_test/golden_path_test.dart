@@ -21,8 +21,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:get/get.dart';
 import 'package:klara/core/routes/app_routes.dart';
-import 'package:klara/core/strings/app_strings.dart';
 import 'package:klara/core/utils/result.dart';
+import 'package:klara/features/deck/widgets/swipe_card.dart';
 import 'package:klara/features/splash/view/splash_view.dart';
 import 'package:klara/main.dart';
 import 'package:klara/services/detection/photo_analysis.dart';
@@ -258,6 +258,19 @@ class _Trash implements TrashService {
   final _Local local;
   final Map<String, int> sizes;
   final List<TrashEntry> entries = <TrashEntry>[];
+  final List<String> deletedIds = <String>[];
+
+  @override
+  Future<Result<DeleteOutcome>> deletePermanently(List<String> ids) async {
+    deletedIds.addAll(ids);
+    return Success<DeleteOutcome>(
+      DeleteOutcome(
+        deletedIds: ids,
+        deniedIds: const <String>[],
+        failedIds: const <String>[],
+      ),
+    );
+  }
 
   @override
   Future<Result<TrashOutcome>> trashAssets(List<String> ids) async {
@@ -375,30 +388,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Delete 1 photos'), findsOneWidget);
 
-    // Confirm trash (fake native-confirmation success).
+    // Confirm permanent delete (fake native-confirmation success).
     await tester.tap(find.text('Delete 1 photos'));
     await tester.pumpAndSettle();
 
-    // Trash lists the entry with its recoverable-until date.
-    expect(find.textContaining('Recoverable until'), findsOneWidget);
-    expect(find.text('Restore'), findsOneWidget);
-
-    // Restore it: the list empties and the restored snackbar shows.
-    await tester.tap(find.text('Restore'));
-    await tester.pumpAndSettle();
-    expect(
-      find.text(AppStrings.tr(AppStrings.trashEmptyTitle)),
-      findsOneWidget,
-    );
+    // Returns directly to deck: photo is permanently deleted, never trashed.
+    expect(find.byType(SwipeCard), findsOneWidget);
     expect(trash.entries, isEmpty);
+    expect(trash.deletedIds, <String>['a1']);
 
-    // History shows the trashed record — trashed MB, freed 0
-    // (never counted as freed while the photo sat in Trash).
+    // History shows the freed record — freed MB, trashed 0.
     Get.offAllNamed<dynamic>(AppRoutes.history);
     await tester.pumpAndSettle();
     expect(find.textContaining('1 photos'), findsOneWidget);
     expect(local.history.length, 1);
     expect(local.history.single.count, 1);
-    expect(local.history.single.mbFreed, 0);
+    expect(local.history.single.mbFreed, greaterThan(0));
+    expect(local.history.single.mbTrashed, 0);
   });
 }

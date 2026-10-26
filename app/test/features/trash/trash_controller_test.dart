@@ -256,6 +256,21 @@ class FakeTrash implements TrashService {
       ),
     );
   }
+
+  @override
+  Future<Result<DeleteOutcome>> deletePermanently(List<String> ids) async {
+    final List<String> deleted = _confirm(ids);
+    final List<String> denied = ids
+        .where((String id) => !deleted.contains(id))
+        .toList();
+    return Success<DeleteOutcome>(
+      DeleteOutcome(
+        deletedIds: deleted,
+        deniedIds: denied,
+        failedIds: <String>[],
+      ),
+    );
+  }
 }
 
 TrashController makeController({

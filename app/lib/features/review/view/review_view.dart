@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/constants/app_icons.dart';
-import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
-import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
 import '../../../core/widgets/app_dialog.dart';
 import '../../../core/widgets/app_scaffold.dart';
@@ -27,10 +25,8 @@ import '../widgets/review_loading_skeleton.dart';
 /// system back gesture (via [PopScope]) and the bottom nav all pop
 /// back to the shell's tabs instead of rebuilding them; standalone
 /// Review falls back to a stack reset. A successful whole-set
-/// delete pushes the Trash screen on top of the shell (ADR-011)
-/// carrying the recoverable-until date as route arguments, so the
-/// Trash screen can show the "Moved to Trash" snackbar on arrival;
-/// leaving Trash pops back to the shell, never a rebuild.
+/// permanent delete returns directly to the deck (ADR-014);
+/// leaving Review pops back to the shell, never a rebuild.
 ///
 /// Selection (owner decision 26 Oct 2026): photos are always
 /// shown revealed. Outside selection mode a tile tap unmarks the
@@ -66,60 +62,42 @@ class ReviewView extends GetView<ReviewController> {
     ReviewDeleteOutcome? outcome,
   ) async {
     switch (outcome) {
-      case ReviewDeleteOutcome.trashed:
+      case ReviewDeleteOutcome.deleted:
         // A partial run (a selection was deleted) stays on screen
-        // with the rest of the set — only a whole-set run goes to
-        // the Trash screen, as before.
+        // with the rest of the set — a whole-set run returns to the
+        // deck directly (nothing was trashed).
         if (controller.items.isNotEmpty) {
           AppSnackbar.show(
             context,
             message: AppStrings.tr(
-              AppStrings.snackMovedToTrashMany,
-              <String, String>{'count': '${controller.lastTrashedCount.value}'},
+              AppStrings.snackDeletedMany,
+              <String, String>{'count': '${controller.lastDeletedCount.value}'},
             ),
           );
           break;
         }
-        final DateTime? until = controller.trashedUntil.value;
-        Get.toNamed<dynamic>(
-          AppRoutes.trash,
-          arguments: until == null ? null : Formatters.formatDate(until),
-        );
+        controller.goToDeck();
       case ReviewDeleteOutcome.denied:
-        // Phase 3B mixed runs: a denied run may also have trashed
-        // some photos and failed others. The pure-denied dialog
-        // would hide both, so a mixed run gets a counted dialog
-        // (and, when anything was trashed, a View trash choice —
-        // the trashed photos are in Trash, not on the deck).
-        if (controller.lastTrashedCount.value > 0 ||
+        // Phase 3B mixed runs: a denied run may also have deleted
+        // some photos and failed others. A mixed run gets a counted
+        // dialog with no "View trash" choice (nothing was trashed).
+        if (controller.lastDeletedCount.value > 0 ||
             controller.lastFailedCount.value > 0) {
-          final bool backToDeck = await AppDialog.showConfirmation(
+          await AppDialog.showConfirmation(
             context,
             title: AppStrings.tr(AppStrings.deniedConfirmTitle),
             message: AppStrings.tr(
-              AppStrings.deniedConfirmMixedMessage,
+              AppStrings.deniedConfirmMixedDeleteMessage,
               <String, String>{
-                'trashed': '${controller.lastTrashedCount.value}',
+                'deleted': '${controller.lastDeletedCount.value}',
                 'denied': '${controller.deniedIds.length}',
                 'failed': '${controller.lastFailedCount.value}',
               },
             ),
             confirmLabel: AppStrings.tr(AppStrings.actionBackToDeck),
-            cancelLabel: controller.lastTrashedCount.value > 0
-                ? AppStrings.tr(AppStrings.actionViewTrash)
-                : null,
           );
-          if (!context.mounted) {
-            return;
-          }
-          if (backToDeck) {
+          if (context.mounted) {
             controller.goToDeck();
-          } else {
-            final DateTime? until = controller.trashedUntil.value;
-            Get.toNamed<dynamic>(
-              AppRoutes.trash,
-              arguments: until == null ? null : Formatters.formatDate(until),
-            );
           }
         } else {
           await AppDialog.showConfirmation(
@@ -133,15 +111,12 @@ class ReviewView extends GetView<ReviewController> {
           }
         }
       case ReviewDeleteOutcome.failed:
-        // Phase 3B: trashed + failed runs stay on screen with the
-        // failed items and the error banner — but the trashed part
-        // was previously invisible. Say it, with a count.
-        if (controller.lastTrashedCount.value > 0) {
+        if (controller.lastDeletedCount.value > 0) {
           AppSnackbar.show(
             context,
             message: AppStrings.tr(
-              AppStrings.snackMovedToTrashMany,
-              <String, String>{'count': '${controller.lastTrashedCount.value}'},
+              AppStrings.snackDeletedMany,
+              <String, String>{'count': '${controller.lastDeletedCount.value}'},
             ),
           );
         }

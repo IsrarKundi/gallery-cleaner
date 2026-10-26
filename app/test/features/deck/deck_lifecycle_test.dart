@@ -268,6 +268,10 @@ class _FakeTrash implements TrashService {
   @override
   Future<Result<EmptyTrashOutcome>> emptyTrash() async =>
       throw UnimplementedError();
+
+  @override
+  Future<Result<DeleteOutcome>> deletePermanently(List<String> ids) async =>
+      throw UnimplementedError();
 }
 
 Future<void> _settleUntil(

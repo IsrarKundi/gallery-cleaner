@@ -292,4 +292,56 @@ class TrashServiceImpl implements TrashService {
       );
     }
   }
+
+  @override
+  Future<Result<DeleteOutcome>> deletePermanently(List<String> ids) async {
+    if (ids.isEmpty) {
+      return const Success<DeleteOutcome>(
+        DeleteOutcome(
+          deletedIds: <String>[],
+          deniedIds: <String>[],
+          failedIds: <String>[],
+        ),
+      );
+    }
+    final Result<void> gate = await _requireApi30();
+    if (gate.isFailure) {
+      return Failure<DeleteOutcome>((gate as Failure<void>).failure);
+    }
+    try {
+      final ResolvedAssets resolved = await _gateway.resolveAssets(ids);
+      final List<String> failed = resolved.missing;
+      if (resolved.found.isEmpty) {
+        return Success<DeleteOutcome>(
+          DeleteOutcome(
+            deletedIds: <String>[],
+            deniedIds: <String>[],
+            failedIds: failed,
+          ),
+        );
+      }
+      final List<String> granted = await _gateway.deleteIds(resolved.found);
+      final Set<String> grantedSet = granted.toSet();
+      final List<String> deleted = <String>[];
+      final List<String> denied = <String>[];
+      for (final AssetEntity entity in resolved.found) {
+        if (grantedSet.contains(entity.id)) {
+          deleted.add(entity.id);
+        } else {
+          denied.add(entity.id);
+        }
+      }
+      return Success<DeleteOutcome>(
+        DeleteOutcome(
+          deletedIds: deleted,
+          deniedIds: denied,
+          failedIds: failed,
+        ),
+      );
+    } catch (_) {
+      return const Failure<DeleteOutcome>(
+        AppFailure(messageKey: AppStrings.errorTrash),
+      );
+    }
+  }
 }

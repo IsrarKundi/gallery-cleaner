@@ -56,6 +56,21 @@ class EmptyTrashOutcome {
   final List<String> failedIds;
 }
 
+/// Outcome of a permanent delete request: ids the system deleted,
+/// ids the user declined at the native sheet, and ids that could
+/// not be reached.
+class DeleteOutcome {
+  const DeleteOutcome({
+    required this.deletedIds,
+    required this.deniedIds,
+    required this.failedIds,
+  });
+
+  final List<String> deletedIds;
+  final List<String> deniedIds;
+  final List<String> failedIds;
+}
+
 abstract class TrashService {
   /// Moves [ids] to the system Trash via the native confirmation
   /// sheet. Records a [TrashEntry] for every trashed id so
@@ -81,4 +96,8 @@ abstract class TrashService {
   /// it fails with [AppStrings.errorTrashUnsupported] instead of
   /// deleting through any silent path.
   Future<Result<EmptyTrashOutcome>> emptyTrash();
+
+  /// Permanently deletes [ids] via the native confirmation sheet
+  /// (MediaStore.createDeleteRequest on API 30+). Never enters Trash.
+  Future<Result<DeleteOutcome>> deletePermanently(List<String> ids);
 }

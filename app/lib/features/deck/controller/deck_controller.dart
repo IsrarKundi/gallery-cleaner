@@ -940,8 +940,9 @@ class DeckController extends GetxController {
       _persist();
       return;
     }
-    final int awaitingIdx =
-        _awaitingTrash.indexWhere((MediaAsset a) => a.id == asset.id);
+    final int awaitingIdx = _awaitingTrash.indexWhere(
+      (MediaAsset a) => a.id == asset.id,
+    );
     if (awaitingIdx != -1) {
       final MediaAsset removed = _awaitingTrash.removeAt(awaitingIdx);
       _rewindAsset(removed, currentIndex.value);
@@ -985,6 +986,7 @@ class DeckController extends GetxController {
       _cancelPendingDelete();
     }
     _awaitingTrash.removeWhere((MediaAsset a) => ids.contains(a.id));
+    undoStack.removeWhere((String id) => ids.contains(id));
     for (final String id in ids) {
       marks.remove(id);
     }

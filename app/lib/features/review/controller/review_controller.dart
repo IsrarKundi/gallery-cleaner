@@ -25,7 +25,7 @@ import 'review_delete.dart';
 /// Outcome of [ReviewController.deleteSelected], for the view's
 /// post-delete handling and for tests (navigation itself is not
 /// asserted — see the navigation contract below).
-enum ReviewDeleteOutcome { trashed, denied, failed, serviceError }
+enum ReviewDeleteOutcome { deleted, denied, failed, serviceError }
 
 /// Review screen state (requirements §4): editable grid of delete-marked photos.
 /// Navigation: exits return to the retained shell when one is alive
@@ -99,11 +99,12 @@ class ReviewController extends GetxController {
   final RxInt protectedExcludedCount = 0.obs;
 
   /// Phase 3B mixed-outcome counts for the view's dialog/snackbar:
-  /// how many of the last run were actually trashed, and how many
+  /// how many of the last run were permanently deleted, and how many
   /// failed to resolve at all. Denied count is [deniedIds].length.
   /// A pure run leaves the other count at 0, so the view can tell
   /// a pure outcome from a mixed one without re-deriving it.
-  final RxInt lastTrashedCount = 0.obs;
+  final RxInt lastDeletedCount = 0.obs;
+  RxInt get lastTrashedCount => lastDeletedCount;
   final RxInt lastFailedCount = 0.obs;
 
   /// Shared recoverable-until date for a trashed run (trashedAt +
@@ -291,19 +292,19 @@ class ReviewController extends GetxController {
     selection.sync(items.map((MediaAsset a) => a.id));
   }
 
-  /// Moves photos to Trash through the native confirmation sheet
-  /// and returns the outcome for the view to act on (snackbar +
-  /// Trash navigation, denied dialog + deck navigation, or the
-  /// error state with retry). Returns null when there is nothing
-  /// to delete or a delete is already running.
+  /// Permanently deletes photos through the native confirmation sheet
+  /// (MediaStore.createDeleteRequest on API 30+) and returns the outcome
+  /// for the view to act on (return to deck, denied dialog + deck
+  /// navigation, or the error state with retry). Returns null when
+  /// there is nothing to delete or a delete is already running.
   ///
   /// [onlyIds] scopes the run to the selection: only those photos
   /// are deleted and the rest stay in the grid (the view shows a
-  /// snackbar and stays for a partial trashed run). Without it the
-  /// whole set is deleted, as before.
+  /// snackbar and stays for a partial deleted run). Without it the
+  /// whole set is deleted, returning to the deck.
   ///
   /// Phase 3A protection: when ON, favourited items (Klara or
-  /// system) are EXCLUDED from the trash run — they stay in the
+  /// system) are EXCLUDED from the delete run — they stay in the
   /// grid and [protectedExcludedCount] explains how many. When
   /// every item is protected, nothing is sent and null returns
   /// (the banner is the whole outcome; no native sheet appears).
@@ -320,7 +321,7 @@ class ReviewController extends GetxController {
     trashedUntil.value = null;
     lastOutcome.value = null;
     protectedExcludedCount.value = 0;
-    lastTrashedCount.value = 0;
+    lastDeletedCount.value = 0;
     lastFailedCount.value = 0;
     // Phase 3B: protection filtering lives in review_delete.dart
     // (extracted to hold the controller's line budget).
@@ -336,23 +337,23 @@ class ReviewController extends GetxController {
       return null;
     }
     final List<String> ids = toDelete.map((MediaAsset a) => a.id).toList();
-    final Result<TrashOutcome> result = await trash.trashAssets(ids);
+    final Result<DeleteOutcome> result = await trash.deletePermanently(ids);
     isDeleting.value = false;
     if (result.isFailure) {
-      errorKey.value = (result as Failure<TrashOutcome>).failure.messageKey;
+      errorKey.value = (result as Failure<DeleteOutcome>).failure.messageKey;
       lastOutcome.value = ReviewDeleteOutcome.serviceError;
       return ReviewDeleteOutcome.serviceError;
     }
-    final TrashOutcome outcome = (result as Success<TrashOutcome>).value;
+    final DeleteOutcome outcome = (result as Success<DeleteOutcome>).value;
     // Phase 3B: record the split before branching, so the view can
-    // explain mixed runs (trashed + denied, trashed + failed) instead
+    // explain mixed runs (deleted + denied, deleted + failed) instead
     // of reporting only the winning outcome and hiding the rest.
-    lastTrashedCount.value = outcome.trashedIds.length;
+    lastDeletedCount.value = outcome.deletedIds.length;
     lastFailedCount.value = outcome.failedIds.length;
-    if (outcome.trashedIds.isNotEmpty) {
-      await _applyTrashed(outcome.trashedIds);
+    if (outcome.deletedIds.isNotEmpty) {
+      await _applyDeleted(outcome.deletedIds);
       if (Get.isRegistered<DeckController>()) {
-        Get.find<DeckController>().removeTrashedAssets(outcome.trashedIds);
+        Get.find<DeckController>().removeTrashedAssets(outcome.deletedIds);
       }
       // Phase 3A haptics (design.md §8): medium click when a
       // delete is confirmed through the native sheet.
@@ -381,39 +382,36 @@ class ReviewController extends GetxController {
       lastOutcome.value = ReviewDeleteOutcome.failed;
       return ReviewDeleteOutcome.failed;
     }
-    lastOutcome.value = ReviewDeleteOutcome.trashed;
-    return ReviewDeleteOutcome.trashed;
+    lastOutcome.value = ReviewDeleteOutcome.deleted;
+    return ReviewDeleteOutcome.deleted;
   }
 
-  /// Clears trashed ids' delete marks (best-effort: the photos are
-  /// already in Trash, so a failed write must not reframe the run
-  /// as an error), removes them from the grid, and appends the one
-  /// history record for the run (trashed MB, freed 0 — never freed
-  /// while the photos sit in Trash).
-  Future<void> _applyTrashed(List<String> ids) async {
+  /// Clears deleted ids' delete marks (best-effort), removes them
+  /// from the grid, and appends the one history record for the run
+  /// (mbFreed = bytes / 1048576, mbTrashed = 0 — permanently freed).
+  Future<void> _applyDeleted(List<String> ids) async {
     await updateSessionMarks(
       local: local,
       filterKey: _filterKey,
       updates: <String, DeckMark?>{for (final String id in ids) id: null},
     );
-    final Set<String> trashed = ids.toSet();
+    final Set<String> deleted = ids.toSet();
     int bytes = 0;
     for (final MediaAsset asset in items) {
-      if (trashed.contains(asset.id)) {
+      if (deleted.contains(asset.id)) {
         bytes += asset.sizeBytes;
       }
     }
-    items.removeWhere((MediaAsset asset) => trashed.contains(asset.id));
+    items.removeWhere((MediaAsset asset) => deleted.contains(asset.id));
     _syncSelection();
     await local.appendHistory(
       HistoryRecord(
         date: DateTime.now(),
         count: ids.length,
-        mbTrashed: bytes / 1048576,
-        mbFreed: 0,
+        mbTrashed: 0,
+        mbFreed: bytes / 1048576,
       ),
     );
-    trashedUntil.value = DateTime.now().add(const Duration(days: 30));
   }
 
   /// Returns to the deck tab. When Review sits on top of the

@@ -525,5 +525,65 @@ void main() {
         AppStrings.errorTrashUnsupported,
       );
     });
+
+    test('deletePermanently partitions granted, denied and missing', () async {
+      final FakeLocalService local = FakeLocalService();
+      final TrashService service = TrashServiceImpl(
+        gateway: FakeTrashGateway(
+          missingIds: <String>{'gone'},
+          grantedIds: <String>{'a'},
+        ),
+        local: local,
+      );
+      final Result<DeleteOutcome> result = await service.deletePermanently(
+        <String>['a', 'b', 'gone'],
+      );
+      expect(result.isSuccess, isTrue);
+      final DeleteOutcome outcome = result.fold(
+        onSuccess: (DeleteOutcome value) => value,
+        onFailure: (_) => throw StateError('expected success'),
+      );
+      expect(outcome.deletedIds, <String>['a']);
+      expect(outcome.deniedIds, <String>['b']);
+      expect(outcome.failedIds, <String>['gone']);
+      // Never enters Trash record!
+      expect(local.trash, isEmpty);
+    });
+
+    test('deletePermanently empty input succeeds', () async {
+      final TrashService service = TrashServiceImpl(
+        gateway: FakeTrashGateway(),
+        local: FakeLocalService(),
+      );
+      final Result<DeleteOutcome> result = await service.deletePermanently(
+        <String>[],
+      );
+      expect(result.isSuccess, isTrue);
+      expect(
+        result.fold(
+          onSuccess: (DeleteOutcome value) => value.deletedIds,
+          onFailure: (_) => <String>['x'],
+        ),
+        isEmpty,
+      );
+    });
+
+    test('deletePermanently below API 30 fails as unsupported', () async {
+      final TrashService service = TrashServiceImpl(
+        gateway: FakeTrashGateway(sdk: 28),
+        local: FakeLocalService(),
+      );
+      final Result<DeleteOutcome> result = await service.deletePermanently(
+        <String>['a'],
+      );
+      expect(result.isFailure, isTrue);
+      expect(
+        result.fold(
+          onSuccess: (_) => '',
+          onFailure: (AppFailure f) => f.messageKey,
+        ),
+        AppStrings.errorTrashUnsupported,
+      );
+    });
   });
 }

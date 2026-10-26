@@ -197,6 +197,23 @@ class FakeTrash implements TrashService {
       ),
     );
   }
+
+  @override
+  Future<Result<DeleteOutcome>> deletePermanently(List<String> ids) async {
+    final List<String> denied = ids
+        .where((String id) => denyIds.contains(id))
+        .toList();
+    final List<String> deleted = ids
+        .where((String id) => !denyIds.contains(id))
+        .toList();
+    return Success<DeleteOutcome>(
+      DeleteOutcome(
+        deletedIds: deleted,
+        deniedIds: denied,
+        failedIds: <String>[],
+      ),
+    );
+  }
 }
 
 class FakeLocal implements LocalService {
@@ -743,62 +760,95 @@ void main() {
       await _settleThumbnails(controller);
       await controller.markCurrent(DeckMark.delete);
       await controller.markCurrent(DeckMark.delete);
-      expect(controller.awaitingTrash.map((MediaAsset a) => a.id).toList(), <String>['a1']);
+      expect(
+        controller.awaitingTrash.map((MediaAsset a) => a.id).toList(),
+        <String>['a1'],
+      );
       expect(controller.pendingDelete?.id, 'a2');
-      expect(controller.deleteMarkedAssets.map((MediaAsset a) => a.id).toList(), <String>['a1', 'a2']);
+      expect(
+        controller.deleteMarkedAssets.map((MediaAsset a) => a.id).toList(),
+        <String>['a1', 'a2'],
+      );
     });
 
-    test('cancelAwaiting rewinds an awaiting photo to the deck queue undecided', () async {
+    test(
+      'cancelAwaiting rewinds an awaiting photo to the deck queue undecided',
+      () async {
+        final DeckController controller = makeController();
+        await controller.init();
+        await _settleThumbnails(controller);
+        await controller.markCurrent(DeckMark.delete);
+        await controller.markCurrent(DeckMark.keep);
+        expect(
+          controller.awaitingTrash.map((MediaAsset a) => a.id).toList(),
+          <String>['a1'],
+        );
+        final MediaAsset a1 = controller.awaitingTrash.first;
+        controller.cancelAwaiting(a1);
+        expect(controller.awaitingTrash, isEmpty);
+        expect(controller.currentAsset?.id, 'a1');
+        expect(controller.marks.containsKey('a1'), isFalse);
+      },
+    );
+
+    test(
+      'markAssetsKept removes awaiting photos and marks them keep',
+      () async {
+        final DeckController controller = makeController();
+        await controller.init();
+        await _settleThumbnails(controller);
+        await controller.markCurrent(DeckMark.delete);
+        await controller.markCurrent(DeckMark.keep);
+        expect(
+          controller.awaitingTrash.map((MediaAsset a) => a.id).toList(),
+          <String>['a1'],
+        );
+        controller.markAssetsKept(<String>['a1']);
+        expect(controller.awaitingTrash, isEmpty);
+        expect(controller.marks['a1'], DeckMark.keep);
+      },
+    );
+
+    test('removeTrashedAssets drops confirmed trashed photos from awaiting and cleans undoStack', () async {
       final DeckController controller = makeController();
       await controller.init();
       await _settleThumbnails(controller);
       await controller.markCurrent(DeckMark.delete);
       await controller.markCurrent(DeckMark.keep);
-      expect(controller.awaitingTrash.map((MediaAsset a) => a.id).toList(), <String>['a1']);
-      final MediaAsset a1 = controller.awaitingTrash.first;
-      controller.cancelAwaiting(a1);
-      expect(controller.awaitingTrash, isEmpty);
-      expect(controller.currentAsset?.id, 'a1');
-      expect(controller.marks.containsKey('a1'), isFalse);
-    });
-
-    test('markAssetsKept removes awaiting photos and marks them keep', () async {
-      final DeckController controller = makeController();
-      await controller.init();
-      await _settleThumbnails(controller);
-      await controller.markCurrent(DeckMark.delete);
-      await controller.markCurrent(DeckMark.keep);
-      expect(controller.awaitingTrash.map((MediaAsset a) => a.id).toList(), <String>['a1']);
-      controller.markAssetsKept(<String>['a1']);
-      expect(controller.awaitingTrash, isEmpty);
-      expect(controller.marks['a1'], DeckMark.keep);
-    });
-
-    test('removeTrashedAssets drops confirmed trashed photos from awaiting', () async {
-      final DeckController controller = makeController();
-      await controller.init();
-      await _settleThumbnails(controller);
-      await controller.markCurrent(DeckMark.delete);
-      await controller.markCurrent(DeckMark.keep);
-      expect(controller.awaitingTrash.map((MediaAsset a) => a.id).toList(), <String>['a1']);
+      expect(
+        controller.awaitingTrash.map((MediaAsset a) => a.id).toList(),
+        <String>['a1'],
+      );
+      controller.undoStack.add('a1');
+      expect(controller.undoStack.contains('a1'), isTrue);
       controller.removeTrashedAssets(<String>['a1']);
       expect(controller.awaitingTrash, isEmpty);
+      expect(controller.undoStack.contains('a1'), isFalse);
       expect(controller.marks.containsKey('a1'), isFalse);
     });
 
-    test('handleDeniedTrash rewinds denied photos to queue with notice banner', () async {
-      final DeckController controller = makeController();
-      await controller.init();
-      await _settleThumbnails(controller);
-      await controller.markCurrent(DeckMark.delete);
-      await controller.markCurrent(DeckMark.keep);
-      expect(controller.awaitingTrash.map((MediaAsset a) => a.id).toList(), <String>['a1']);
-      controller.handleDeniedTrash(<String>['a1']);
-      expect(controller.awaitingTrash, isEmpty);
-      expect(controller.currentAsset?.id, 'a1');
-      expect(controller.marks.containsKey('a1'), isFalse);
-      expect(controller.trashBatchDeniedKey.value, AppStrings.trashBatchDenied);
-    });
+    test(
+      'handleDeniedTrash rewinds denied photos to queue with notice banner',
+      () async {
+        final DeckController controller = makeController();
+        await controller.init();
+        await _settleThumbnails(controller);
+        await controller.markCurrent(DeckMark.delete);
+        await controller.markCurrent(DeckMark.keep);
+        expect(
+          controller.awaitingTrash.map((MediaAsset a) => a.id).toList(),
+          <String>['a1'],
+        );
+        controller.handleDeniedTrash(<String>['a1']);
+        expect(controller.awaitingTrash, isEmpty);
+        expect(controller.currentAsset?.id, 'a1');
+        expect(controller.marks.containsKey('a1'), isFalse);
+        expect(
+          controller.trashBatchDeniedKey.value,
+          AppStrings.trashBatchDenied,
+        );
+      },
+    );
   });
 
   group('filters, sessions and tutorial', () {

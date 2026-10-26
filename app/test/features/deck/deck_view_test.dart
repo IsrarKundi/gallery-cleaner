@@ -147,6 +147,17 @@ class _Trash implements TrashService {
       ),
     );
   }
+
+  @override
+  Future<Result<DeleteOutcome>> deletePermanently(List<String> ids) async {
+    return const Success<DeleteOutcome>(
+      DeleteOutcome(
+        deletedIds: <String>[],
+        deniedIds: <String>[],
+        failedIds: <String>[],
+      ),
+    );
+  }
 }
 
 class _Local implements LocalService {

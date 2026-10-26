@@ -112,8 +112,21 @@ class _Media implements MediaService {
 
 class _Trash implements TrashService {
   List<String> trashCalls = <String>[];
+  List<String> deleteCalls = <String>[];
   bool emptyCalled = false;
   List<TrashEntry> listed = <TrashEntry>[];
+
+  @override
+  Future<Result<DeleteOutcome>> deletePermanently(List<String> ids) async {
+    deleteCalls = ids;
+    return Success<DeleteOutcome>(
+      DeleteOutcome(
+        deletedIds: ids,
+        deniedIds: const <String>[],
+        failedIds: const <String>[],
+      ),
+    );
+  }
 
   @override
   Future<Result<TrashOutcome>> trashAssets(List<String> ids) async {
@@ -385,8 +398,8 @@ void main() {
       );
       controller.onInit();
       final ReviewDeleteOutcome? outcome = await controller.deleteSelected();
-      expect(outcome, ReviewDeleteOutcome.trashed);
-      expect(trash.trashCalls, <String>['plain']);
+      expect(outcome, ReviewDeleteOutcome.deleted);
+      expect(trash.deleteCalls, <String>['plain']);
       expect(controller.items.map((MediaAsset a) => a.id).toList(), <String>[
         'fav',
         'sys',
@@ -407,7 +420,7 @@ void main() {
       );
       controller.onInit();
       expect(await controller.deleteSelected(), isNull);
-      expect(trash.trashCalls, isEmpty);
+      expect(trash.deleteCalls, isEmpty);
       expect(controller.items.length, 1);
     });
   });

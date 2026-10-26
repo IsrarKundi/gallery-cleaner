@@ -292,7 +292,10 @@ class AppStrings {
       'permissionDeniedSettingsHint';
   static const String actionViewTrash = 'actionViewTrash';
   static const String deniedConfirmMixedMessage = 'deniedConfirmMixedMessage';
+  static const String deniedConfirmMixedDeleteMessage =
+      'deniedConfirmMixedDeleteMessage';
   static const String snackMovedToTrashMany = 'snackMovedToTrashMany';
+  static const String snackDeletedMany = 'snackDeletedMany';
   static const String trashRestoreDeniedMixed = 'trashRestoreDeniedMixed';
   static const String trashEmptyDeniedMixed = 'trashEmptyDeniedMixed';
 
@@ -620,6 +623,11 @@ class AppStrings {
         '{trashed} photos moved to trash, {denied} returned to the deck, '
         'and {failed} could not be moved. The returned photos are back '
         'in your deck, undecided.',
+    deniedConfirmMixedDeleteMessage:
+        '{deleted} photos deleted, {denied} returned to the deck, '
+        'and {failed} could not be deleted. The returned photos are back '
+        'in your deck, undecided.',
+    snackDeletedMany: '{count} photos deleted.',
     trashRestoreDeniedMixed:
         '{restored} photos restored. The rest are still in trash because '
         'you did not confirm.',

@@ -243,6 +243,34 @@ class FakeTrash implements TrashService {
   final bool failCall;
 
   List<String> trashCalls = <String>[];
+  List<String> deleteCalls = <String>[];
+
+  @override
+  Future<Result<DeleteOutcome>> deletePermanently(List<String> ids) async {
+    deleteCalls = ids;
+    if (failCall) {
+      return const Failure<DeleteOutcome>(
+        AppFailure(messageKey: AppStrings.errorTrash),
+      );
+    }
+    final List<String> deleted = <String>[];
+    final List<String> denied = <String>[];
+    final List<String> failed = <String>[];
+    for (final String id in ids) {
+      if (failedIds.contains(id)) {
+        failed.add(id);
+      } else if (deniedIds.contains(id)) {
+        denied.add(id);
+      } else if (grantedIds == null || grantedIds!.contains(id)) {
+        deleted.add(id);
+      } else {
+        denied.add(id);
+      }
+    }
+    return Success<DeleteOutcome>(
+      DeleteOutcome(deletedIds: deleted, deniedIds: denied, failedIds: failed),
+    );
+  }
 
   @override
   Future<Result<TrashOutcome>> trashAssets(List<String> ids) async {
@@ -380,23 +408,29 @@ void main() {
       });
     });
 
-    test('trash success clears marks, appends history, sets outcome', () async {
-      final FakeLocal local = FakeLocal();
-      seedSession(local, 'all', <String>['a', 'b']);
-      final ReviewController controller = makeController(
-        local: local,
-        trash: FakeTrash(),
-      );
-      final ReviewDeleteOutcome? outcome = await controller.deleteSelected();
-      expect(outcome, ReviewDeleteOutcome.trashed);
-      expect(controller.items, isEmpty);
-      expect(local.sessions['all']!.marks, isEmpty);
-      expect(local.history.length, 1);
-      expect(local.history.single.count, 2);
-      expect(local.history.single.mbTrashed, closeTo(2.86, 0.01));
-      expect(local.history.single.mbFreed, 0);
-      expect(controller.trashedUntil.value, isNotNull);
-    });
+    test(
+      'delete success clears marks, appends history, sets outcome',
+      () async {
+        final FakeLocal local = FakeLocal();
+        seedSession(local, 'all', <String>['a', 'b']);
+        final FakeTrash trash = FakeTrash();
+        final ReviewController controller = makeController(
+          local: local,
+          trash: trash,
+        );
+        final ReviewDeleteOutcome? outcome = await controller.deleteSelected();
+        expect(outcome, ReviewDeleteOutcome.deleted);
+        expect(trash.deleteCalls, <String>['a', 'b']);
+        expect(trash.trashCalls, isEmpty);
+        expect(controller.items, isEmpty);
+        expect(local.sessions['all']!.marks, isEmpty);
+        expect(local.history.length, 1);
+        expect(local.history.single.count, 2);
+        expect(local.history.single.mbFreed, closeTo(2.86, 0.01));
+        expect(local.history.single.mbTrashed, 0);
+        expect(controller.trashedUntil.value, isNull);
+      },
+    );
 
     test('denied clears marks and reports the denied ids', () async {
       final FakeLocal local = FakeLocal();
@@ -440,7 +474,7 @@ void main() {
     });
 
     test(
-      'mixed trashed + denied: denied wins, trashed still recorded',
+      'mixed deleted + denied: denied wins, deleted still recorded',
       () async {
         final FakeLocal local = FakeLocal();
         seedSession(local, 'all', <String>['a', 'b']);
@@ -455,11 +489,13 @@ void main() {
         ]);
         expect(local.history.length, 1);
         expect(local.history.single.count, 1);
+        expect(local.history.single.mbFreed, greaterThan(0));
+        expect(local.history.single.mbTrashed, 0);
         expect(local.sessions['all']!.marks, isEmpty);
       },
     );
 
-    test('mixed trashed + failed: failed stays with error state', () async {
+    test('mixed deleted + failed: failed stays with error state', () async {
       final FakeLocal local = FakeLocal();
       seedSession(local, 'all', <String>['a', 'b']);
       final ReviewController controller = makeController(
@@ -472,6 +508,8 @@ void main() {
         'b',
       ]);
       expect(local.history.length, 1);
+      expect(local.history.single.mbFreed, greaterThan(0));
+      expect(local.history.single.mbTrashed, 0);
       expect(controller.errorKey.value, AppStrings.errorTrash);
     });
 
@@ -483,75 +521,85 @@ void main() {
       expect(controller.totalBytes, 3000000);
     });
 
-    test('coordination: unmarking calls DeckController.cancelAwaiting', () async {
-      final FakeLocal local = FakeLocal();
-      seedSession(local, 'all', <String>['a', 'b']);
-      final _SpyDeckController spy = _SpyDeckController();
-      Get.put<DeckController>(spy);
-      addTearDown(Get.reset);
+    test(
+      'coordination: unmarking calls DeckController.cancelAwaiting',
+      () async {
+        final FakeLocal local = FakeLocal();
+        seedSession(local, 'all', <String>['a', 'b']);
+        final _SpyDeckController spy = _SpyDeckController();
+        Get.put<DeckController>(spy);
+        addTearDown(Get.reset);
 
-      final ReviewController controller = makeController(
-        local: local,
-        trash: FakeTrash(),
-      );
-      await controller.unmark(controller.items.first);
-      expect(spy.cancelled.map((MediaAsset a) => a.id).toList(), <String>['a']);
-    });
+        final ReviewController controller = makeController(
+          local: local,
+          trash: FakeTrash(),
+        );
+        await controller.unmark(controller.items.first);
+        expect(spy.cancelled.map((MediaAsset a) => a.id).toList(), <String>[
+          'a',
+        ]);
+      },
+    );
 
-    test('coordination: keepAll and keepSelected call markAssetsKept', () async {
-      final FakeLocal local = FakeLocal();
-      seedSession(local, 'all', <String>['a', 'b']);
-      final _SpyDeckController spy = _SpyDeckController();
-      Get.put<DeckController>(spy);
-      addTearDown(Get.reset);
+    test(
+      'coordination: keepAll and keepSelected call markAssetsKept',
+      () async {
+        final FakeLocal local = FakeLocal();
+        seedSession(local, 'all', <String>['a', 'b']);
+        final _SpyDeckController spy = _SpyDeckController();
+        Get.put<DeckController>(spy);
+        addTearDown(Get.reset);
 
-      final ReviewController controller = makeController(
-        local: local,
-        trash: FakeTrash(),
-      );
-      await controller.keepAll();
-      expect(spy.kept, containsAll(<String>['a', 'b']));
-    });
+        final ReviewController controller = makeController(
+          local: local,
+          trash: FakeTrash(),
+        );
+        await controller.keepAll();
+        expect(spy.kept, containsAll(<String>['a', 'b']));
+      },
+    );
 
-    test('coordination: deleteSelected trashed calls removeTrashedAssets', () async {
-      final FakeLocal local = FakeLocal();
-      seedSession(local, 'all', <String>['a', 'b']);
-      final _SpyDeckController spy = _SpyDeckController();
-      Get.put<DeckController>(spy);
-      addTearDown(Get.reset);
+    test(
+      'coordination: deleteSelected deleted calls removeTrashedAssets',
+      () async {
+        final FakeLocal local = FakeLocal();
+        seedSession(local, 'all', <String>['a', 'b']);
+        final _SpyDeckController spy = _SpyDeckController();
+        Get.put<DeckController>(spy);
+        addTearDown(Get.reset);
 
-      final ReviewController controller = makeController(
-        local: local,
-        trash: FakeTrash(),
-      );
-      await controller.deleteSelected();
-      expect(spy.trashed, containsAll(<String>['a', 'b']));
-    });
+        final ReviewController controller = makeController(
+          local: local,
+          trash: FakeTrash(),
+        );
+        await controller.deleteSelected();
+        expect(spy.trashed, containsAll(<String>['a', 'b']));
+      },
+    );
 
-    test('coordination: deleteSelected denied calls handleDeniedTrash', () async {
-      final FakeLocal local = FakeLocal();
-      seedSession(local, 'all', <String>['a', 'b']);
-      final _SpyDeckController spy = _SpyDeckController();
-      Get.put<DeckController>(spy);
-      addTearDown(Get.reset);
+    test(
+      'coordination: deleteSelected denied calls handleDeniedTrash',
+      () async {
+        final FakeLocal local = FakeLocal();
+        seedSession(local, 'all', <String>['a', 'b']);
+        final _SpyDeckController spy = _SpyDeckController();
+        Get.put<DeckController>(spy);
+        addTearDown(Get.reset);
 
-      final ReviewController controller = makeController(
-        local: local,
-        trash: FakeTrash(deniedIds: <String>{'a', 'b'}),
-      );
-      await controller.deleteSelected();
-      expect(spy.denied, containsAll(<String>['a', 'b']));
-    });
+        final ReviewController controller = makeController(
+          local: local,
+          trash: FakeTrash(deniedIds: <String>{'a', 'b'}),
+        );
+        await controller.deleteSelected();
+        expect(spy.denied, containsAll(<String>['a', 'b']));
+      },
+    );
   });
 }
 
 class _SpyDeckController extends DeckController {
   _SpyDeckController()
-      : super(
-          media: FakeMedia(),
-          trash: FakeTrash(),
-          local: FakeLocal(),
-        );
+    : super(media: FakeMedia(), trash: FakeTrash(), local: FakeLocal());
 
   final List<MediaAsset> cancelled = <MediaAsset>[];
   final List<String> kept = <String>[];

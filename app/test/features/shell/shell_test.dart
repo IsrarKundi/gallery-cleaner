@@ -289,6 +289,17 @@ class _Trash implements TrashService {
       ),
     );
   }
+
+  @override
+  Future<Result<DeleteOutcome>> deletePermanently(List<String> ids) async {
+    return Success<DeleteOutcome>(
+      DeleteOutcome(
+        deletedIds: ids,
+        deniedIds: const <String>[],
+        failedIds: const <String>[],
+      ),
+    );
+  }
 }
 
 /// Nav destination inside the shell's NavigationBar (scoped so a

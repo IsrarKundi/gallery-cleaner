@@ -230,6 +230,25 @@ class _Trash implements TrashService {
   final Set<String> failedIds;
 
   @override
+  Future<Result<DeleteOutcome>> deletePermanently(List<String> ids) async {
+    final List<String> deleted = <String>[];
+    final List<String> denied = <String>[];
+    final List<String> failed = <String>[];
+    for (final String id in ids) {
+      if (failedIds.contains(id)) {
+        failed.add(id);
+      } else if (deniedIds.contains(id)) {
+        denied.add(id);
+      } else {
+        deleted.add(id);
+      }
+    }
+    return Success<DeleteOutcome>(
+      DeleteOutcome(deletedIds: deleted, deniedIds: denied, failedIds: failed),
+    );
+  }
+
+  @override
   Future<Result<TrashOutcome>> trashAssets(List<String> ids) async {
     final List<String> trashed = <String>[];
     final List<String> denied = <String>[];
@@ -345,13 +364,13 @@ void main() {
       expect(find.text('Delete 1 photos'), findsOneWidget);
     });
 
-    testWidgets('delete success navigates to trash', (
+    testWidgets('delete success navigates to deck', (
       WidgetTester tester,
     ) async {
       await _pump(tester, _controller(_Local(), _Trash()));
       await tester.tap(find.text('Delete 2 photos'));
       await tester.pumpAndSettle();
-      expect(find.text('trash-dummy'), findsOneWidget);
+      expect(find.text('deck-dummy'), findsOneWidget);
     });
 
     testWidgets('denied shows the explanation then goes to deck', (
