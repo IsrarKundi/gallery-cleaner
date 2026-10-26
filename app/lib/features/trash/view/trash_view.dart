@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/constants/app_icons.dart';
-import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../core/utils/formatters.dart';
@@ -22,10 +21,13 @@ import '../widgets/trash_row.dart';
 /// single + multi, and emptying. Layout + Obx only: the native-sheet
 /// outcomes and history writes live in [TrashController].
 ///
-/// Navigation contract (see the controller): every exit resets the
-/// stack with [Get.offAllNamed] — the AppBar back control, the system
-/// back gesture (via [PopScope]) and the empty-state CTA all go to
-/// the deck, never [Get.back] into a stale deck controller.
+/// Navigation contract (see the controller): exits return to the
+/// retained shell when one is alive — the AppBar back control, the
+/// system back gesture (via [PopScope]), the empty-state CTA and
+/// the bottom nav all pop back to the shell's tabs instead of
+/// rebuilding them; standalone Trash falls back to a stack reset.
+/// The Trash screen sits on top of the shell, so a return pops
+/// every route above the shell, never just one.
 /// Emptying is destructive, so it first shows Klara's own in-app
 /// confirmation (stating the deletion cannot be undone — the only
 /// place that wording is allowed, because after emptying restore no
@@ -129,12 +131,11 @@ class TrashView extends GetView<TrashController> {
 
   @override
   Widget build(BuildContext context) {
+    // Back goes to the deck tab (the button's tooltip says so):
+    // with a live shell underneath, that pops every route above
+    // the shell instead of landing on an empty Review behind it.
     void onBack() {
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      } else {
-        controller.goToDeck();
-      }
+      controller.goToDeck();
     }
 
     return PopScope(
@@ -182,13 +183,12 @@ class TrashView extends GetView<TrashController> {
                   ),
                   onEmptyTrash: () => _emptyTrash(context),
                 ),
-          // Phase 7.1: nav taps from Trash land back in the shell
-          // at the tapped tab (the shell route is '/'); Trash
+          // ADR-011: nav taps from Trash return to the retained
+          // shell at the tapped tab (pop, never a rebuild); Trash
           // itself never fires here (it is the current tab).
           bottomNav: AppBottomNav(
             currentIndex: 2,
-            onDestinationSelected: (int index) =>
-                Get.offAllNamed<dynamic>(AppRoutes.deck, arguments: index),
+            onDestinationSelected: controller.goToShellTab,
           ),
           body: _ArrivalSnack(
             controller: controller,

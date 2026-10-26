@@ -14,8 +14,10 @@ import '../../deck/controller/deck_controller.dart';
 /// (a new binding runs each time), so it can never go stale — but
 /// the shell underneath is never destroyed, so returning from
 /// Review pops back to the exact tab state instead of rebuilding
-/// every tab (see ADR-009). The stack index maps nav index 3
-/// (Settings) to stack index 2.
+/// every tab (see ADR-009). The Trash screen reached from Review
+/// likewise pushes on top of the shell and pops back to it (see
+/// ADR-011). The stack index maps nav index 3 (Settings) to
+/// stack index 2.
 ///
 /// Composition exception (AGENTS.md): this controller coordinates
 /// tabs, so it imports [DeckController] the way AppPages imports

@@ -21,6 +21,11 @@ class DeckWarmUpImpl implements DeckWarmUp {
   Future<MediaPermission?>? _permissionFuture;
   Future<List<MediaAsset>?>? _firstPageFuture;
 
+  /// The warmed page is handed out once, ever (see [DeckWarmUp]).
+  /// A later deck — e.g. after a shell rebuild — fetches fresh
+  /// instead of reusing a page warmed before a trash run.
+  bool _pageConsumed = false;
+
   @override
   bool get started => _started;
 
@@ -41,6 +46,10 @@ class DeckWarmUpImpl implements DeckWarmUp {
 
   @override
   Future<List<MediaAsset>?> get firstPage {
+    if (_pageConsumed) {
+      return Future<List<MediaAsset>?>.value(null);
+    }
+    _pageConsumed = true;
     return _firstPageFuture ?? Future<List<MediaAsset>?>.value(null);
   }
 

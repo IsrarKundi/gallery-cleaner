@@ -11,9 +11,10 @@ import '../controller/shell_controller.dart';
 /// feature binding. The tabs' controllers live as long as the shell
 /// route (tab switches never dispose them). Review trips no longer
 /// leave the shell (Review pushes on top and pops back, ADR-009),
-/// so a Decks↔Trash round-trip keeps every tab; only the
-/// post-delete path to the Trash screen still resets the stack,
-/// where fresh state after a delete is correct.
+/// so a Decks↔Trash round-trip keeps every tab; the Trash screen
+/// reached from Review likewise pushes on top and pops back to
+/// the shell (ADR-011) — no exit from Review or Trash destroys
+/// the shell anymore.
 class ShellBinding extends Bindings {
   @override
   void dependencies() {

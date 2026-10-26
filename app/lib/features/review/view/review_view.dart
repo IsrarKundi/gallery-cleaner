@@ -27,10 +27,10 @@ import '../widgets/review_loading_skeleton.dart';
 /// system back gesture (via [PopScope]) and the bottom nav all pop
 /// back to the shell's tabs instead of rebuilding them; standalone
 /// Review falls back to a stack reset. A successful whole-set
-/// delete still goes to Trash with a stack reset carrying the
-/// recoverable-until date as route arguments, so the Trash screen
-/// can show the "Moved to Trash" snackbar on arrival and the
-/// post-delete state loads fresh.
+/// delete pushes the Trash screen on top of the shell (ADR-011)
+/// carrying the recoverable-until date as route arguments, so the
+/// Trash screen can show the "Moved to Trash" snackbar on arrival;
+/// leaving Trash pops back to the shell, never a rebuild.
 ///
 /// Selection (owner decision 26 Oct 2026): photos are always
 /// shown revealed. Outside selection mode a tile tap unmarks the
@@ -81,7 +81,7 @@ class ReviewView extends GetView<ReviewController> {
           break;
         }
         final DateTime? until = controller.trashedUntil.value;
-        Get.offAllNamed<dynamic>(
+        Get.toNamed<dynamic>(
           AppRoutes.trash,
           arguments: until == null ? null : Formatters.formatDate(until),
         );
@@ -116,7 +116,7 @@ class ReviewView extends GetView<ReviewController> {
             controller.goToDeck();
           } else {
             final DateTime? until = controller.trashedUntil.value;
-            Get.offAllNamed<dynamic>(
+            Get.toNamed<dynamic>(
               AppRoutes.trash,
               arguments: until == null ? null : Formatters.formatDate(until),
             );

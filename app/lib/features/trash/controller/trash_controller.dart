@@ -7,6 +7,10 @@ import '../../../core/utils/result.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/trash/trash_entry.dart';
 import '../../../services/trash/trash_service.dart';
+// Composition exception (AGENTS.md): mirroring Review's shell
+// import, Trash only asks the shell to select a tab when the
+// shell is alive underneath it — it owns no shell state.
+import '../../shell/controller/shell_controller.dart';
 
 /// Outcome of a trash action, for the view's feedback (snackbar,
 /// denied dialog, error strip) and for tests. Navigation itself is
@@ -16,9 +20,15 @@ enum TrashActionOutcome { restored, emptied, denied, failed, serviceError }
 /// Trash screen state (requirements §4): Klara's recorded Trash list
 /// (newest first), restore single + multi, and emptying.
 ///
-/// Navigation contract: every exit resets the stack with
-/// [Get.offAllNamed] to the deck, never [Get.back] into a stale
-/// controller (see the review controller for why).
+/// Navigation contract: exits return to the retained shell when
+/// one is alive — the AppBar back control, the system back
+/// gesture, the empty-state CTA and the bottom nav all pop back
+/// to the shell's tabs instead of rebuilding them; standalone
+/// Trash falls back to a stack reset. The Trash screen sits on
+/// top of the shell (pushed from Review), so a return pops every
+/// route above the shell (Trash and any Review beneath it), never
+/// just one — landing on an empty Review would strand the user.
+/// See ADR-011.
 ///
 /// Record-cleanup ownership (verified in [TrashServiceImpl]): the
 /// SERVICE removes restored/emptied ids from the recorded Trash list
@@ -292,9 +302,39 @@ class TrashController extends GetxController {
     result.fold(onSuccess: entries.assignAll, onFailure: (_) {});
   }
 
-  /// Resets the stack to the deck so it reloads fresh from the
-  /// session. Never [Get.back] into the stale deck controller.
-  void goToDeck() {
-    Get.offAllNamed<dynamic>(AppRoutes.deck);
+  /// Returns to the deck tab. When Trash sits on top of the
+  /// retained shell (the normal Review path), the shell is still
+  /// alive underneath, so select the deck tab and pop every route
+  /// above the shell instead of destroying and rebuilding every
+  /// tab — the destination matches the old stack reset exactly,
+  /// only the rebuild goes away. Standalone Trash (no shell
+  /// underneath) keeps the old reset. Never [Get.back] into a
+  /// stale deck controller: the shell's deck controller is
+  /// retained, not stale, so popping to it is safe.
+  void goToDeck() => _popToShellTab(0);
+
+  /// Bottom-nav return from Trash to a shell tab. Same
+  /// pop-to-retained-shell rule as [goToDeck]; standalone Trash
+  /// keeps the old reset with the tapped tab as the shell's
+  /// initial tab.
+  void goToShellTab(int nav) => _popToShellTab(nav);
+
+  void _popToShellTab(int nav) {
+    if (Get.isRegistered<ShellController>()) {
+      Get.find<ShellController>().selectTab(nav);
+      // Pop stacked routes (Trash, and any Review beneath it)
+      // until the shell (deck route) is on top. Bounded so a
+      // stack without the shell falls through to the reset
+      // instead of popping past the bottom.
+      var pops = 0;
+      while (Get.currentRoute != AppRoutes.deck && pops < 5) {
+        Get.back<dynamic>();
+        pops++;
+      }
+      if (Get.currentRoute == AppRoutes.deck) {
+        return;
+      }
+    }
+    Get.offAllNamed<dynamic>(AppRoutes.deck, arguments: nav);
   }
 }

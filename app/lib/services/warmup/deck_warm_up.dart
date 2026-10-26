@@ -14,6 +14,14 @@
 // so a stale grant can never survive a retry. Both futures always
 // complete (failure reads as null), so the deck always falls back
 // to its normal path instead of hanging on warm-up.
+//
+// Consumption is app-wide, not per deck controller: [firstPage]
+// hands its page out on the first read only, and later reads get
+// null (fresh fetch). A rebuilt deck — e.g. after the shell is
+// recreated — must never reuse a page warmed before a trash run:
+// trashed photos are hidden from MediaStore but still sit in the
+// warmed page, and with their session marks cleared they would
+// reappear in the deck as undecided (ADR-011).
 
 import '../media/media_asset.dart';
 
