@@ -189,10 +189,21 @@ class DeckController extends GetxController {
       permission.value == MediaPermission.grantedLimited;
 
   /// Assets marked delete: the review set (see class doc).
+  /// Includes both committed photos waiting in [_awaitingTrash]
+  /// and newly swiped photos still in [queue].
   List<MediaAsset> get deleteMarkedAssets {
-    return queue
+    final List<MediaAsset> queued = queue
         .where((MediaAsset asset) => marks[asset.id] == DeckMark.delete)
         .toList();
+    if (_awaitingTrash.isEmpty) {
+      return queued;
+    }
+    final Set<String> queuedIds = queued.map((MediaAsset a) => a.id).toSet();
+    return <MediaAsset>[
+      for (final MediaAsset asset in _awaitingTrash)
+        if (!queuedIds.contains(asset.id)) asset,
+      ...queued,
+    ];
   }
 
   /// Finished-session summary (Phase 2B; delete MB is "to be freed").
@@ -892,11 +903,122 @@ class DeckController extends GetxController {
     if (_pendingDelete != null && ids.contains(_pendingDelete!.id)) {
       _cancelPendingDelete();
     }
-    if (access.rewindDenied(marks, undoStack, ids)) {
+    final Set<String> idSet = ids.toSet();
+    final List<MediaAsset> toRewind = <MediaAsset>[];
+    _awaitingTrash.removeWhere((MediaAsset asset) {
+      if (idSet.contains(asset.id)) {
+        toRewind.add(asset);
+        return true;
+      }
+      return false;
+    });
+    int insertAt = currentIndex.value;
+    for (final MediaAsset asset in toRewind) {
+      insertAt = _rewindAsset(asset, insertAt);
+    }
+    if (access.rewindDenied(marks, undoStack, ids) || toRewind.isNotEmpty) {
       currentIndex.value = firstUndecidedIndex(queue, marks);
       _preloader.preloadAround(queue, currentIndex.value);
       _persist();
     }
+  }
+
+  /// Cancels an awaiting or pending delete swipe from Review:
+  /// removes the photo from [_awaitingTrash] (or cancels its
+  /// pending window), clears its mark, and rewinds it into
+  /// [queue] undecided at [currentIndex] so it returns to the
+  /// deck as the current card.
+  void cancelAwaiting(MediaAsset asset) {
+    if (_pendingDelete?.id == asset.id) {
+      _cancelPendingDelete();
+      marks.remove(asset.id);
+      final int idx = queue.indexWhere((MediaAsset a) => a.id == asset.id);
+      if (idx != -1 && idx < currentIndex.value) {
+        currentIndex.value = idx;
+      }
+      _preloader.preloadAround(queue, currentIndex.value);
+      _persist();
+      return;
+    }
+    final int awaitingIdx =
+        _awaitingTrash.indexWhere((MediaAsset a) => a.id == asset.id);
+    if (awaitingIdx != -1) {
+      final MediaAsset removed = _awaitingTrash.removeAt(awaitingIdx);
+      _rewindAsset(removed, currentIndex.value);
+      _refreshMonths();
+      _preloader.preloadAround(queue, currentIndex.value);
+      _persist();
+      return;
+    }
+    if (marks[asset.id] == DeckMark.delete) {
+      marks.remove(asset.id);
+      final int idx = queue.indexWhere((MediaAsset a) => a.id == asset.id);
+      if (idx != -1 && idx < currentIndex.value) {
+        currentIndex.value = idx;
+      }
+      _preloader.preloadAround(queue, currentIndex.value);
+      _persist();
+    }
+  }
+
+  /// Records keep marks from Review: removes them from
+  /// [_awaitingTrash] so they are never trashed, and updates
+  /// their marks to keep.
+  void markAssetsKept(Iterable<String> assetIds) {
+    final Set<String> ids = assetIds.toSet();
+    if (_pendingDelete != null && ids.contains(_pendingDelete!.id)) {
+      _cancelPendingDelete();
+    }
+    _awaitingTrash.removeWhere((MediaAsset a) => ids.contains(a.id));
+    for (final String id in ids) {
+      marks[id] = DeckMark.keep;
+    }
+    _persist();
+  }
+
+  /// Drops confirmed-trashed photos from [_awaitingTrash] when
+  /// Review trashes them, so [flushAwaitingTrash] will never
+  /// re-trash them.
+  void removeTrashedAssets(Iterable<String> assetIds) {
+    final Set<String> ids = assetIds.toSet();
+    if (_pendingDelete != null && ids.contains(_pendingDelete!.id)) {
+      _cancelPendingDelete();
+    }
+    _awaitingTrash.removeWhere((MediaAsset a) => ids.contains(a.id));
+    for (final String id in ids) {
+      marks.remove(id);
+    }
+    _persist();
+    unawaited(meterState.refresh(trashEntries, history));
+  }
+
+  /// Rewinds denied photos from Review to the deck queue as
+  /// undecided, and sets [trashBatchDeniedKey] so the deck
+  /// shows the denial notice banner on return.
+  void handleDeniedTrash(Iterable<String> deniedIds) {
+    final Set<String> ids = deniedIds.toSet();
+    if (_pendingDelete != null && ids.contains(_pendingDelete!.id)) {
+      _cancelPendingDelete();
+    }
+    final List<MediaAsset> toRewind = <MediaAsset>[];
+    _awaitingTrash.removeWhere((MediaAsset asset) {
+      if (ids.contains(asset.id)) {
+        toRewind.add(asset);
+        return true;
+      }
+      return false;
+    });
+    int insertAt = currentIndex.value;
+    for (final MediaAsset asset in toRewind) {
+      insertAt = _rewindAsset(asset, insertAt);
+    }
+    for (final String id in ids) {
+      marks.remove(id);
+    }
+    trashBatchDeniedKey.value = AppStrings.trashBatchDenied;
+    _refreshMonths();
+    _preloader.preloadAround(queue, currentIndex.value);
+    _persist();
   }
 
   /// Starts a fresh queue under the new filter's session key.

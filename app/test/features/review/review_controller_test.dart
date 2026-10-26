@@ -15,6 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:klara/core/strings/app_strings.dart';
 import 'package:klara/core/utils/result.dart';
+import 'package:klara/features/deck/controller/deck_controller.dart';
 import 'package:klara/features/review/controller/review_controller.dart';
 import 'package:klara/services/detection/photo_analysis.dart';
 import 'package:klara/services/local/local_service.dart';
@@ -481,5 +482,99 @@ void main() {
       );
       expect(controller.totalBytes, 3000000);
     });
+
+    test('coordination: unmarking calls DeckController.cancelAwaiting', () async {
+      final FakeLocal local = FakeLocal();
+      seedSession(local, 'all', <String>['a', 'b']);
+      final _SpyDeckController spy = _SpyDeckController();
+      Get.put<DeckController>(spy);
+      addTearDown(Get.reset);
+
+      final ReviewController controller = makeController(
+        local: local,
+        trash: FakeTrash(),
+      );
+      await controller.unmark(controller.items.first);
+      expect(spy.cancelled.map((MediaAsset a) => a.id).toList(), <String>['a']);
+    });
+
+    test('coordination: keepAll and keepSelected call markAssetsKept', () async {
+      final FakeLocal local = FakeLocal();
+      seedSession(local, 'all', <String>['a', 'b']);
+      final _SpyDeckController spy = _SpyDeckController();
+      Get.put<DeckController>(spy);
+      addTearDown(Get.reset);
+
+      final ReviewController controller = makeController(
+        local: local,
+        trash: FakeTrash(),
+      );
+      await controller.keepAll();
+      expect(spy.kept, containsAll(<String>['a', 'b']));
+    });
+
+    test('coordination: deleteSelected trashed calls removeTrashedAssets', () async {
+      final FakeLocal local = FakeLocal();
+      seedSession(local, 'all', <String>['a', 'b']);
+      final _SpyDeckController spy = _SpyDeckController();
+      Get.put<DeckController>(spy);
+      addTearDown(Get.reset);
+
+      final ReviewController controller = makeController(
+        local: local,
+        trash: FakeTrash(),
+      );
+      await controller.deleteSelected();
+      expect(spy.trashed, containsAll(<String>['a', 'b']));
+    });
+
+    test('coordination: deleteSelected denied calls handleDeniedTrash', () async {
+      final FakeLocal local = FakeLocal();
+      seedSession(local, 'all', <String>['a', 'b']);
+      final _SpyDeckController spy = _SpyDeckController();
+      Get.put<DeckController>(spy);
+      addTearDown(Get.reset);
+
+      final ReviewController controller = makeController(
+        local: local,
+        trash: FakeTrash(deniedIds: <String>{'a', 'b'}),
+      );
+      await controller.deleteSelected();
+      expect(spy.denied, containsAll(<String>['a', 'b']));
+    });
   });
+}
+
+class _SpyDeckController extends DeckController {
+  _SpyDeckController()
+      : super(
+          media: FakeMedia(),
+          trash: FakeTrash(),
+          local: FakeLocal(),
+        );
+
+  final List<MediaAsset> cancelled = <MediaAsset>[];
+  final List<String> kept = <String>[];
+  final List<String> trashed = <String>[];
+  final List<String> denied = <String>[];
+
+  @override
+  void cancelAwaiting(MediaAsset asset) {
+    cancelled.add(asset);
+  }
+
+  @override
+  void markAssetsKept(Iterable<String> assetIds) {
+    kept.addAll(assetIds);
+  }
+
+  @override
+  void removeTrashedAssets(Iterable<String> assetIds) {
+    trashed.addAll(assetIds);
+  }
+
+  @override
+  void handleDeniedTrash(Iterable<String> deniedIds) {
+    denied.addAll(deniedIds);
+  }
 }

@@ -407,35 +407,40 @@ void main() {
     expect(find.text('Delete 1 photos'), findsOneWidget);
   });
 
-  testWidgets('committed deletes flush to trash on leaving Clean', (
-    WidgetTester tester,
-  ) async {
-    final _Trash trash = _Trash();
-    await _pumpShell(tester, _Media(), _Local(), trash);
-    final DeckController deck = Get.find<DeckController>();
+  testWidgets(
+    'committed deletes do not flush unexpectedly on visiting Decks, and show in Review',
+    (WidgetTester tester) async {
+      final _Trash trash = _Trash();
+      await _pumpShell(tester, _Media(), _Local(), trash);
+      final DeckController deck = Get.find<DeckController>();
 
-    // Mark a1 and let the window lapse: the delete commits to
-    // the trash pipeline. The exit needs two pumps to record
-    // the mark; the third advances the clock past the 2s timer
-    // (pumpAndSettle alone stops once frames settle, so it
-    // never runs the timer out).
-    await tester.drag(find.byType(SwipeCard), const Offset(200, 0));
-    await tester.pump(const Duration(seconds: 3));
-    await tester.pump(const Duration(seconds: 3));
-    await tester.pump(const Duration(seconds: 3));
-    expect(deck.awaitingTrash.map((MediaAsset a) => a.id).toList(), <String>[
-      'a1',
-    ]);
+      // Mark a1 and let the window lapse: the delete commits to
+      // the trash pipeline. The exit needs two pumps to record
+      // the mark; the third advances the clock past the 2s timer.
+      await tester.drag(find.byType(SwipeCard), const Offset(200, 0));
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(seconds: 3));
+      expect(deck.awaitingTrash.map((MediaAsset a) => a.id).toList(), <String>[
+        'a1',
+      ]);
 
-    // Leaving Clean fires one native batch for the commit.
-    await tester.tap(_navItem('Decks'));
-    await tester.runAsync(_waitHubSettled);
-    await tester.pumpAndSettle();
-    expect(trash.entries.map((TrashEntry e) => e.assetId).toList(), <String>[
-      'a1',
-    ]);
-    expect(deck.awaitingTrash, isEmpty);
-  });
+      // Visiting Decks does NOT fire an unexpected native batch over the hub.
+      await tester.tap(_navItem('Decks'));
+      await tester.runAsync(_waitHubSettled);
+      await tester.pumpAndSettle();
+      expect(trash.entries, isEmpty);
+      expect(deck.awaitingTrash.map((MediaAsset a) => a.id).toList(), <String>[
+        'a1',
+      ]);
+
+      // Tapping Trash opens Review and shows the committed delete set.
+      await tester.tap(_navItem('Trash'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ReviewView), findsOneWidget);
+      expect(find.text('Delete 1 photos'), findsOneWidget);
+    },
+  );
 
   testWidgets('Trash opens Review with content on the first frame', (
     WidgetTester tester,

@@ -5,9 +5,10 @@ import 'package:get/get.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
 // Composition exception (AGENTS.md): mirroring the shell's
-// DeckController import, Review only asks the shell to select a
-// tab when the shell is alive underneath it — it owns no shell
-// state. See ADR-009.
+// DeckController import, Review coordinates tab return and
+// syncs awaiting trash entries with DeckController when the shell
+// is alive underneath it — it owns no shell state. See ADR-009.
+import '../../deck/controller/deck_controller.dart';
 import '../../shell/controller/shell_controller.dart';
 import '../../../core/utils/app_haptics.dart';
 import '../../../core/utils/result.dart';
@@ -217,6 +218,9 @@ class ReviewController extends GetxController {
     }
     items.removeWhere((MediaAsset item) => item.id == asset.id);
     _syncSelection();
+    if (Get.isRegistered<DeckController>()) {
+      Get.find<DeckController>().cancelAwaiting(asset);
+    }
   }
 
   /// Sets every delete mark in the set to keep in the session
@@ -241,6 +245,9 @@ class ReviewController extends GetxController {
     }
     items.clear();
     selection.clear();
+    if (Get.isRegistered<DeckController>()) {
+      Get.find<DeckController>().markAssetsKept(updates.keys);
+    }
     goToDeck();
   }
 
@@ -270,6 +277,9 @@ class ReviewController extends GetxController {
     final Set<String> kept = selectedItems.map((MediaAsset a) => a.id).toSet();
     items.removeWhere((MediaAsset item) => kept.contains(item.id));
     _syncSelection();
+    if (Get.isRegistered<DeckController>()) {
+      Get.find<DeckController>().markAssetsKept(kept);
+    }
     if (items.isEmpty) {
       goToDeck();
     }
@@ -341,6 +351,9 @@ class ReviewController extends GetxController {
     lastFailedCount.value = outcome.failedIds.length;
     if (outcome.trashedIds.isNotEmpty) {
       await _applyTrashed(outcome.trashedIds);
+      if (Get.isRegistered<DeckController>()) {
+        Get.find<DeckController>().removeTrashedAssets(outcome.trashedIds);
+      }
       // Phase 3A haptics (design.md §8): medium click when a
       // delete is confirmed through the native sheet.
       AppHaptics.deleteConfirm();
@@ -357,6 +370,9 @@ class ReviewController extends GetxController {
         },
       );
       deniedIds.assignAll(outcome.deniedIds);
+      if (Get.isRegistered<DeckController>()) {
+        Get.find<DeckController>().handleDeniedTrash(outcome.deniedIds);
+      }
       lastOutcome.value = ReviewDeleteOutcome.denied;
       return ReviewDeleteOutcome.denied;
     }
