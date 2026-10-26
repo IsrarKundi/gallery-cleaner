@@ -95,10 +95,29 @@ class ShellController extends GetxController {
   /// fast double tap never stacks Review twice. Review itself
   /// stays fresh — a new binding runs on every open — so pushing
   /// it cannot show a stale delete set.
+  ///
+  /// The current delete set travels as route arguments (same as
+  /// the deck's own go-to-review), so Review renders its count,
+  /// buttons and tiles on the first frame instead of flashing the
+  /// loading skeleton while it re-resolves the set from the
+  /// session (ADR-012). The arguments are read here, at push
+  /// time — after the settled-review gate releases — so a mark
+  /// recorded during a gated wait is included. When the deck is
+  /// unresolvable the plain push stands and Review falls back to
+  /// the session path, skeleton included, as before.
   void _pushReview() {
     if (Get.currentRoute == AppRoutes.review) {
       return;
     }
-    Get.toNamed<dynamic>(AppRoutes.review);
+    try {
+      final DeckController deck = Get.find<DeckController>();
+      Get.toNamed<dynamic>(
+        AppRoutes.review,
+        arguments: deck.deleteMarkedAssets,
+        parameters: <String, String>{'filterKey': deck.filter.value.filterKey},
+      );
+    } catch (_) {
+      Get.toNamed<dynamic>(AppRoutes.review);
+    }
   }
 }

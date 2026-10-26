@@ -20,6 +20,7 @@ import 'package:klara/features/decks/controller/decks_controller.dart';
 import 'package:klara/features/decks/model/decks_status.dart';
 import 'package:klara/features/review/binding/review_binding.dart';
 import 'package:klara/features/review/view/review_view.dart';
+import 'package:klara/features/review/widgets/review_loading_skeleton.dart';
 import 'package:klara/features/shell/binding/shell_binding.dart';
 import 'package:klara/features/shell/controller/shell_controller.dart';
 import 'package:klara/features/shell/view/shell_view.dart';
@@ -405,6 +406,27 @@ void main() {
     await tester.tap(_navItem('Trash'));
     await tester.pumpAndSettle();
     expect(find.text('Delete 2 photos'), findsOneWidget);
+  });
+
+  testWidgets('Trash opens Review with content on the first frame', (
+    WidgetTester tester,
+  ) async {
+    await _pumpShell(tester, _Media(), _Local(), _Trash());
+
+    // Mark a1, then Trash: the delete set travels as route
+    // arguments, so the first Review frame already shows the
+    // count and buttons — never the loading skeleton (ADR-012).
+    await tester.drag(find.byType(SwipeCard), const Offset(200, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(_navItem('Trash'));
+    // Step through the push transition frame by frame: the delete
+    // set travels as route arguments, so no frame may show the
+    // loading skeleton, and the count is there once Review lands.
+    for (int i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(find.byType(ReviewLoadingSkeleton), findsNothing);
+    }
+    expect(find.text('Delete 1 photos'), findsOneWidget);
   });
 
   testWidgets('Trash round-trip keeps the shell and its tabs alive', (
