@@ -75,6 +75,11 @@ flutter:
   assets:
     - assets/icons/klara_logo.svg
     - assets/icons/klara_logo_white.svg
+    - assets/icons/nav_home.svg
+    - assets/icons/nav_albums.svg
+    - assets/icons/nav_trash.svg
+    - assets/icons/nav_settings.svg
+    - assets/icons/action_add_to_album.svg
     - assets/animations/klara_logo_lottie.json
     - assets/animations/klara_logo_lottie_white.json
 

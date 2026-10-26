@@ -5,12 +5,13 @@ import '../constants/app_icons.dart';
 import '../routes/app_routes.dart';
 import '../strings/app_strings.dart';
 import '../theme/theme_ext.dart';
+import 'app_svg_icon.dart';
 
 /// App bottom navigation bar (design.md §6).
 ///
 /// 4 destinations:
 /// 0: Clean (DeckView)
-/// 1: Deck (DecksView)
+/// 1: Albums (DecksView)
 /// 2: Trash (TrashView)
 /// 3: Settings (SettingsView)
 ///
@@ -53,6 +54,11 @@ class AppBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Colours match what NavigationBar gave the old font icons:
+    // selected = onSecondaryContainer, unselected = onSurfaceVariant.
+    Color navColor(int index) => index == currentIndex
+        ? context.palette.textPrimary
+        : context.palette.textSecondary;
     return Container(
       decoration: BoxDecoration(
         color: context.palette.surface,
@@ -67,19 +73,35 @@ class AppBottomNav extends StatelessWidget {
         indicatorColor: context.palette.primaryContainer,
         destinations: <NavigationDestination>[
           NavigationDestination(
-            icon: Icon(AppIcons.clean, size: context.sizes.iconMd),
+            icon: AppSvgIcon(
+              asset: AppIcons.navCleanAsset,
+              size: context.sizes.iconMd,
+              color: navColor(0),
+            ),
             label: AppStrings.tr(AppStrings.navClean),
           ),
           NavigationDestination(
-            icon: Icon(AppIcons.decks, size: context.sizes.iconMd),
+            icon: AppSvgIcon(
+              asset: AppIcons.navAlbumsAsset,
+              size: context.sizes.iconMd,
+              color: navColor(1),
+            ),
             label: AppStrings.tr(AppStrings.navDecks),
           ),
           NavigationDestination(
-            icon: Icon(AppIcons.trash, size: context.sizes.iconMd),
+            icon: AppSvgIcon(
+              asset: AppIcons.navTrashAsset,
+              size: context.sizes.iconMd,
+              color: navColor(2),
+            ),
             label: AppStrings.tr(AppStrings.navTrash),
           ),
           NavigationDestination(
-            icon: Icon(AppIcons.settings, size: context.sizes.iconMd),
+            icon: AppSvgIcon(
+              asset: AppIcons.navSettingsAsset,
+              size: context.sizes.iconMd,
+              color: navColor(3),
+            ),
             label: AppStrings.tr(AppStrings.navSettings),
           ),
         ],

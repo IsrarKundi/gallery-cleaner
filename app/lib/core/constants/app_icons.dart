@@ -8,6 +8,12 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 /// place. Feature code and core widgets must never name a pack glyph
 /// class or the framework icon set directly.
 ///
+/// Two renderings live here: Phosphor [IconData] constants (the default)
+/// and custom SVG asset paths (rendered with AppSvgIcon). The SVG set
+/// covers the bottom-nav destinations and the add-to-album action only,
+/// per the owner's explicit 26 Oct 2026 decision; every other usage
+/// still uses the Phosphor constants until the owner says otherwise.
+///
 /// Weight rules: Regular is the default weight. Fill marks
 /// selected/active only. Duotone is reserved and no Duotone constant is
 /// defined in v1.
@@ -91,6 +97,19 @@ class AppIcons {
   static const IconData waveform = PhosphorIconsRegular.waveform;
   static const IconData shield = PhosphorIconsRegular.shieldCheck;
   static const IconData fileText = PhosphorIconsRegular.fileText;
+
+  /// Custom SVG icon assets (Iconify, design.md §13), rendered with
+  /// AppSvgIcon. Bottom-nav destinations + the add-to-album action
+  /// only; all other usages keep the Phosphor constants above.
+  /// Line weight is normalised to 2dp at 24dp: the 48-grid settings
+  /// asset carries stroke-width 4 (renders as 2dp), the 24-grid house
+  /// asset carries stroke-width 2, and the filled-path assets have
+  /// their weight baked into the path.
+  static const String navCleanAsset = 'assets/icons/nav_home.svg';
+  static const String navAlbumsAsset = 'assets/icons/nav_albums.svg';
+  static const String navTrashAsset = 'assets/icons/nav_trash.svg';
+  static const String navSettingsAsset = 'assets/icons/nav_settings.svg';
+  static const String addToAlbumAsset = 'assets/icons/action_add_to_album.svg';
 
   /// Every constant, for tests that assert each one is a valid glyph.
   static const List<IconData> all = <IconData>[

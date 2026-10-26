@@ -254,7 +254,7 @@ void main() {
   ) async {
     await pumpKit(tester, const AppBottomNav(currentIndex: 0));
     expect(find.text('Clean'), findsOneWidget);
-    expect(find.text('Decks'), findsOneWidget);
+    expect(find.text('Albums'), findsOneWidget);
     expect(find.text('Trash'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
   });

@@ -368,7 +368,7 @@ void main() {
     expect(deck.queue.length, 2);
 
     // First visit of every tab (hub scan completes here).
-    await tester.tap(_navItem('Decks'));
+    await tester.tap(_navItem('Albums'));
     await tester.runAsync(_waitHubSettled);
     await tester.pumpAndSettle();
     final DecksController hub = Get.find<DecksController>();
@@ -382,7 +382,7 @@ void main() {
 
     // Five full round-trips: no reload, no re-scan, same instances.
     for (int i = 0; i < 5; i++) {
-      await tester.tap(_navItem('Decks'));
+      await tester.tap(_navItem('Albums'));
       await tester.pumpAndSettle();
       await tester.tap(_navItem('Settings'));
       await tester.pumpAndSettle();
@@ -438,7 +438,7 @@ void main() {
       ]);
 
       // Visiting Decks does NOT fire an unexpected native batch over the hub.
-      await tester.tap(_navItem('Decks'));
+      await tester.tap(_navItem('Albums'));
       await tester.runAsync(_waitHubSettled);
       await tester.pumpAndSettle();
       expect(trash.entries, isEmpty);
@@ -486,7 +486,7 @@ void main() {
     final DeckController deck = Get.find<DeckController>();
 
     // Visit Decks so the hub is mounted, then Trash and back.
-    await tester.tap(_navItem('Decks'));
+    await tester.tap(_navItem('Albums'));
     await tester.runAsync(_waitHubSettled);
     await tester.pumpAndSettle();
     final DecksController hub = Get.find<DecksController>();
@@ -499,7 +499,7 @@ void main() {
 
     // Return via Review's own bottom nav: same shell, same tab
     // controllers, no reload, no re-scan.
-    await tester.tap(_navItem('Decks'));
+    await tester.tap(_navItem('Albums'));
     await tester.pumpAndSettle();
     expect(identical(Get.find<ShellController>(), shell), isTrue);
     expect(identical(Get.find<DeckController>(), deck), isTrue);
@@ -552,7 +552,7 @@ void main() {
     // Retained switch: the deck stays mounted off-stage, so its
     // flight completes and the mark records (the old off-all nav
     // destroyed the deck here and lost the mark).
-    await tester.tap(_navItem('Decks'));
+    await tester.tap(_navItem('Albums'));
     await tester.runAsync(_waitHubSettled);
     await tester.pumpAndSettle();
     expect(identical(Get.find<DeckController>(), deck), isTrue);

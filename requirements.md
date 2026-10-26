@@ -102,6 +102,10 @@ labels; English; Android; flat design. NO monetization code in Phase 1 (see §8)
 
 ### Phase 2 — Smart decks and retention
 
+AMENDED 26 Oct 2026 (owner decision): the Smart decks hub is labelled "Albums" in the
+app UI, and a single smart deck screen is labelled "Album". The internal feature name
+("smart decks") and code names are unchanged — only the user-visible labels change.
+
 Duplicate / similar grouping with changeable keeper (app suggests best shot, user may pick another);
 blurry and dark photo detection; smart decks (Screenshots, WhatsApp, Downloads, Videos, Large
 photos, Old photos 90+ days, Bursts); similarity slider; Maybe snooze (7 / 14 / 30 days); goals
