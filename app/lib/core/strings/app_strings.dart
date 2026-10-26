@@ -352,7 +352,7 @@ class AppStrings {
 
   /// English (v1) values, keyed by the constants above.
   static const Map<String, String> en = <String, String>{
-    appTitle: 'Klara',
+    appTitle: 'Wipe',
     screenDeck: 'Clean',
     screenReview: 'Review',
     screenTrash: 'Trash',
@@ -366,7 +366,7 @@ class AppStrings {
     navSettings: 'Settings',
     decksTitle: 'Albums',
     decksSubtitle:
-        'Groups Klara found in your library. Open one to swipe through it.',
+        'Groups Wipe found in your library. Open one to swipe through it.',
     decksReadyToClean: 'READY TO CLEAN ({count})',
     decksScanning: 'Scanning your library…',
     decksScanningCount: 'Scanned {count} photos…',
@@ -452,12 +452,12 @@ class AppStrings {
     historyRowMeta: '{count} photos · Trashed {trashed} · Freed {freed}',
     permissionTitle: 'Access your photos',
     permissionMessage:
-        'Klara needs access to your photos so you can swipe through '
+        'Wipe needs access to your photos so you can swipe through '
         'your whole library and decide what to keep.',
     permissionAllowAccess: 'Allow access',
     permissionPartialTitle: 'Working on selected photos',
     permissionPartialMessage:
-        'You shared only some photos. Klara works on exactly those '
+        'You shared only some photos. Wipe works on exactly those '
         'photos and nothing else.',
     permissionDeniedTitle: 'Photo access denied',
     permissionDeniedMessage:
@@ -572,7 +572,7 @@ class AppStrings {
     settingsProtectionTitle: 'Protect favourites',
     settingsProtectionMessage:
         'Favourited photos can never be marked for deletion while '
-        'this is on — your Klara favourites and photos starred on '
+        'this is on — your Wipe favourites and photos starred on '
         'the device. There is no reliable edited flag on-device, so '
         'edited photos are not covered by this toggle.',
     settingsNotificationsTitle: 'Weekly nudge',
@@ -581,7 +581,7 @@ class AppStrings {
         'marketing.',
     settingsNudgeTitle: 'Time for a quick clean?',
     settingsNudgeBody:
-        'A few swipes can free up space. Open Klara when you have a minute.',
+        'A few swipes can free up space. Open Wipe when you have a minute.',
     settingsNotificationsDenied:
         'Notifications are off on this device, so the weekly nudge '
         'could not be set. The toggle stays off.',
@@ -595,13 +595,13 @@ class AppStrings {
         'system setting is off. When off, the system setting applies.',
     settingsAutoEmptyTitle: 'Prompt to empty expired trash',
     settingsAutoEmptyMessage:
-        'When on, Klara asks before emptying trash whose 30 days '
+        'When on, Wipe asks before emptying trash whose 30 days '
         'have passed. Nothing is ever deleted without your '
         'confirmation — this only adds a prompt.',
     settingsAboutVersion: 'Version {version}',
     settingsVersionUnknown: 'Version unknown',
     settingsTrustNote:
-        'Klara never deletes anything without your confirmation: '
+        'Wipe never deletes anything without your confirmation: '
         'swipes only mark, review comes first, and the system '
         'confirmation moves photos to trash for 30 days.',
     protectionDeckBlocked:
@@ -661,7 +661,7 @@ class AppStrings {
     compressEmptyMessage:
         'There are no videos in your library to compress right now.',
     compressHint:
-        'Pick one video. Klara makes a smaller copy first and shows '
+        'Pick one video. Wipe makes a smaller copy first and shows '
         'you both sizes — nothing is replaced until you say so.',
     compressTapHint: 'Tap a video to compress it.',
     compressing: 'Compressing… {percent}%',

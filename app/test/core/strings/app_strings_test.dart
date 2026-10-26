@@ -35,7 +35,7 @@ void main() {
       expect(AppStrings.tr(AppStrings.edgeDelete), 'DELETE');
       expect(AppStrings.tr(AppStrings.edgeMaybe), 'MAYBE');
       expect(AppStrings.tr(AppStrings.edgeFavourite), 'FAVOURITE');
-      expect(AppStrings.tr(AppStrings.appTitle), 'Klara');
+      expect(AppStrings.tr(AppStrings.appTitle), 'Wipe');
       expect(AppStrings.tr(AppStrings.deniedConfirmMessage), contains('deck'));
     });
 

@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "mobile.klara.app"
+    namespace = "mobile.wipe.app"
     // Phase 7.4: SDK/NDK pinned explicitly — no silent inheritance
     // drift. Values equal Flutter 3.47.7's own defaults (verified
     // in the SDK's FlutterExtension.kt), so pinning changes
@@ -22,7 +22,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "mobile.klara.app"
+        applicationId = "mobile.wipe.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         // Phase 7.4: pinned like compileSdk/ndkVersion above

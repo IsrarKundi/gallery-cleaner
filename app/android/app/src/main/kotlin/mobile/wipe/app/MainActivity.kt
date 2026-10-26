@@ -1,4 +1,4 @@
-package mobile.klara.app
+package mobile.wipe.app
 
 import io.flutter.embedding.android.FlutterActivity
 
