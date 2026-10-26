@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 
 import '../../../core/constants/app_icons.dart';
@@ -127,7 +128,12 @@ class DeckView extends GetView<DeckController> {
       final bool isFav =
           current != null && controller.favouriteIds.contains(current.id);
       return AppScaffold(
-        title: AppStrings.tr(AppStrings.screenDeck),
+        titleWidget: SvgPicture.asset(
+          'assets/icons/wipe_logo.svg',
+          height: context.sizes.iconLg,
+          theme: SvgTheme(currentColor: context.palette.textPrimary),
+          semanticsLabel: AppStrings.tr(AppStrings.appTitle),
+        ),
         actions: <Widget>[
           IconButton(
             icon: Icon(AppIcons.history, size: context.sizes.iconMd),
