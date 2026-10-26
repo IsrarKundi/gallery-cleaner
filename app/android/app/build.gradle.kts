@@ -6,8 +6,13 @@ plugins {
 
 android {
     namespace = "mobile.klara.app"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // Phase 7.4: SDK/NDK pinned explicitly — no silent inheritance
+    // drift. Values equal Flutter 3.47.7's own defaults (verified
+    // in the SDK's FlutterExtension.kt), so pinning changes
+    // nothing effective today; on a Flutter upgrade, revisit
+    // these pins deliberately instead of inheriting new ones.
+    compileSdk = 36
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
@@ -20,8 +25,10 @@ android {
         applicationId = "mobile.klara.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        // Phase 7.4: pinned like compileSdk/ndkVersion above
+        // (Flutter 3.47.7 defaults: min 24, target 36).
+        minSdk = 24
+        targetSdk = 36
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
         // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`

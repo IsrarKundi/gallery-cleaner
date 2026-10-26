@@ -231,4 +231,40 @@ explained in the release record before submission.
 | Mapping / resources presence | `build/symbols/<version>/` exists after the build and is archived OUTSIDE git before any `flutter clean` (ADR-002) | Missing symbols = failed candidate (obfuscated traces would be unreadable) |
 | Reference anchor (not a budget) | Phase 0 profile APK: 33.7 MB | Profile-mode size, NOT comparable to a release AAB/APK — recorded only so nobody mistakes it for a release budget |
 
-## 4. Release finish (7.4 — follows in the next commit)
+## 4. Release finish (7.4)
+
+- **Canonical command unchanged and unchallenged.** ADR-002
+  remains the ONLY documented way to build release (verified by
+  grep: no other doc names a release invocation — the one
+  `flutter build apk` mention in `performance-issues.md` is a
+  descriptive finding in a frozen doc, not a competing command).
+  AAB only for submission, `--split-per-abi` for QA builds,
+  `--obfuscate --split-debug-info=build/symbols/<version>/` on
+  both — so what is tested is what ships.
+- **SDK/NDK pinned explicitly** in
+  `app/android/app/build.gradle.kts` (no silent inheritance
+  drift): compile 36, min 24, target 36, NDK `28.2.13676358`.
+  Values taken from Flutter 3.47.7's own
+  `FlutterExtension.kt`, so pinning changes nothing effective
+  today. On a Flutter upgrade, revisit these pins deliberately
+  (see the comments at the pin sites) instead of inheriting
+  new defaults silently. `versionCode`/`versionName` still come
+  from the pubspec — only SDK/NDK levels are pinned.
+- **Gradle wrapper:** `9.3.1-all.zip` → `9.3.1-bin.zip`
+  (same Gradle version; `-bin` is all a build needs).
+- **Gradle properties:** `-Xmx8G` → `-Xmx4G` (inside the doc's
+  2–4G range); `org.gradle.caching=true` and
+  `org.gradle.parallel=true` added; all other flags kept.
+- **NOT verifiable on this VM (owner, SDK machine):** no
+  Android SDK exists here, so no release build was run. The
+  owner verifies on an SDK machine: (1) two consecutive
+  canonical release builds produce the same shrinking
+  behaviour and artefact set (doc 7.4 acceptance); (2) the
+  pinned values build clean (they are byte-identical to the
+  previous effective values, so no build change is expected,
+  but expectation is not evidence); (3) the §3 budget table
+  is recorded from that build. Until then, nothing about
+  release-build output is claimed.
+- **Signing stays human-only** (ADR-002 checklist, untouched):
+  debug signing config still in the release block; the owner's
+  keystore + `key.properties` step is a Phase 8 item.
