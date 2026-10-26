@@ -4,6 +4,11 @@ import 'package:get/get.dart';
 
 import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
+// Composition exception (AGENTS.md): mirroring the shell's
+// DeckController import, Review only asks the shell to select a
+// tab when the shell is alive underneath it — it owns no shell
+// state. See ADR-009.
+import '../../shell/controller/shell_controller.dart';
 import '../../../core/utils/app_haptics.dart';
 import '../../../core/utils/result.dart';
 import '../../../services/detection/document_guard.dart';
@@ -32,7 +37,10 @@ enum ReviewDeleteOutcome {
 }
 
 /// Review screen state (requirements §4): editable grid of delete-marked photos.
-/// Navigation: stack reset with Get.offAllNamed (never Get.back into stale controller).
+/// Navigation: exits return to the retained shell when one is alive
+/// (pop, never rebuild); standalone Review falls back to a stack
+/// reset. The post-delete path to Trash still resets, so state
+/// after a delete loads fresh. See ADR-009.
 /// Session: filterKey travels as route param, preserving stored index and favourites.
 /// Priority: denied wins over failed; pure trashed goes to Trash; mixed stays with errors.
 class ReviewController extends GetxController {
@@ -430,9 +438,29 @@ class ReviewController extends GetxController {
     trashedUntil.value = DateTime.now().add(const Duration(days: 30));
   }
 
-  /// Resets the stack to the deck so it reloads fresh from the
-  /// session. Never [Get.back] into the stale deck controller.
-  void goToDeck() {
-    Get.offAllNamed<dynamic>(AppRoutes.deck);
+  /// Returns to the deck tab. When Review sits on top of the
+  /// retained shell (the normal bottom-nav path), the shell is
+  /// still alive underneath, so select the deck tab and pop back
+  /// to it instead of destroying and rebuilding every tab — the
+  /// destination matches the old stack reset exactly, only the
+  /// rebuild goes away. Standalone Review (no shell underneath)
+  /// keeps the old reset. Never [Get.back] into a stale deck
+  /// controller: the shell's deck controller is retained, not
+  /// stale, so popping to it is safe.
+  void goToDeck() => _popToShellTab(0);
+
+  /// Bottom-nav return from Review to a shell tab. Same
+  /// pop-to-retained-shell rule as [goToDeck]; standalone Review
+  /// keeps the old reset with the tapped tab as the shell's
+  /// initial tab.
+  void goToShellTab(int nav) => _popToShellTab(nav);
+
+  void _popToShellTab(int nav) {
+    if (Get.isRegistered<ShellController>()) {
+      Get.find<ShellController>().selectTab(nav);
+      Get.back<dynamic>();
+      return;
+    }
+    Get.offAllNamed<dynamic>(AppRoutes.deck, arguments: nav);
   }
 }

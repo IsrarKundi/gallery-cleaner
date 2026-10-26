@@ -22,13 +22,15 @@ import '../widgets/review_loading_skeleton.dart';
 /// photos with counts and total size. Layout + Obx only: marks,
 /// trash outcomes and session writes live in [ReviewController].
 ///
-/// Navigation contract (see the controller): every exit resets the
-/// stack with [Get.offAllNamed] — the AppBar back control, the system
-/// back gesture (via [PopScope]) and the empty-state CTA all go to
-/// the deck, never [Get.back] into a stale deck controller. A
-/// successful delete goes to Trash carrying the recoverable-until
+/// Navigation contract (see the controller): exits return to the
+/// retained shell when one is alive — the AppBar back control, the
+/// system back gesture (via [PopScope]) and the bottom nav all pop
+/// back to the shell's tabs instead of rebuilding them; standalone
+/// Review falls back to a stack reset. A successful delete still
+/// goes to Trash with a stack reset carrying the recoverable-until
 /// date as route arguments, so the Trash screen can show the
-/// "Moved to Trash" snackbar on arrival.
+/// "Moved to Trash" snackbar on arrival and the post-delete state
+/// loads fresh.
 class ReviewView extends GetView<ReviewController> {
   const ReviewView({super.key});
 
@@ -214,13 +216,13 @@ class ReviewView extends GetView<ReviewController> {
                   controller: controller,
                   onDelete: () => _delete(context),
                 ),
-          // Phase 7.1: nav taps from Review land back in the shell
-          // at the tapped tab (the shell route is '/'); Trash
-          // itself never fires here (it is the current tab).
+          // Phase 7.1 + ADR-009: nav taps from Review return to
+          // the retained shell at the tapped tab (pop, never a
+          // rebuild); Trash itself never fires here (it is the
+          // current tab).
           bottomNav: AppBottomNav(
             currentIndex: 2,
-            onDestinationSelected: (int index) =>
-                Get.offAllNamed<dynamic>(AppRoutes.deck, arguments: index),
+            onDestinationSelected: controller.goToShellTab,
           ),
           body: isEmpty
               ? (controller.isLoading.value

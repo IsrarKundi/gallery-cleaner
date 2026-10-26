@@ -9,10 +9,13 @@ import '../../deck/controller/deck_controller.dart';
 ///
 /// Tab model: the nav bar has 4 destinations (Clean, Decks, Trash,
 /// Settings) but only 3 retained stack children — Trash is an
-/// ACTION, not a tab: tapping it opens a fresh Review route (the
-/// Review/Trash off-all-on-return semantics are preserved, so a
-/// retained Review can never go stale). The stack index maps nav
-/// index 3 (Settings) to stack index 2.
+/// ACTION, not a tab: tapping it pushes a fresh Review route on
+/// top of the retained shell. Review is still fresh on every open
+/// (a new binding runs each time), so it can never go stale — but
+/// the shell underneath is never destroyed, so returning from
+/// Review pops back to the exact tab state instead of rebuilding
+/// every tab (see ADR-009). The stack index maps nav index 3
+/// (Settings) to stack index 2.
 ///
 /// Composition exception (AGENTS.md): this controller coordinates
 /// tabs, so it imports [DeckController] the way AppPages imports
@@ -49,7 +52,7 @@ class ShellController extends GetxController {
   bool isTabVisited(int stackIndex) => visitedStacks.contains(stackIndex);
 
   /// Handles a bottom-nav tap. Retained tabs switch in place (no
-  /// reload, no re-scan); Trash opens a fresh Review route.
+  /// reload, no re-scan); Trash pushes a fresh Review route.
   void selectTab(int nav) {
     if (nav == 2) {
       _openReview();
@@ -73,15 +76,27 @@ class ShellController extends GetxController {
   void _openReview() {
     if (visitedStacks.contains(0)) {
       try {
-        Get.find<DeckController>().runAfterCardExit(
-          () => Get.offAllNamed<dynamic>(AppRoutes.review),
-        );
+        Get.find<DeckController>().runAfterCardExit(_pushReview);
         return;
       } catch (_) {
         // Deck visited but unresolvable (should not happen): fall
         // through to plain navigation rather than stranding the tap.
       }
     }
-    Get.offAllNamed<dynamic>(AppRoutes.review);
+    _pushReview();
+  }
+
+  /// Pushes a fresh Review route on top of the retained shell —
+  /// never off-all: destroying the shell here is what rebuilt
+  /// every tab on the way back from Trash (ADR-009). A second
+  /// Trash tap while Review is already on top is a no-op, so a
+  /// fast double tap never stacks Review twice. Review itself
+  /// stays fresh — a new binding runs on every open — so pushing
+  /// it cannot show a stale delete set.
+  void _pushReview() {
+    if (Get.currentRoute == AppRoutes.review) {
+      return;
+    }
+    Get.toNamed<dynamic>(AppRoutes.review);
   }
 }

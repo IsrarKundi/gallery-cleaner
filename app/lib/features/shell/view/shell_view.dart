@@ -14,9 +14,9 @@ import '../controller/shell_controller.dart';
 /// a tab switch is never a relaunch — the deck keeps its queue and
 /// marks, the hub keeps its scan (shared since Phase 4.2) and its
 /// lists. Each tab renders without its own nav (the shell renders
-/// the one nav); Review/Trash are NOT shell children — they stay
-/// fresh routes reached through the nav's Trash action, preserving
-/// their off-all-on-return semantics.
+/// the one nav); Review/Trash are NOT shell children — Review is a
+/// fresh route pushed over the shell by the nav's Trash action, and
+/// returning from it pops back to the retained tabs (ADR-009).
 ///
 /// Composition exception (AGENTS.md): like AppPages, the shell view
 /// composes feature views; it owns no feature state. See ADR-007.

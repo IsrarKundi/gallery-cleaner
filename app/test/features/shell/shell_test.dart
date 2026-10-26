@@ -21,6 +21,7 @@ import 'package:klara/features/decks/model/decks_status.dart';
 import 'package:klara/features/review/binding/review_binding.dart';
 import 'package:klara/features/review/view/review_view.dart';
 import 'package:klara/features/shell/binding/shell_binding.dart';
+import 'package:klara/features/shell/controller/shell_controller.dart';
 import 'package:klara/features/shell/view/shell_view.dart';
 import 'package:klara/services/detection/photo_analysis.dart';
 import 'package:klara/services/local/local_service.dart';
@@ -395,8 +396,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Delete 1 photos'), findsOneWidget);
 
-    // Back to the deck (a fresh shell restores the session), mark
-    // a2, and the second Trash visit shows both marks.
+    // Back to the deck (the retained shell is still underneath),
+    // mark a2, and the second Trash visit shows both marks.
     await tester.tap(_navItem('Clean'));
     await tester.pumpAndSettle();
     await tester.drag(find.byType(SwipeCard), const Offset(200, 0));
@@ -404,6 +405,46 @@ void main() {
     await tester.tap(_navItem('Trash'));
     await tester.pumpAndSettle();
     expect(find.text('Delete 2 photos'), findsOneWidget);
+  });
+
+  testWidgets('Trash round-trip keeps the shell and its tabs alive', (
+    WidgetTester tester,
+  ) async {
+    final _Media media = _Media();
+    await _pumpShell(tester, media, _Local(), _Trash());
+    final ShellController shell = Get.find<ShellController>();
+    final DeckController deck = Get.find<DeckController>();
+
+    // Visit Decks so the hub is mounted, then Trash and back.
+    await tester.tap(_navItem('Decks'));
+    await tester.runAsync(_waitHubSettled);
+    await tester.pumpAndSettle();
+    final DecksController hub = Get.find<DecksController>();
+    final int assetsBaseline = media.getAssetsCalls;
+    final int permissionBaseline = media.permissionCalls;
+
+    await tester.tap(_navItem('Trash'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ReviewView), findsOneWidget);
+
+    // Return via Review's own bottom nav: same shell, same tab
+    // controllers, no reload, no re-scan.
+    await tester.tap(_navItem('Decks'));
+    await tester.pumpAndSettle();
+    expect(identical(Get.find<ShellController>(), shell), isTrue);
+    expect(identical(Get.find<DeckController>(), deck), isTrue);
+    expect(identical(Get.find<DecksController>(), hub), isTrue);
+    expect(media.getAssetsCalls, assetsBaseline);
+    expect(media.permissionCalls, permissionBaseline);
+
+    // And again through Trash to Clean: still the same shell.
+    await tester.tap(_navItem('Trash'));
+    await tester.pumpAndSettle();
+    await tester.tap(_navItem('Clean'));
+    await tester.pumpAndSettle();
+    expect(identical(Get.find<ShellController>(), shell), isTrue);
+    expect(identical(Get.find<DeckController>(), deck), isTrue);
+    expect(deck.queue.length, 2);
   });
 
   testWidgets('Trash tap during a card exit waits for the mark', (
