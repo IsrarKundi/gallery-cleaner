@@ -96,6 +96,32 @@ class DeckController extends GetxController {
   final RxSet<String> favouriteIds = <String>{}.obs;
   final RxInt currentIndex = 0.obs;
   final RxList<String> undoStack = <String>[].obs;
+
+  /// Two-second undo window for delete swipes (owner decision
+  /// 26 Oct 2026, ADR-013): the photo stays delete-marked and
+  /// undoable for [pendingDeleteWindow]; then it commits to
+  /// [_awaitingTrash]. A new mark commits it at once, so swiping
+  /// on is the confirmation. The delete mark itself is kept
+  /// until the native batch lands, so the session stays the
+  /// source of truth for intent (a Review keep/unmark rewinds
+  /// instead of trashing).
+  static const Duration pendingDeleteWindow = Duration(seconds: 2);
+
+  Timer? _pendingDeleteTimer;
+  MediaAsset? _pendingDelete;
+
+  /// Delete-swiped photos committed by the deck but not yet
+  /// moved to Trash by the native sheet. The batch fires once
+  /// when the user leaves the Clean deck (see
+  /// [flushAwaitingTrash]); if the app dies first, these photos
+  /// simply reappear undecided on the next launch.
+  final List<MediaAsset> _awaitingTrash = <MediaAsset>[];
+
+  bool _flushingTrash = false;
+
+  /// Set when the batched native sheet is denied: the deck shows
+  /// a banner until dismissed.
+  final RxString trashBatchDeniedKey = ''.obs;
   final RxList<MediaAlbum> albums = <MediaAlbum>[].obs;
   final RxList<String> months = <String>[].obs;
   final RxList<TrashEntry> trashEntries = <TrashEntry>[].obs;
@@ -151,6 +177,13 @@ class DeckController extends GetxController {
 
   bool get canUndo => undoStack.isNotEmpty;
 
+  /// The delete-swiped photo still inside its undo window, if any.
+  MediaAsset? get pendingDelete => _pendingDelete;
+
+  /// Committed photos still waiting for the native batch.
+  List<MediaAsset> get awaitingTrash =>
+      List<MediaAsset>.unmodifiable(_awaitingTrash);
+
   /// True only for the honest Android 14 partial-access state.
   bool get isPartialAccess =>
       permission.value == MediaPermission.grantedLimited;
@@ -191,6 +224,9 @@ class DeckController extends GetxController {
       lifecycle!.removePauseListener(_handlePause);
       lifecycle!.removeResumeListener(_handleResume);
     }
+    _pendingDeleteTimer?.cancel();
+    _pendingDeleteTimer = null;
+    _pendingDelete = null;
     unawaited(_librarySubscription?.cancel());
     _librarySubscription = null;
     // Dispose flush point (solutions 4.1/4.4): never leave a
@@ -605,6 +641,10 @@ class DeckController extends GetxController {
     if (protection.blocksDelete(mark, asset, favouriteIds)) {
       return;
     }
+    // A new decision commits the previous delete swipe at once:
+    // swiping on is the confirmation (ADR-013). Refused marks
+    // never reach here (the guards above return first).
+    _commitPendingDelete();
     marks[asset.id] = mark;
     if (mark == DeckMark.favourite) {
       favouriteIds.add(asset.id);
@@ -616,6 +656,9 @@ class DeckController extends GetxController {
     _maybeLoadMore();
     _preloader.preloadAround(queue, currentIndex.value);
     _persist();
+    if (mark == DeckMark.delete) {
+      _startPendingDelete(asset);
+    }
     // Phase 3A haptics (design.md §8): light tick on every mark.
     AppHaptics.mark();
     // Phase 2B streak day: the moment the final mark lands, this
@@ -643,6 +686,12 @@ class DeckController extends GetxController {
   /// no-op) when the undo stack is empty.
   void undo() {
     final int? index = access.undo(marks, favouriteIds, undoStack, queue);
+    // The pending delete (if any) was the popped entry by
+    // construction: a new mark always commits it first.
+    // Cancelling here is safe even if that invariant ever
+    // breaks — the photo simply stays delete-marked until the
+    // next mark or Review.
+    _cancelPendingDelete();
     if (index == null) {
       return;
     }
@@ -651,10 +700,198 @@ class DeckController extends GetxController {
     _persist();
   }
 
+  /// Starts the undo window for a freshly delete-swiped photo.
+  /// Any previous window is already closed: a new mark commits
+  /// it first, and undo cancels it.
+  void _startPendingDelete(MediaAsset asset) {
+    _pendingDeleteTimer?.cancel();
+    _pendingDelete = asset;
+    _pendingDeleteTimer = Timer(pendingDeleteWindow, _commitPendingDelete);
+  }
+
+  /// Closes the undo window without committing: the photo keeps
+  /// whatever mark it has (undo already popped it, or a Review
+  /// action cleared it).
+  void _cancelPendingDelete() {
+    _pendingDeleteTimer?.cancel();
+    _pendingDeleteTimer = null;
+    _pendingDelete = null;
+  }
+
+  /// Commits the pending delete swipe to the trash pipeline:
+  /// the photo leaves the deck queue and its undo entry, and
+  /// waits in [_awaitingTrash] for the batched native sheet.
+  /// The delete mark is deliberately KEPT (in memory and in the
+  /// session) until that sheet lands: the session stays the
+  /// source of truth for intent, so a Review keep/unmark rewinds
+  /// instead of trashing, and the meter (queue-only lookups)
+  /// never counts a photo that is not in the queue. No-op when
+  /// the photo already left the queue (trashed via Review) or
+  /// its mark was cleared while the window was open.
+  void _commitPendingDelete() {
+    final MediaAsset? pending = _pendingDelete;
+    _pendingDeleteTimer?.cancel();
+    _pendingDeleteTimer = null;
+    _pendingDelete = null;
+    if (pending == null) {
+      return;
+    }
+    final int index = queue.indexWhere(
+      (MediaAsset asset) => asset.id == pending.id,
+    );
+    if (index == -1) {
+      return;
+    }
+    if (marks[pending.id] != DeckMark.delete) {
+      return;
+    }
+    queue.removeAt(index);
+    undoStack.remove(pending.id);
+    if (index < currentIndex.value) {
+      currentIndex.value -= 1;
+    }
+    _awaitingTrash.add(pending);
+    _refreshMonths();
+    _maybeLoadMore();
+    _preloader.preloadAround(queue, currentIndex.value);
+    _persist();
+  }
+
+  /// Moves every committed photo to Trash through ONE native
+  /// sheet, called when the user leaves the Clean deck (the
+  /// shell hooks tab switches away from Clean). One sheet per
+  /// batch, never one per photo: per-photo sheets would
+  /// interrupt swiping, which is exactly the friction this
+  /// removes. Re-entrant calls and empty batches are no-ops.
+  ///
+  /// Intent is verified against the session before anything is
+  /// trashed: a photo Review kept or unmarked after its swipe
+  /// rewinds to the deck undecided instead of being trashed,
+  /// and a photo Review already trashed is simply dropped. A
+  /// failed session read fails safe: nothing is trashed and the
+  /// batch waits for the next trigger. Denied photos rewind to
+  /// the deck with a banner; unreachable photos are dropped
+  /// (MediaStore cannot return them, so retrying is pointless).
+  Future<void> flushAwaitingTrash() async {
+    if (_awaitingTrash.isEmpty || _flushingTrash) {
+      return;
+    }
+    _flushingTrash = true;
+    try {
+      final Result<DeckSession?> sessionResult = await local.loadSession(
+        filter.value.filterKey,
+      );
+      if (sessionResult.isFailure) {
+        return;
+      }
+      final Map<String, DeckMark> sessionMarks =
+          (sessionResult as Success<DeckSession?>).value?.marks ??
+          <String, DeckMark>{};
+      final Result<List<TrashEntry>> trashedResult = await trash.listTrashed();
+      final Set<String> alreadyTrashed = trashedResult.fold(
+        onSuccess: (List<TrashEntry> entries) =>
+            entries.map((TrashEntry entry) => entry.assetId).toSet(),
+        onFailure: (_) => <String>{},
+      );
+      final List<MediaAsset> toTrash = <MediaAsset>[];
+      final List<MediaAsset> toRewind = <MediaAsset>[];
+      for (final MediaAsset asset in _awaitingTrash) {
+        if (alreadyTrashed.contains(asset.id)) {
+          continue;
+        }
+        if (sessionMarks[asset.id] == DeckMark.delete) {
+          toTrash.add(asset);
+        } else {
+          toRewind.add(asset);
+        }
+      }
+      int insertAt = currentIndex.value;
+      for (final MediaAsset asset in toRewind) {
+        insertAt = _rewindAsset(asset, insertAt);
+      }
+      _awaitingTrash.removeWhere(
+        (MediaAsset asset) =>
+            toRewind.contains(asset) || alreadyTrashed.contains(asset.id),
+      );
+      if (toTrash.isEmpty) {
+        if (toRewind.isNotEmpty) {
+          _refreshMonths();
+          _preloader.preloadAround(queue, currentIndex.value);
+          _persist();
+        }
+        return;
+      }
+      final Result<TrashOutcome> result = await trash.trashAssets(
+        toTrash.map((MediaAsset asset) => asset.id).toList(),
+      );
+      if (result.isFailure) {
+        if (toRewind.isNotEmpty) {
+          _refreshMonths();
+          _preloader.preloadAround(queue, currentIndex.value);
+          _persist();
+        }
+        return;
+      }
+      final TrashOutcome outcome = (result as Success<TrashOutcome>).value;
+      final Set<String> trashedIds = outcome.trashedIds.toSet();
+      final Set<String> deniedIds = outcome.deniedIds.toSet();
+      for (final MediaAsset asset in toTrash) {
+        if (trashedIds.contains(asset.id)) {
+          // Trashed photos keep their delete mark in memory and
+          // in the session, exactly like Review-trashed photos:
+          // decided photos behind the index are never re-shown,
+          // and MediaStore hides them from fresh loads anyway.
+        } else if (deniedIds.contains(asset.id)) {
+          insertAt = _rewindAsset(asset, insertAt);
+        }
+        // Unreachable photos are simply dropped from the batch
+        // (their mark stays delete; MediaStore cannot return
+        // them, so retrying is pointless).
+      }
+      _awaitingTrash.removeWhere((MediaAsset asset) => toTrash.contains(asset));
+      if (deniedIds.isNotEmpty) {
+        trashBatchDeniedKey.value = AppStrings.trashBatchDenied;
+      }
+      _refreshMonths();
+      _preloader.preloadAround(queue, currentIndex.value);
+      _persist();
+      unawaited(meterState.refresh(trashEntries, history));
+    } finally {
+      _flushingTrash = false;
+    }
+  }
+
+  /// Dismisses the batched-trash denial banner.
+  void clearTrashDeniedNotice() {
+    trashBatchDeniedKey.value = '';
+  }
+
+  /// Returns a photo to the deck undecided, as the current card
+  /// (or the next slot when several rewind at once). A photo
+  /// that re-entered the queue through a fresh load (e.g. after
+  /// a filter change) only loses its mark — inserting it again
+  /// would show the same photo twice. Returns the next insert
+  /// position.
+  int _rewindAsset(MediaAsset asset, int insertAt) {
+    marks.remove(asset.id);
+    if (queue.any((MediaAsset queued) => queued.id == asset.id)) {
+      return insertAt;
+    }
+    final int at = insertAt.clamp(0, queue.length);
+    queue.insert(at, asset);
+    return insertAt + 1;
+  }
+
   /// Rewinds assets whose delete marks were cleared by review (e.g.
   /// after a denied native confirmation, requirements §5) so the deck
   /// re-shows them instead of silently dropping them from the queue.
   void clearDeleteMarks(List<String> ids) {
+    // A denied photo that is still inside its undo window comes
+    // back undecided: close the window so the timer cannot
+    // commit it after the rewind.
+    if (_pendingDelete != null && ids.contains(_pendingDelete!.id)) {
+      _cancelPendingDelete();
+    }
     if (access.rewindDenied(marks, undoStack, ids)) {
       currentIndex.value = firstUndecidedIndex(queue, marks);
       _preloader.preloadAround(queue, currentIndex.value);
@@ -667,6 +904,9 @@ class DeckController extends GetxController {
     if (next == filter.value) {
       return;
     }
+    // A filter change must not strand a photo inside its undo
+    // window: commit it to the trash pipeline first.
+    _commitPendingDelete();
     filter.value = next;
     queue.clear();
     marks.clear();

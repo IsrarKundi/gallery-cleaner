@@ -320,15 +320,19 @@ void main() {
   tearDown(Get.reset);
 
   group('ReviewView', () {
-    testWidgets('shows grid, count and total size', (
+    // Owner design change 26 Oct 2026 (c8ec4e3): the header
+    // (count + total size + unmark hint) is removed from the
+    // layout, so the screen shows the grid and the delete
+    // action only. Nothing here restores the header.
+    testWidgets('shows grid and delete action without the header', (
       WidgetTester tester,
     ) async {
       await _pump(tester, _controller(_Local(), _Trash()));
       expect(find.byType(ReviewGridTile), findsNWidgets(2));
-      expect(find.text('2 · 2.9 MB'), findsOneWidget);
+      expect(find.text('2 · 2.9 MB'), findsNothing);
       expect(
         find.text(AppStrings.tr(AppStrings.reviewUnmarkHint)),
-        findsOneWidget,
+        findsNothing,
       );
       expect(find.text('Delete 2 photos'), findsOneWidget);
     });

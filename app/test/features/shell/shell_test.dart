@@ -385,27 +385,56 @@ void main() {
     expect(media.permissionCalls, permissionBaseline);
   });
 
-  testWidgets('Trash opens a fresh Review that grows on revisit', (
+  testWidgets('Trash opens Review with the pending delete in its window', (
     WidgetTester tester,
   ) async {
     await _pumpShell(tester, _Media(), _Local(), _Trash());
 
-    // Mark a1, then Trash shows the current delete set.
+    // Mark a1, then Trash inside the 2s window: Review shows the
+    // pending delete set (ADR-013), not the skeleton (ADR-012).
+    // The exit needs two pumps to record the mark; the window
+    // then runs from the mark, so the tap lands well inside it.
     await tester.drag(find.byType(SwipeCard), const Offset(200, 0));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(seconds: 3));
     await tester.tap(_navItem('Trash'));
-    await tester.pumpAndSettle();
+    // A few frames for the gate and the push to land; still far
+    // inside the 2s window.
+    for (int i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(find.byType(ReviewLoadingSkeleton), findsNothing);
     expect(find.text('Delete 1 photos'), findsOneWidget);
+  });
 
-    // Back to the deck (the retained shell is still underneath),
-    // mark a2, and the second Trash visit shows both marks.
-    await tester.tap(_navItem('Clean'));
-    await tester.pumpAndSettle();
+  testWidgets('committed deletes flush to trash on leaving Clean', (
+    WidgetTester tester,
+  ) async {
+    final _Trash trash = _Trash();
+    await _pumpShell(tester, _Media(), _Local(), trash);
+    final DeckController deck = Get.find<DeckController>();
+
+    // Mark a1 and let the window lapse: the delete commits to
+    // the trash pipeline. The exit needs two pumps to record
+    // the mark; the third advances the clock past the 2s timer
+    // (pumpAndSettle alone stops once frames settle, so it
+    // never runs the timer out).
     await tester.drag(find.byType(SwipeCard), const Offset(200, 0));
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(seconds: 3));
+    expect(deck.awaitingTrash.map((MediaAsset a) => a.id).toList(), <String>[
+      'a1',
+    ]);
+
+    // Leaving Clean fires one native batch for the commit.
+    await tester.tap(_navItem('Decks'));
+    await tester.runAsync(_waitHubSettled);
     await tester.pumpAndSettle();
-    await tester.tap(_navItem('Trash'));
-    await tester.pumpAndSettle();
-    expect(find.text('Delete 2 photos'), findsOneWidget);
+    expect(trash.entries.map((TrashEntry e) => e.assetId).toList(), <String>[
+      'a1',
+    ]);
+    expect(deck.awaitingTrash, isEmpty);
   });
 
   testWidgets('Trash opens Review with content on the first frame', (
@@ -416,8 +445,10 @@ void main() {
     // Mark a1, then Trash: the delete set travels as route
     // arguments, so the first Review frame already shows the
     // count and buttons — never the loading skeleton (ADR-012).
+    // The tap waits on the exit gate, so the mark is recorded
+    // and the 2s window is still open when Review lands.
     await tester.drag(find.byType(SwipeCard), const Offset(200, 0));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 3));
     await tester.tap(_navItem('Trash'));
     // Step through the push transition frame by frame: the delete
     // set travels as route arguments, so no frame may show the

@@ -82,6 +82,7 @@ class AppStrings {
   static const String trashEmptyMessage = 'trashEmptyMessage';
   static const String trashRestoreAll = 'trashRestoreAll';
   static const String trashDeniedMessage = 'trashDeniedMessage';
+  static const String trashBatchDenied = 'trashBatchDenied';
   static const String trashRowMeta = 'trashRowMeta';
 
   // History.
@@ -433,6 +434,7 @@ class AppStrings {
     trashRestoreAll: 'Restore all',
     trashDeniedMessage:
         'You did not confirm, so those photos are still in trash.',
+    trashBatchDenied: 'You did not confirm moving these to trash, so they are back in your deck.',
     trashRowMeta: 'Trashed {trashed} · Recoverable until {until}',
     historyEmptyTitle: 'No history yet',
     historyEmptyMessage: 'Your cleaning history will appear here.',

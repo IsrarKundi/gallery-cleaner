@@ -312,6 +312,14 @@ class _ReadyBody extends StatelessWidget {
             if (controller.isPartialAccess) {
               banners.add(_PartialBanner(controller: controller));
             }
+            if (controller.trashBatchDeniedKey.value.isNotEmpty) {
+              banners.add(
+                InfoBanner(
+                  message: AppStrings.tr(controller.trashBatchDeniedKey.value),
+                  onDismiss: controller.clearTrashDeniedNotice,
+                ),
+              );
+            }
             return Column(children: banners);
           }),
           // Obx(() => SpaceMeterBar(totals: controller.meter)),

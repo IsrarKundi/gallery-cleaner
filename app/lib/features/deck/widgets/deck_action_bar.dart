@@ -8,7 +8,9 @@ import '../../../services/local/local_service.dart';
 /// Bottom-anchored deck action bar (design.md §7): buttons for all
 /// four actions — no action depends on gestures alone — plus Undo
 /// (always visible, disabled only when the stack is empty) and Review
-/// navigation. Buttons only MARK; confirmation lives on review.
+/// navigation. Buttons only MARK; confirmation lives on review —
+/// except Clean-deck deletes, which confirm via the 2-second undo
+/// window instead (ADR-013).
 ///
 /// Callback-based (not controller-typed) so the smart-deck screen
 /// reuses this exact bar with its own controller: same buttons, same

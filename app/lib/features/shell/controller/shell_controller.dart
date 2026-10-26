@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:get/get.dart';
 
 import '../../../core/routes/app_routes.dart';
@@ -66,8 +68,24 @@ class ShellController extends GetxController {
     if (nav == navIndex.value) {
       return;
     }
+    // Leaving the Clean deck flushes the batched native trash
+    // run (ADR-013): one system sheet for everything swiped to
+    // Trash since the last flush, never a sheet per photo.
+    if (navIndex.value == 0) {
+      _flushDeckTrash();
+    }
     visitedStacks.add(stackIndexForNav(nav));
     navIndex.value = nav;
+  }
+
+  /// Fire-and-forget: the deck guards empty and re-entrant
+  /// flushes itself, and a missing deck means nothing awaits.
+  void _flushDeckTrash() {
+    try {
+      unawaited(Get.find<DeckController>().flushAwaitingTrash());
+    } catch (_) {
+      // Deck never visited: nothing awaits trash.
+    }
   }
 
   /// Opens Review for the bottom-nav Trash tab, deferred through

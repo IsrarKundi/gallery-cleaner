@@ -147,12 +147,25 @@ class FakeTrash implements TrashService {
 
   final List<TrashEntry> entries;
 
+  /// Ids the fake native sheet denies (everything else grants).
+  final Set<String> denyIds = <String>{};
+
+  /// Every trashAssets call, in order, for batch assertions.
+  final List<List<String>> trashCalls = <List<String>>[];
+
   @override
   Future<Result<TrashOutcome>> trashAssets(List<String> ids) async {
-    return const Success<TrashOutcome>(
+    trashCalls.add(List<String>.of(ids));
+    final List<String> denied = ids
+        .where((String id) => denyIds.contains(id))
+        .toList();
+    final List<String> trashed = ids
+        .where((String id) => !denyIds.contains(id))
+        .toList();
+    return Success<TrashOutcome>(
       TrashOutcome(
-        trashedIds: <String>[],
-        deniedIds: <String>[],
+        trashedIds: trashed,
+        deniedIds: denied,
         failedIds: <String>[],
       ),
     );
@@ -326,6 +339,16 @@ class FakeLocal implements LocalService {
   }
 }
 
+/// LocalService that fails session reads, for the flush failsafe test.
+class _FailingSessionLocal extends FakeLocal {
+  @override
+  Future<Result<DeckSession?>> loadSession(String filterKey) async {
+    return const Failure<DeckSession?>(
+      AppFailure(messageKey: AppStrings.errorLocal),
+    );
+  }
+}
+
 DeckController makeController({
   MediaService? media,
   TrashService? trash,
@@ -410,6 +433,9 @@ void main() {
       await _settleThumbnails(controller);
       await controller.markCurrent(DeckMark.delete);
       await _settleThumbnails(controller);
+      // Marking a3 commits the a2 delete at once (ADR-013): a2
+      // leaves the queue for the trash pipeline, so the index
+      // counts one less card — but its mark is kept.
       controller.markCurrent(DeckMark.maybe);
       await _settleThumbnails(controller);
       controller.markCurrent(DeckMark.favourite);
@@ -420,7 +446,18 @@ void main() {
         'a4': DeckMark.favourite,
       });
       expect(controller.favouriteIds, <String>{'a4'});
-      expect(controller.currentIndex.value, 4);
+      expect(controller.queue.map((MediaAsset a) => a.id).toList(), <String>[
+        'a1',
+        'a3',
+        'a4',
+        'a5',
+        'a6',
+      ]);
+      expect(
+        controller.awaitingTrash.map((MediaAsset a) => a.id).toList(),
+        <String>['a2'],
+      );
+      expect(controller.currentIndex.value, 3);
       expect(controller.currentAsset?.id, 'a5');
     });
 
@@ -472,12 +509,20 @@ void main() {
       await _settleThumbnails(controller);
       await controller.markCurrent(DeckMark.delete);
       await _settleThumbnails(controller);
+      // The second delete commits the first (ADR-013): a1 leaves
+      // the queue for the trash pipeline, so only a2 still counts
+      // as marked — a1 is claimed nowhere until the native batch
+      // lands, which is the honest three-state accounting.
       await controller.markCurrent(DeckMark.delete);
       final meter = controller.meter;
-      expect(meter.markedBytes, 3000000);
+      expect(meter.markedBytes, 2000000);
       expect(meter.inTrashBytes, 4000000);
       expect(meter.freedMb, 5);
       expect(meter.recoverableUntil, DateTime(2026, 11, 19));
+      expect(
+        controller.awaitingTrash.map((MediaAsset a) => a.id).toList(),
+        <String>['a1'],
+      );
     });
 
     test('clearDeleteMarks rewinds denied ids back onto the deck', () async {
@@ -487,11 +532,209 @@ void main() {
       controller.markCurrent(DeckMark.keep);
       await _settleThumbnails(controller);
       await controller.markCurrent(DeckMark.delete);
-      await _settleThumbnails(controller);
-      controller.markCurrent(DeckMark.keep);
+      // No third mark: a2 is still inside its undo window (not
+      // committed), which is exactly the Review-denied path —
+      // the photo is still in the queue, so the rewind can
+      // return to it.
       controller.clearDeleteMarks(<String>['a2']);
       expect(controller.marks.containsKey('a2'), isFalse);
       expect(controller.currentAsset?.id, 'a2');
+      expect(controller.pendingDelete, isNull);
+    });
+  });
+
+  group('pending delete window (ADR-013)', () {
+    test('undo inside the window returns the card, nothing commits', () async {
+      final DeckController controller = makeController();
+      await controller.init();
+      await _settleThumbnails(controller);
+      await controller.markCurrent(DeckMark.delete);
+      expect(controller.pendingDelete?.id, 'a1');
+      expect(controller.canUndo, isTrue);
+      controller.undo();
+      expect(controller.currentAsset?.id, 'a1');
+      expect(controller.marks.containsKey('a1'), isFalse);
+      expect(controller.awaitingTrash, isEmpty);
+      expect(controller.pendingDelete, isNull);
+      expect(controller.canUndo, isFalse);
+    });
+
+    test('timeout commits the delete to the trash pipeline', () async {
+      final DeckController controller = makeController();
+      await controller.init();
+      await _settleThumbnails(controller);
+      await controller.markCurrent(DeckMark.delete);
+      expect(controller.pendingDelete?.id, 'a1');
+      await Future<void>.delayed(const Duration(milliseconds: 2500));
+      expect(controller.pendingDelete, isNull);
+      expect(controller.queue.map((MediaAsset a) => a.id).toList(), <String>[
+        'a2',
+        'a3',
+        'a4',
+        'a5',
+        'a6',
+      ]);
+      expect(
+        controller.awaitingTrash.map((MediaAsset a) => a.id).toList(),
+        <String>['a1'],
+      );
+      // The mark is kept until the native batch lands.
+      expect(controller.marks['a1'], DeckMark.delete);
+      expect(controller.canUndo, isFalse);
+      expect(controller.currentAsset?.id, 'a2');
+    });
+
+    test('the next swipe commits the previous delete at once', () async {
+      final DeckController controller = makeController();
+      await controller.init();
+      await _settleThumbnails(controller);
+      await controller.markCurrent(DeckMark.delete);
+      await controller.markCurrent(DeckMark.keep);
+      expect(
+        controller.awaitingTrash.map((MediaAsset a) => a.id).toList(),
+        <String>['a1'],
+      );
+      expect(controller.queue.map((MediaAsset a) => a.id).toList(), <String>[
+        'a2',
+        'a3',
+        'a4',
+        'a5',
+        'a6',
+      ]);
+      expect(controller.currentAsset?.id, 'a3');
+      expect(controller.marks['a2'], DeckMark.keep);
+    });
+
+    test('flush sends one native batch and clears the pipeline', () async {
+      final FakeTrash trash = FakeTrash();
+      final DeckController controller = makeController(trash: trash);
+      await controller.init();
+      await _settleThumbnails(controller);
+      await controller.markCurrent(DeckMark.delete);
+      await controller.markCurrent(DeckMark.keep);
+      await controller.flushAwaitingTrash();
+      expect(trash.trashCalls, <List<String>>[
+        <String>['a1'],
+      ]);
+      expect(controller.awaitingTrash, isEmpty);
+      expect(controller.marks['a1'], DeckMark.delete);
+    });
+
+    test('flush denied rewinds to the deck with a banner', () async {
+      final FakeTrash trash = FakeTrash()..denyIds.add('a1');
+      final DeckController controller = makeController(trash: trash);
+      await controller.init();
+      await _settleThumbnails(controller);
+      await controller.markCurrent(DeckMark.delete);
+      await controller.markCurrent(DeckMark.keep);
+      await controller.flushAwaitingTrash();
+      expect(trash.trashCalls, <List<String>>[
+        <String>['a1'],
+      ]);
+      expect(controller.awaitingTrash, isEmpty);
+      expect(controller.queue.map((MediaAsset a) => a.id).toList(), <String>[
+        'a2',
+        'a1',
+        'a3',
+        'a4',
+        'a5',
+        'a6',
+      ]);
+      expect(controller.currentAsset?.id, 'a1');
+      expect(controller.marks.containsKey('a1'), isFalse);
+      expect(controller.trashBatchDeniedKey.value, AppStrings.trashBatchDenied);
+      controller.clearTrashDeniedNotice();
+      expect(controller.trashBatchDeniedKey.value, isEmpty);
+    });
+
+    test('flush rewinds photos Review kept instead of trashing', () async {
+      final FakeLocal local = FakeLocal();
+      final FakeTrash trash = FakeTrash();
+      final DeckController controller = makeController(
+        trash: trash,
+        local: local,
+      );
+      await controller.init();
+      await _settleThumbnails(controller);
+      await controller.markCurrent(DeckMark.delete);
+      await controller.markCurrent(DeckMark.keep);
+      // Review's keepAll writes keep for a1 after its swipe.
+      await local.saveSession(
+        DeckSession(
+          filterKey: controller.filter.value.filterKey,
+          currentIndex: 0,
+          marks: <String, DeckMark>{'a1': DeckMark.keep, 'a2': DeckMark.keep},
+          favouriteIds: <String>{},
+        ),
+      );
+      await controller.flushAwaitingTrash();
+      expect(trash.trashCalls, isEmpty);
+      expect(controller.awaitingTrash, isEmpty);
+      expect(controller.currentAsset?.id, 'a1');
+      expect(controller.marks.containsKey('a1'), isFalse);
+    });
+
+    test('flush drops photos Review already trashed', () async {
+      final FakeTrash trash = FakeTrash(
+        entries: <TrashEntry>[
+          TrashEntry(
+            assetId: 'a1',
+            typeInt: 1,
+            width: 10,
+            height: 10,
+            sizeBytes: 1000000,
+            trashedAt: DateTime(2026, 10, 20),
+          ),
+        ],
+      );
+      final DeckController controller = makeController(trash: trash);
+      await controller.init();
+      await _settleThumbnails(controller);
+      await controller.markCurrent(DeckMark.delete);
+      await controller.markCurrent(DeckMark.keep);
+      await controller.flushAwaitingTrash();
+      expect(trash.trashCalls, isEmpty);
+      expect(controller.awaitingTrash, isEmpty);
+      expect(controller.queue.map((MediaAsset a) => a.id).toList(), <String>[
+        'a2',
+        'a3',
+        'a4',
+        'a5',
+        'a6',
+      ]);
+    });
+
+    test('flush with a failed session read trashes nothing', () async {
+      final _FailingSessionLocal local = _FailingSessionLocal();
+      final FakeTrash trash = FakeTrash();
+      final DeckController controller = makeController(
+        trash: trash,
+        local: local,
+      );
+      await controller.init();
+      await _settleThumbnails(controller);
+      await controller.markCurrent(DeckMark.delete);
+      await controller.markCurrent(DeckMark.keep);
+      await controller.flushAwaitingTrash();
+      expect(trash.trashCalls, isEmpty);
+      expect(
+        controller.awaitingTrash.map((MediaAsset a) => a.id).toList(),
+        <String>['a1'],
+      );
+    });
+
+    test('filter change commits the pending delete first', () async {
+      final DeckController controller = makeController();
+      await controller.init();
+      await _settleThumbnails(controller);
+      await controller.markCurrent(DeckMark.delete);
+      expect(controller.pendingDelete?.id, 'a1');
+      await controller.setFilter(const DeckFilter.album('cam'));
+      expect(controller.pendingDelete, isNull);
+      expect(
+        controller.awaitingTrash.map((MediaAsset a) => a.id).toList(),
+        <String>['a1'],
+      );
     });
   });
 

@@ -33,6 +33,11 @@ related work starts. This file is the single source of truth for the build; the 
   (usually left = delete, right = keep), so users will otherwise guess wrong on destructive swipes.
 - NOTE: mockups generated 25 Oct 2026 show the opposite mapping (DELETE left / KEEP right). They are
   SUPERSEDED by this section and must be regenerated before being used as design reference.
+- AMENDED 26 Oct 2026 (owner decision, ADR-013, Clean deck only): a right swipe still marks first,
+  but the mark confirms after a 2-second undo window, or at once when the next photo is swiped —
+  the photo then leaves the deck for the batched native trash run, and Review is no longer the
+  mandatory gate for Clean-deck deletes. Smart decks keep the mark → review → native sheet flow
+  unchanged. The native sheet remains the only path to Trash.
 
 ## 4. Core flow (non-negotiable trust rules)
 
@@ -52,6 +57,13 @@ related work starts. This file is the single source of truth for the build; the 
    Freed = only after emptying or expiry. Never report trashed MB as freed. Never use the word
    "permanent" while restore exists.
 7. NEVER auto-delete. Every deletion is user-confirmed via review + native sheet.
+- AMENDED 26 Oct 2026 (owner decision, ADR-013, Clean deck only): rule 7's "via review" no longer
+  applies to Clean-deck deletes — the confirmation is the swipe decision plus its 2-second undo
+  window (or the next swipe), and the native sheet still gates entry to Trash. Rules 3–6 stand
+  unchanged: nothing is claimed deleted before the native sheet, Trash stays 30 days recoverable,
+  and permanent deletion still happens only via emptying or expiry. This amendment CONFLICTS with
+  the earlier "never skip review" rule; the owner's explicit 26 Oct 2026 order outranks it, and
+  the conflict is recorded here and in ADR-013 rather than silently resolved.
 
 ## 5. Permissions and platform rules
 
