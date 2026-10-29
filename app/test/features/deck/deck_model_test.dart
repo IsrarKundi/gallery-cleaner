@@ -10,21 +10,44 @@ import 'package:klara/services/media/media_asset.dart';
 import 'package:klara/services/trash/trash_entry.dart';
 
 void main() {
-  group('markForDrag (requirements §3: locked mapping)', () {
-    test('left keep, right delete, up maybe, down favourite', () {
-      expect(markForDrag(-100, 0, 80), DeckMark.keep);
-      expect(markForDrag(100, 0, 80), DeckMark.delete);
-      expect(markForDrag(0, -100, 80), DeckMark.maybe);
-      expect(markForDrag(0, 100, 80), DeckMark.favourite);
+  group('markForDrag (requirements §3 amendment 27 Oct 2026)', () {
+    test('default: right keep, left delete, vertical swipes disabled', () {
+      expect(markForDrag(100, 0, 80), DeckMark.keep);
+      expect(markForDrag(-100, 0, 80), DeckMark.delete);
+      expect(markForDrag(0, -100, 80), isNull);
+      expect(markForDrag(0, 100, 80), isNull);
     });
 
-    test('dominant axis wins on diagonals', () {
-      expect(markForDrag(-120, 50, 80), DeckMark.keep);
-      expect(markForDrag(40, 120, 80), DeckMark.favourite);
+    test('reversed direction: right delete, left keep', () {
+      expect(
+        markForDrag(
+          100,
+          0,
+          80,
+          directions: SwipeDirections.rightDeleteLeftKeep,
+        ),
+        DeckMark.delete,
+      );
+      expect(
+        markForDrag(
+          -100,
+          0,
+          80,
+          directions: SwipeDirections.rightDeleteLeftKeep,
+        ),
+        DeckMark.keep,
+      );
     });
 
-    test('below threshold in both axes is not a swipe', () {
+    test('dominant horizontal axis wins; vertical dominant is ignored', () {
+      expect(markForDrag(120, 50, 80), DeckMark.keep);
+      expect(markForDrag(-120, 50, 80), DeckMark.delete);
+      expect(markForDrag(40, 120, 80), isNull);
+    });
+
+    test('below threshold in horizontal axis is not a swipe', () {
       expect(markForDrag(10, 10, 80), isNull);
+      expect(markForDrag(79, 0, 80), isNull);
       expect(markForDrag(-79, 0, 80), isNull);
     });
   });

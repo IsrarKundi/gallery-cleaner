@@ -32,7 +32,7 @@ class SettingsView extends GetView<SettingsController> {
         body: ListView(
           padding: EdgeInsets.symmetric(
             horizontal: context.sizes.screenPadding,
-            vertical: context.sizes.lg,
+            vertical: 0,
           ),
           children: <Widget>[
             if (controller.errorKey.value.isNotEmpty)
@@ -97,6 +97,34 @@ class SettingsView extends GetView<SettingsController> {
                     activeTrackColor: context.palette.primaryContainer,
                     onChanged: controller.setHaptics,
                   ),
+                ),
+                const _SettingsDivider(),
+                _SettingsTile(
+                  icon: AppIcons.clean,
+                  title: AppStrings.tr(AppStrings.settingsSwipeDirections),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        AppStrings.tr(switch (controller.swipeDirections) {
+                          SwipeDirections.rightKeepLeftDelete =>
+                            AppStrings.settingsSwipeRightKeepShort,
+                          SwipeDirections.rightDeleteLeftKeep =>
+                            AppStrings.settingsSwipeRightDeleteShort,
+                        }),
+                        style: context.textStyles.bodyMedium.copyWith(
+                          color: context.palette.textSecondary,
+                        ),
+                      ),
+                      SizedBox(width: context.sizes.xs),
+                      Icon(
+                        AppIcons.forward,
+                        size: 16,
+                        color: context.palette.textSecondary,
+                      ),
+                    ],
+                  ),
+                  onTap: () => _showSwipeDirectionsPicker(context, controller),
                 ),
               ],
             ),
@@ -190,6 +218,75 @@ class SettingsView extends GetView<SettingsController> {
                     ),
                     onTap: () {
                       controller.setTheme(option);
+                      Navigator.of(sheetContext).pop();
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showSwipeDirectionsPicker(
+    BuildContext context,
+    SettingsController controller,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.palette.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(context.sizes.radiusSheet),
+        ),
+      ),
+      builder: (BuildContext sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              vertical: context.sizes.lg,
+              horizontal: context.sizes.screenPadding,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Padding(
+                  padding: EdgeInsets.only(
+                    left: context.sizes.sm,
+                    bottom: context.sizes.sm,
+                  ),
+                  child: Text(
+                    AppStrings.tr(AppStrings.settingsSwipeDirections),
+                    style: context.textStyles.titleMedium,
+                  ),
+                ),
+                for (final SwipeDirections option in SwipeDirections.values)
+                  ListTile(
+                    title: Text(
+                      AppStrings.tr(switch (option) {
+                        SwipeDirections.rightKeepLeftDelete =>
+                          AppStrings.settingsSwipeRightKeep,
+                        SwipeDirections.rightDeleteLeftKeep =>
+                          AppStrings.settingsSwipeRightDelete,
+                      }),
+                      style: context.textStyles.bodyLarge,
+                    ),
+                    trailing: controller.swipeDirections == option
+                        ? Icon(
+                            AppIcons.check,
+                            color: context.palette.primary,
+                            size: context.sizes.iconMd,
+                          )
+                        : null,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                        context.sizes.radiusMd,
+                      ),
+                    ),
+                    onTap: () {
+                      controller.setSwipeDirections(option);
                       Navigator.of(sheetContext).pop();
                     },
                   ),

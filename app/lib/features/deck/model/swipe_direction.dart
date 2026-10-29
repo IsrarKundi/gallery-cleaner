@@ -1,18 +1,27 @@
 import '../../../services/local/local_service.dart';
 
-/// Pure drag-to-mark mapping for the locked gestures (requirements §3):
-/// left = Keep, right = Delete, up = Maybe, down = Favourite.
+/// Pure drag-to-mark mapping for deck swipes (requirements §3 amendment 27 Oct 2026).
 ///
-/// The dominant axis wins; a drag shorter than [threshold] in both
-/// axes is not a swipe and maps to null (the card springs back).
-/// This is the single place the mapping lives for swipe input; buttons
-/// pass their mark directly, so a mapping change touches this file.
-DeckMark? markForDrag(double dx, double dy, double threshold) {
-  if (dx.abs() < threshold && dy.abs() < threshold) {
+/// Default mapping is Right = Keep, Left = Delete ([SwipeDirections.rightKeepLeftDelete]).
+/// If [directions] is [SwipeDirections.rightDeleteLeftKeep], Right = Delete, Left = Keep.
+/// Vertical swipes are disabled (no Maybe or Favourite gesture via swipe).
+///
+/// A horizontal drag shorter than [threshold] or a drag that is predominantly
+/// vertical (dx.abs() < dy.abs()) is not a swipe and maps to null (the card springs back).
+DeckMark? markForDrag(
+  double dx,
+  double dy,
+  double threshold, {
+  SwipeDirections directions = SwipeDirections.rightKeepLeftDelete,
+}) {
+  if (dx.abs() < threshold || dx.abs() < dy.abs()) {
     return null;
   }
-  if (dx.abs() >= dy.abs()) {
-    return dx < 0 ? DeckMark.keep : DeckMark.delete;
+  final bool isRight = dx > 0;
+  final bool rightIsKeep = directions == SwipeDirections.rightKeepLeftDelete;
+  if (isRight) {
+    return rightIsKeep ? DeckMark.keep : DeckMark.delete;
+  } else {
+    return rightIsKeep ? DeckMark.delete : DeckMark.keep;
   }
-  return dy < 0 ? DeckMark.maybe : DeckMark.favourite;
 }

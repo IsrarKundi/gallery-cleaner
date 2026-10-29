@@ -2,11 +2,14 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
+import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../core/utils/decode_size.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
+import '../../settings/controller/settings_controller.dart';
 import '../model/thumbnail_preloader.dart';
 import 'swipe_card.dart';
 
@@ -25,7 +28,7 @@ import 'swipe_card.dart';
 /// Thumbnail arrivals rebuild only this stack (its own Obx): the
 /// parent view reads the queue and index, never the thumbnail maps,
 /// so a preload insertion no longer rebuilds the whole deck body.
-class DeckCardStack extends StatelessWidget {
+class DeckCardStack extends StatefulWidget {
   const DeckCardStack({
     super.key,
     required this.current,
@@ -62,39 +65,237 @@ class DeckCardStack extends StatelessWidget {
   final VoidCallback? onExitEnd;
 
   @override
+  State<DeckCardStack> createState() => _DeckCardStackState();
+}
+
+class _DeckCardStackState extends State<DeckCardStack> {
+  final ValueNotifier<Offset> _dragNotifier = ValueNotifier<Offset>(Offset.zero);
+
+  @override
+  void didUpdateWidget(DeckCardStack oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.current.id != widget.current.id) {
+      _dragNotifier.value = Offset.zero;
+    }
+  }
+
+  @override
+  void dispose() {
+    _dragNotifier.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final MediaAsset? second = next.isNotEmpty ? next.first : null;
-      final MediaAsset? third = next.length > 1 ? next[1] : null;
+      final SwipeDirections directions = Get.isRegistered<SettingsController>()
+          ? Get.find<SettingsController>().swipeDirections
+          : SwipeDirections.rightKeepLeftDelete;
+      final MediaAsset? second =
+          widget.next.isNotEmpty ? widget.next.first : null;
+      final MediaAsset? third =
+          widget.next.length > 1 ? widget.next[1] : null;
       return Stack(
         fit: StackFit.expand,
         children: <Widget>[
           // Deepest first: the second-next card, then the next card,
-          // then the interactive top card. Underneath cards are
-          // fully behind the top card (same size, no offset) so the
-          // reveal is gapless and no layout shifts on slot swaps.
+          // then the background indicator layer, then the interactive top card.
           if (third != null)
             _StackPhoto(
-              thumbnail: thumbnails[third.id],
-              failed: failedThumbnails.contains(third.id),
+              thumbnail: widget.thumbnails[third.id],
+              failed: widget.failedThumbnails.contains(third.id),
             ),
           if (second != null)
             _StackPhoto(
-              thumbnail: thumbnails[second.id],
-              failed: failedThumbnails.contains(second.id),
+              thumbnail: widget.thumbnails[second.id],
+              failed: widget.failedThumbnails.contains(second.id),
             ),
+          _DeckBackgroundIndicators(
+            dragNotifier: _dragNotifier,
+            directions: directions,
+          ),
           SwipeCard(
-            key: ValueKey<String>(current.id),
-            thumbnail: thumbnails[current.id],
-            thumbnailFailed: failedThumbnails.contains(current.id),
-            onSwiped: onSwiped,
-            onRetry: onRetry,
-            onExitStart: onExitStart,
-            onExitEnd: onExitEnd,
+            key: ValueKey<String>(widget.current.id),
+            thumbnail: widget.thumbnails[widget.current.id],
+            thumbnailFailed: widget.failedThumbnails.contains(widget.current.id),
+            swipeDirections: directions,
+            dragNotifier: _dragNotifier,
+            onSwiped: widget.onSwiped,
+            onRetry: widget.onRetry,
+            onExitStart: widget.onExitStart,
+            onExitEnd: widget.onExitEnd,
           ),
         ],
       );
     });
+  }
+}
+
+/// Action labels (Keep / Delete) rendered as a separate background layer
+/// behind the swipe card (requirements §3 / design §7).
+///
+/// Anchored to the screen edges (vertically centered) and revealed as the card
+/// slides away. Opacity and scale scale with drag progress.
+class _DeckBackgroundIndicators extends StatelessWidget {
+  const _DeckBackgroundIndicators({
+    required this.dragNotifier,
+    required this.directions,
+  });
+
+  final ValueNotifier<Offset> dragNotifier;
+  final SwipeDirections directions;
+
+  static const double _threshold = 80;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool rightIsKeep = directions == SwipeDirections.rightKeepLeftDelete;
+
+    final Color keepColor = context.palette.success;
+    final Color deleteColor = context.palette.error;
+
+    final IconData keepIcon = PhosphorIconsFill.thumbsUp;
+    final IconData deleteIcon = PhosphorIconsFill.trash;
+
+    final String keepText = AppStrings.tr(AppStrings.swipeActionKeep);
+    final String deleteText = AppStrings.tr(AppStrings.swipeActionDelete);
+
+    // Left indicator: revealed when card translates right (dx > 0).
+    final bool leftIsKeep = rightIsKeep;
+    final Color leftColor = leftIsKeep ? keepColor : deleteColor;
+    final IconData leftIcon = leftIsKeep ? keepIcon : deleteIcon;
+    final String leftText = leftIsKeep ? keepText : deleteText;
+
+    // Right indicator: revealed when card translates left (dx < 0).
+    final bool rightIsKeepAction = !rightIsKeep;
+    final Color rightColor = rightIsKeepAction ? keepColor : deleteColor;
+    final IconData rightIcon = rightIsKeepAction ? keepIcon : deleteIcon;
+    final String rightText = rightIsKeepAction ? keepText : deleteText;
+
+    return ValueListenableBuilder<Offset>(
+      valueListenable: dragNotifier,
+      builder: (BuildContext context, Offset offset, Widget? child) {
+        final double dx = offset.dx;
+        final double leftIntensity = dx > 0
+            ? (dx / _threshold).clamp(0.0, 1.0)
+            : 0.0;
+        final double rightIntensity = dx < 0
+            ? (-dx / _threshold).clamp(0.0, 1.0)
+            : 0.0;
+
+        if (leftIntensity <= 0.01 && rightIntensity <= 0.01) {
+          return const SizedBox.shrink();
+        }
+
+        return IgnorePointer(
+          child: ExcludeSemantics(
+            child: Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                if (leftIntensity > 0.01)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: EdgeInsets.only(left: context.sizes.md),
+                      child: Opacity(
+                        opacity: leftIntensity,
+                        child: Transform.scale(
+                          scale: 0.85 + 0.15 * leftIntensity,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              Icon(
+                                leftIcon,
+                                size: 64,
+                                color: leftColor,
+                                shadows: <Shadow>[
+                                  Shadow(
+                                    color: context.palette.scrim.withValues(
+                                      alpha: 0.35,
+                                    ),
+                                    offset: Offset(0, context.sizes.xxs),
+                                    blurRadius: context.sizes.xs,
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: context.sizes.xs),
+                              Text(
+                                leftText,
+                                style: context.textStyles.headlineLarge.copyWith(
+                                  color: leftColor,
+                                  fontWeight: FontWeight.w800,
+                                  shadows: <Shadow>[
+                                    Shadow(
+                                      color: context.palette.scrim.withValues(
+                                        alpha: 0.35,
+                                      ),
+                                      offset: Offset(0, context.sizes.xxs),
+                                      blurRadius: context.sizes.xs,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (rightIntensity > 0.01)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: EdgeInsets.only(right: context.sizes.md),
+                      child: Opacity(
+                        opacity: rightIntensity,
+                        child: Transform.scale(
+                          scale: 0.85 + 0.15 * rightIntensity,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              Icon(
+                                rightIcon,
+                                size: 64,
+                                color: rightColor,
+                                shadows: <Shadow>[
+                                  Shadow(
+                                    color: context.palette.scrim.withValues(
+                                      alpha: 0.35,
+                                    ),
+                                    offset: Offset(0, context.sizes.xxs),
+                                    blurRadius: context.sizes.xs,
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: context.sizes.xs),
+                              Text(
+                                rightText,
+                                style: context.textStyles.headlineLarge.copyWith(
+                                  color: rightColor,
+                                  fontWeight: FontWeight.w800,
+                                  shadows: <Shadow>[
+                                    Shadow(
+                                      color: context.palette.scrim.withValues(
+                                        alpha: 0.35,
+                                      ),
+                                      offset: Offset(0, context.sizes.xxs),
+                                      blurRadius: context.sizes.xs,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 

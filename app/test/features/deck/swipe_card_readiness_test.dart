@@ -76,7 +76,7 @@ void main() {
       );
       await tester.drag(find.byType(SwipeCard), const Offset(200, 0));
       await tester.pumpAndSettle();
-      expect(marks, <DeckMark>[DeckMark.delete]);
+      expect(marks, <DeckMark>[DeckMark.keep]);
     });
 
     testWidgets('failure state accepts no mark gesture', (

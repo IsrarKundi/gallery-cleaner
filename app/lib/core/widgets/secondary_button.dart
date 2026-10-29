@@ -30,9 +30,19 @@ class SecondaryButton extends StatelessWidget {
     return Opacity(
       opacity: _enabled ? 1 : context.sizes.disabledOpacity,
       child: SizedBox(
-        height: context.sizes.hitArea,
+        height: context.sizes.buttonPrimary,
         width: double.infinity,
         child: OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            // backgroundColor: context.palette.surfaceVariant,
+            side: BorderSide(
+              color: context.palette.primary,
+              width: 1.5, // Border thickness
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(100),
+            ),
+          ),
           onPressed: _enabled ? onPressed : null,
           child: isLoading
               ? SizedBox(

@@ -119,6 +119,10 @@ class HistoryRecord {
 /// Light or Dark gets exactly that, on every launch.
 enum ThemePreference { system, light, dark }
 
+/// Swipe direction mapping for the deck (requirements §3 amendment 27 Oct 2026).
+/// Default is [rightKeepLeftDelete]: swiping right keeps, swiping left deletes.
+enum SwipeDirections { rightKeepLeftDelete, rightDeleteLeftKeep }
+
 /// The persisted settings record (Phase 3A), stored in the same
 /// `klara_settings.json` file as the goal target and tutorial flag.
 /// New keys merge into existing records: old records simply read as
@@ -137,6 +141,7 @@ enum ThemePreference { system, light, dark }
 /// - reducedMotion OFF — the system setting applies until the user
 ///   overrides it in-app. trashAutoEmptyPrompt OFF — see the
 ///   trust-rule resolution on [AppSettings.trashAutoEmptyPrompt].
+/// - swipeDirections rightKeepLeftDelete (Right = Keep, Left = Delete).
 class AppSettings {
   const AppSettings({
     this.theme = ThemePreference.system,
@@ -146,6 +151,7 @@ class AppSettings {
     this.haptics = true,
     this.reducedMotion = false,
     this.trashAutoEmptyPrompt = false,
+    this.swipeDirections = SwipeDirections.rightKeepLeftDelete,
   });
 
   final ThemePreference theme;
@@ -154,6 +160,8 @@ class AppSettings {
   final bool weeklyNudge;
   final bool haptics;
   final bool reducedMotion;
+  final bool trashAutoEmptyPrompt;
+  final SwipeDirections swipeDirections;
 
   /// TRUST-RULE RESOLUTION (requirements §4 wins): "never
   /// auto-delete" overrides any literal auto-empty reading of the
@@ -164,8 +172,6 @@ class AppSettings {
   /// expired records — dropping stale local records whose system
   /// media already expired, which deletes no media at all. When
   /// OFF, expired records are left for manual emptying.
-  final bool trashAutoEmptyPrompt;
-
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'theme': theme.name,
@@ -175,6 +181,7 @@ class AppSettings {
       'haptics': haptics,
       'reducedMotion': reducedMotion,
       'trashAutoEmptyPrompt': trashAutoEmptyPrompt,
+      'swipeDirections': swipeDirections.name,
     };
   }
 
@@ -191,6 +198,13 @@ class AppSettings {
             orElse: () => ThemePreference.system,
           )
         : ThemePreference.system;
+    final Object? swipeRaw = json['swipeDirections'];
+    final SwipeDirections swipeDirections = swipeRaw is String
+        ? SwipeDirections.values.firstWhere(
+            (SwipeDirections s) => s.name == swipeRaw,
+            orElse: () => SwipeDirections.rightKeepLeftDelete,
+          )
+        : SwipeDirections.rightKeepLeftDelete;
     return AppSettings(
       theme: theme,
       privateBlur: flag('privateBlur', false),
@@ -199,6 +213,7 @@ class AppSettings {
       haptics: flag('haptics', true),
       reducedMotion: flag('reducedMotion', false),
       trashAutoEmptyPrompt: flag('trashAutoEmptyPrompt', false),
+      swipeDirections: swipeDirections,
     );
   }
 
@@ -210,6 +225,7 @@ class AppSettings {
     bool? haptics,
     bool? reducedMotion,
     bool? trashAutoEmptyPrompt,
+    SwipeDirections? swipeDirections,
   }) {
     return AppSettings(
       theme: theme ?? this.theme,
@@ -219,6 +235,7 @@ class AppSettings {
       haptics: haptics ?? this.haptics,
       reducedMotion: reducedMotion ?? this.reducedMotion,
       trashAutoEmptyPrompt: trashAutoEmptyPrompt ?? this.trashAutoEmptyPrompt,
+      swipeDirections: swipeDirections ?? this.swipeDirections,
     );
   }
 }

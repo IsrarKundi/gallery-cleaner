@@ -190,6 +190,7 @@ void main() {
       expect(settings.haptics, isTrue);
       expect(settings.reducedMotion, isFalse);
       expect(settings.trashAutoEmptyPrompt, isFalse);
+      expect(settings.swipeDirections, SwipeDirections.rightKeepLeftDelete);
     });
 
     test('round-trips through JSON and tolerates old records', () {
@@ -198,11 +199,13 @@ void main() {
           theme: ThemePreference.dark,
           privateBlur: true,
           protection: true,
+          swipeDirections: SwipeDirections.rightDeleteLeftKeep,
         ).toJson(),
       );
       expect(restored.theme, ThemePreference.dark);
       expect(restored.privateBlur, isTrue);
       expect(restored.protection, isTrue);
+      expect(restored.swipeDirections, SwipeDirections.rightDeleteLeftKeep);
       // An old record (goal/tutorial keys only) reads as defaults.
       expect(
         AppSettings.fromJson(<String, dynamic>{}).theme,
@@ -275,6 +278,7 @@ void main() {
       expect(AppHaptics.enabled, isFalse);
       await controller.setReducedMotion(true);
       await controller.setTrashAutoEmptyPrompt(true);
+      await controller.setSwipeDirections(SwipeDirections.rightDeleteLeftKeep);
       final AppSettings saved = (await local.loadSettings()).fold(
         onSuccess: (AppSettings value) => value,
         onFailure: (_) => throw StateError('load failed'),
@@ -285,6 +289,7 @@ void main() {
       expect(saved.haptics, isFalse);
       expect(saved.reducedMotion, isTrue);
       expect(saved.trashAutoEmptyPrompt, isTrue);
+      expect(saved.swipeDirections, SwipeDirections.rightDeleteLeftKeep);
     });
 
     test('persisted theme applies at load', () async {

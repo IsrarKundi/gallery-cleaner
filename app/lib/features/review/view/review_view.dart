@@ -149,11 +149,11 @@ class ReviewView extends GetView<ReviewController> {
         final bool isEmpty = controller.items.isEmpty;
         return AppScaffold(
           title: AppStrings.tr(AppStrings.screenReview),
-          leading: IconButton(
-            icon: Icon(AppIcons.back, size: context.sizes.iconMd),
-            tooltip: AppStrings.tr(AppStrings.actionBackToDeck),
-            onPressed: _onBack,
-          ),
+          // leading: IconButton(
+          //   icon: Icon(AppIcons.back, size: context.sizes.iconMd),
+          //   tooltip: AppStrings.tr(AppStrings.actionBackToDeck),
+          //   onPressed: _onBack,
+          // ),
           actions: <Widget>[
             Obx(() {
               final bool mode = controller.selection.mode.value;
@@ -202,7 +202,7 @@ class ReviewView extends GetView<ReviewController> {
                       ))
               : Column(
                   children: <Widget>[
-                    const SizedBox(height: 10),
+                    // const SizedBox(height: 10),
                     // _Header(controller: controller),
                     if (controller.protectedExcludedCount.value > 0)
                       InfoBanner(
@@ -280,4 +280,3 @@ class ReviewView extends GetView<ReviewController> {
     );
   }
 }
-

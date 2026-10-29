@@ -36,7 +36,7 @@ class AppSizes {
   // Buttons and targets (design.md §5, §9).
   // Primary height 52 sits inside the 48-56dp range; compact is 40.
   // Every interactive element keeps a 48dp hit area.
-  double get buttonPrimary => 52;
+  double get buttonPrimary => 46;
   double get buttonCompact => 40;
   double get hitArea => 48;
   double get listRowMin => 56;
@@ -73,10 +73,10 @@ class AppSizes {
   // Splash (design.md §13): logo width on the splash screen, and the
   // hold-timer fallback. The Lottie itself is ~1.67s, so the timer only
   // fires if Lottie playback fails; it is cancelled on Lottie finish.
-  double get splashLogoWidth => 150;
+  double get splashLogoWidth => 80;
   // Height matching the generated logo aspect (755:200 viewBox).
   double get splashLogoHeight => 53;
-  Duration get splashHold => const Duration(milliseconds: 3000);
+  Duration get splashHold => const Duration(milliseconds: 2000);
   // Reduced-motion splash (Phase 2.2): no Lottie runs, so the 3.0s
   // fallback would be the whole wait. A short hold lets the brand
   // mark register, then the splash exits — far below the fallback.

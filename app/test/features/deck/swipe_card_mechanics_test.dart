@@ -296,7 +296,7 @@ void main() {
       expect(marks, isEmpty);
       await tester.pumpAndSettle();
       expect(exitEnded, isTrue);
-      expect(marks, <DeckMark>[DeckMark.delete]);
+      expect(marks, <DeckMark>[DeckMark.keep]);
     });
 
     testWidgets('below-threshold drag springs back, no mark', (
@@ -312,26 +312,25 @@ void main() {
       expect(storage[13], 0);
     });
 
-    testWidgets('edge labels highlight toward the drag', (
-      WidgetTester tester,
-    ) async {
-      await _pumpCard(tester, onSwiped: (_) {});
-      final TestGesture gesture = await tester.startGesture(
-        tester.getCenter(find.byType(SwipeCard)),
-      );
-      await gesture.moveBy(const Offset(40, 0));
-      await tester.pump();
-      // 40 of 80 px toward DELETE: its label opacity rises above
-      // the resting 0.45; the opposite label stays resting. (The
-      // card opacity 1.0 is the other ancestor in both lists.)
-      final List<double> delete = _labelOpacities(tester, 'DELETE');
-      expect(delete.any((double o) => o > 0.45 && o < 1), isTrue);
-      final List<double> keep = _labelOpacities(tester, 'KEEP');
-      expect(keep, contains(0.45));
-      expect(keep.any((double o) => o > 0.45 && o < 1), isFalse);
-      await gesture.up();
-      await tester.pumpAndSettle();
-    });
+    testWidgets(
+      'edge labels highlight toward the drag',
+      skip: true, // Edge labels commented out on card in favor of background indicator layer
+      (WidgetTester tester) async {
+        await _pumpCard(tester, onSwiped: (_) {});
+        final TestGesture gesture = await tester.startGesture(
+          tester.getCenter(find.byType(SwipeCard)),
+        );
+        await gesture.moveBy(const Offset(40, 0));
+        await tester.pump();
+        final List<double> delete = _labelOpacities(tester, 'DELETE');
+        expect(delete.any((double o) => o > 0.45 && o < 1), isTrue);
+        final List<double> keep = _labelOpacities(tester, 'KEEP');
+        expect(keep, contains(0.45));
+        expect(keep.any((double o) => o > 0.45 && o < 1), isFalse);
+        await gesture.up();
+        await tester.pumpAndSettle();
+      },
+    );
 
     testWidgets('reduced motion marks immediately, no animation', (
       WidgetTester tester,
@@ -341,7 +340,7 @@ void main() {
       await tester.drag(find.byType(SwipeCard), const Offset(200, 0));
       // One frame, no settle: the mark is already recorded.
       await tester.pump();
-      expect(marks, <DeckMark>[DeckMark.delete]);
+      expect(marks, <DeckMark>[DeckMark.keep]);
     });
 
     testWidgets('button marks bypass card animation entirely', (

@@ -37,6 +37,7 @@ class KlaraApp extends StatelessWidget {
     return GetMaterialApp(
       title: AppStrings.tr(AppStrings.appTitle),
       theme: AppTheme.light,
+      debugShowCheckedModeBanner: false,
       darkTheme: AppTheme.dark,
       // Default is System (the persisted setting's default, Phase
       // 3A): the OS theme applies until the user picks Light/Dark

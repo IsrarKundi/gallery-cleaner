@@ -111,7 +111,7 @@ For Klara — a utility, not a portfolio piece — borrow the boring parts: one 
 
 ## 7. The deck (Klara's core screen — §5/§6 plus these)
 
-- **Card:** full-bleed photo, 12–16dp corners. Edge labels per the locked gesture mapping (`requirements.md` §3): KEEP left, DELETE right, MAYBE top, FAVOURITE bottom. Buttons for all four actions below the card; Undo always visible.
+- **Card:** full-bleed photo, 12–16dp corners. Edge labels per the gesture mapping (`requirements.md` §3 amendment 27 Oct 2026): KEEP right, DELETE left (configurable in Settings). Top/bottom gestures removed (action bar buttons retain Maybe and Favourite). Bottom-anchored gradient tint (green for Keep, red for Delete) with large action icon + label scales during drag toward the active direction. Buttons for all four actions below the card; Undo always visible.
 - **Bottom-anchored action bar** with Keep / Delete / Review. Delete on the deck only MARKS — the destructive confirmation lives on the review screen.
 - **Live three-state space meter on the deck** (Marked "to be freed" → In trash until [date] → Freed only after emptying/expiry) — never hidden away in Stats. This is the #1 differentiator and it must be visible where the user swipes.
 - **Photo context on the card:** date, size, folder — small caption, never covering the photo's subject.

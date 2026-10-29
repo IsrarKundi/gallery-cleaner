@@ -406,7 +406,7 @@ void main() {
     // pending delete set (ADR-013), not the skeleton (ADR-012).
     // The exit needs two pumps to record the mark; the window
     // then runs from the mark, so the tap lands well inside it.
-    await tester.drag(find.byType(SwipeCard), const Offset(200, 0));
+    await tester.drag(find.byType(SwipeCard), const Offset(-200, 0));
     await tester.pump(const Duration(seconds: 3));
     await tester.pump(const Duration(seconds: 3));
     await tester.tap(_navItem('Trash'));
@@ -429,7 +429,7 @@ void main() {
       // Mark a1 and let the window lapse: the delete commits to
       // the trash pipeline. The exit needs two pumps to record
       // the mark; the third advances the clock past the 2s timer.
-      await tester.drag(find.byType(SwipeCard), const Offset(200, 0));
+      await tester.drag(find.byType(SwipeCard), const Offset(-200, 0));
       await tester.pump(const Duration(seconds: 3));
       await tester.pump(const Duration(seconds: 3));
       await tester.pump(const Duration(seconds: 3));
@@ -464,7 +464,7 @@ void main() {
     // count and buttons — never the loading skeleton (ADR-012).
     // The tap waits on the exit gate, so the mark is recorded
     // and the 2s window is still open when Review lands.
-    await tester.drag(find.byType(SwipeCard), const Offset(200, 0));
+    await tester.drag(find.byType(SwipeCard), const Offset(-200, 0));
     await tester.pump(const Duration(seconds: 3));
     await tester.tap(_navItem('Trash'));
     // Step through the push transition frame by frame: the delete
@@ -525,7 +525,7 @@ void main() {
 
     // Start a swipe and tap Trash mid-flight (150 ms of 300 ms):
     // Review must NOT open while the mark is unrecorded.
-    await tester.drag(find.byType(SwipeCard), const Offset(200, 0));
+    await tester.drag(find.byType(SwipeCard), const Offset(-200, 0));
     await tester.pump(const Duration(milliseconds: 150));
     expect(deck.isCardExiting, isTrue);
     await tester.tap(_navItem('Trash'));
@@ -545,7 +545,7 @@ void main() {
     await _pumpShell(tester, _Media(), _Local(), _Trash());
     final DeckController deck = Get.find<DeckController>();
 
-    await tester.drag(find.byType(SwipeCard), const Offset(200, 0));
+    await tester.drag(find.byType(SwipeCard), const Offset(-200, 0));
     await tester.pump(const Duration(milliseconds: 150));
     expect(deck.isCardExiting, isTrue);
 
@@ -585,7 +585,7 @@ void main() {
     final DeckController deck = Get.find<DeckController>();
 
     // Swipe delete 1 photo on Clean deck
-    await tester.drag(find.byType(SwipeCard), const Offset(200, 0));
+    await tester.drag(find.byType(SwipeCard), const Offset(-200, 0));
     await tester.pumpAndSettle();
     expect(deck.marks['a1'], DeckMark.delete);
 

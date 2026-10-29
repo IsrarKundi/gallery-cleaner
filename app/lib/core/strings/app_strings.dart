@@ -232,8 +232,21 @@ class AppStrings {
   static const String tutorialDelete = 'tutorialDelete';
   static const String tutorialMaybe = 'tutorialMaybe';
   static const String tutorialFavourite = 'tutorialFavourite';
+  static const String tutorialKeepRight = 'tutorialKeepRight';
+  static const String tutorialDeleteLeft = 'tutorialDeleteLeft';
+  static const String tutorialKeepLeft = 'tutorialKeepLeft';
+  static const String tutorialDeleteRight = 'tutorialDeleteRight';
   static const String tutorialSwipeNote = 'tutorialSwipeNote';
   static const String tutorialDone = 'tutorialDone';
+  static const String settingsSwipeDirections = 'settingsSwipeDirections';
+  static const String settingsSwipeRightKeep = 'settingsSwipeRightKeep';
+  static const String settingsSwipeRightDelete = 'settingsSwipeRightDelete';
+  static const String settingsSwipeRightKeepShort =
+      'settingsSwipeRightKeepShort';
+  static const String settingsSwipeRightDeleteShort =
+      'settingsSwipeRightDeleteShort';
+  static const String swipeActionKeep = 'swipeActionKeep';
+  static const String swipeActionDelete = 'swipeActionDelete';
 
   // Phase 3A settings (requirements §7, Phase 3): theme, private
   // blur, favourites protection, weekly nudge, haptics, reduced
@@ -430,8 +443,8 @@ class AppStrings {
     meterToBeFreed: 'To be freed',
     meterInTrash: 'In trash until {date}',
     meterFreed: 'Freed',
-    reviewDeleteCount: 'Delete {count} photos',
-    reviewKeepCount: 'Keep {count} photos',
+    reviewDeleteCount: 'Delete {count}',
+    reviewKeepCount: 'Keep',
     reviewEmptyTitle: 'Nothing to review',
     reviewEmptyMessage:
         'Every marked photo is decided. Go back to the deck to keep cleaning.',
@@ -532,14 +545,25 @@ class AppStrings {
     scanSlower: 'Scanning is slower than usual.',
     resumeSession: 'Resume where you left off',
     tutorialTitle: 'How swiping works',
-    tutorialKeep: 'Swipe left to keep a photo.',
-    tutorialDelete: 'Swipe right to mark a photo for removal.',
+    tutorialKeep: 'Swipe right to keep a photo.',
+    tutorialDelete: 'Swipe left to mark a photo for removal.',
+    tutorialKeepRight: 'Swipe right to keep a photo.',
+    tutorialDeleteLeft: 'Swipe left to mark a photo for removal.',
+    tutorialKeepLeft: 'Swipe left to keep a photo.',
+    tutorialDeleteRight: 'Swipe right to mark a photo for removal.',
     tutorialMaybe: 'Swipe up to decide later.',
     tutorialFavourite: 'Swipe down to favourite and protect a photo.',
     tutorialSwipeNote:
         'Swiping only marks a photo. Nothing is removed until you '
         'review it and confirm.',
     tutorialDone: 'Got it',
+    settingsSwipeDirections: 'Swipe directions',
+    settingsSwipeRightKeep: 'Right = Keep, Left = Delete',
+    settingsSwipeRightDelete: 'Right = Delete, Left = Keep',
+    settingsSwipeRightKeepShort: 'Right = Keep',
+    settingsSwipeRightDeleteShort: 'Right = Delete',
+    swipeActionKeep: 'Keep',
+    swipeActionDelete: 'Delete',
     splashSkipLabel: 'Skip splash',
     filterTitle: 'Filters',
     filterAll: 'All photos',

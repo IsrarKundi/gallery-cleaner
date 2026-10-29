@@ -341,10 +341,10 @@ void main() {
       },
     );
 
-    testWidgets('drag left swipes Keep', (WidgetTester tester) async {
+    testWidgets('drag right swipes Keep', (WidgetTester tester) async {
       final _Local local = _Local()..tutorialSeen = true;
       final DeckController controller = await _pumpDeck(tester, local: local);
-      await tester.drag(find.byType(SwipeCard), const Offset(-200, 0));
+      await tester.drag(find.byType(SwipeCard), const Offset(200, 0));
       await tester.pumpAndSettle();
       expect(controller.marks['a1'], DeckMark.keep);
     });

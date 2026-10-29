@@ -164,6 +164,7 @@ class _Body extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
+              SizedBox(height: context.sizes.lg),
               SessionSummaryCard(summary: controller.summary),
               SizedBox(height: context.sizes.xl),
               SizedBox(

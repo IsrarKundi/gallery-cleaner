@@ -96,6 +96,7 @@ class SettingsController extends GetxController {
   bool get haptics => settings.value.haptics;
   bool get reducedMotion => settings.value.reducedMotion;
   bool get trashAutoEmptyPrompt => settings.value.trashAutoEmptyPrompt;
+  SwipeDirections get swipeDirections => settings.value.swipeDirections;
 
   @override
   void onInit() {
@@ -245,6 +246,15 @@ class SettingsController extends GetxController {
       return;
     }
     if (await _persist(settings.value.copyWith(trashAutoEmptyPrompt: value))) {
+      AppHaptics.mark();
+    }
+  }
+
+  Future<void> setSwipeDirections(SwipeDirections value) async {
+    if (value == swipeDirections) {
+      return;
+    }
+    if (await _persist(settings.value.copyWith(swipeDirections: value))) {
       AppHaptics.mark();
     }
   }

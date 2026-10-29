@@ -1,24 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 import '../../../core/constants/app_icons.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../core/widgets/primary_button.dart';
+import '../../../services/local/local_service.dart';
+import '../../settings/controller/settings_controller.dart';
 
-/// First-run interactive tutorial overlay (requirements §3, mandatory
-/// because the mapping is the opposite of the usual convention).
+/// First-run interactive tutorial overlay (requirements §3 amendment 27 Oct 2026).
 ///
-/// Explains all four directions with arrows + edge labels and a
-/// dismiss action. It is skippable, never permanently blocks the deck
-/// (it sits above the deck and dismisses on one tap), and never
-/// reappears once dismissed — the controller records the flag.
+/// Explains the two horizontal swipe directions (Keep and Delete) with edge
+/// actions and a dismiss action. Up/down swiping is disabled.
 class TutorialOverlay extends StatelessWidget {
-  const TutorialOverlay({super.key, required this.onDismiss});
+  const TutorialOverlay({
+    super.key,
+    required this.onDismiss,
+    this.swipeDirections,
+  });
 
   final VoidCallback onDismiss;
+  final SwipeDirections? swipeDirections;
 
   @override
   Widget build(BuildContext context) {
+    final SwipeDirections directions =
+        swipeDirections ??
+        (Get.isRegistered<SettingsController>()
+            ? Get.find<SettingsController>().swipeDirections
+            : SwipeDirections.rightKeepLeftDelete);
+    final bool rightIsKeep = directions == SwipeDirections.rightKeepLeftDelete;
+
     return Container(
       color: context.palette.scrim,
       child: Center(
@@ -41,22 +53,20 @@ class TutorialOverlay extends StatelessWidget {
                 SizedBox(height: context.sizes.lg),
                 _TutorialRow(
                   icon: AppIcons.keep,
-                  text: AppStrings.tr(AppStrings.tutorialKeep),
+                  text: AppStrings.tr(
+                    rightIsKeep
+                        ? AppStrings.tutorialKeepRight
+                        : AppStrings.tutorialKeepLeft,
+                  ),
                 ),
                 SizedBox(height: context.sizes.sm),
                 _TutorialRow(
                   icon: AppIcons.delete,
-                  text: AppStrings.tr(AppStrings.tutorialDelete),
-                ),
-                SizedBox(height: context.sizes.sm),
-                _TutorialRow(
-                  icon: AppIcons.maybe,
-                  text: AppStrings.tr(AppStrings.tutorialMaybe),
-                ),
-                SizedBox(height: context.sizes.sm),
-                _TutorialRow(
-                  icon: AppIcons.favourite,
-                  text: AppStrings.tr(AppStrings.tutorialFavourite),
+                  text: AppStrings.tr(
+                    rightIsKeep
+                        ? AppStrings.tutorialDeleteLeft
+                        : AppStrings.tutorialDeleteRight,
+                  ),
                 ),
                 SizedBox(height: context.sizes.lg),
                 Text(

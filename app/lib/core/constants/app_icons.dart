@@ -29,7 +29,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 ///   a different semantic constant)
 /// - filter → funnelSimple → Regular
 /// - photos → image → Regular
-/// - back → arrowLeft → Regular
+/// - back → caretLeft → Regular (chevron)
 /// - decks → squaresFour → Regular (smart-deck hub)
 /// - duplicates → copySimple → Regular (duplicate groups)
 /// - screenshots → imageSquare → Regular
@@ -59,8 +59,8 @@ class AppIcons {
   static const IconData check = PhosphorIconsRegular.check;
   static const IconData filter = PhosphorIconsRegular.funnelSimple;
   static const IconData photos = PhosphorIconsRegular.image;
-  static const IconData clean = PhosphorIconsRegular.broom;
-  static const IconData back = PhosphorIconsRegular.arrowLeft;
+  static const IconData clean = PhosphorIconsRegular.handSwipeRight;
+  static const IconData back = PhosphorIconsRegular.caretLeft;
   static const IconData decks = PhosphorIconsRegular.squaresFour;
   static const IconData duplicates = PhosphorIconsRegular.copySimple;
   static const IconData screenshots = PhosphorIconsRegular.imageSquare;

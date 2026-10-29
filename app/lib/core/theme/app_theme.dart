@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../constants/app_colors.dart';
+import '../constants/app_icons.dart';
 import '../constants/app_sizes.dart';
 import '../constants/app_text.dart';
 
@@ -68,6 +69,10 @@ class AppTheme {
           size: sizes.iconMd,
         ),
         toolbarHeight: sizes.appBar,
+      ),
+      actionIconTheme: ActionIconThemeData(
+        backButtonIconBuilder: (BuildContext context) =>
+            const Icon(AppIcons.back),
       ),
       textTheme: TextTheme(
         displaySmall: styles.displaySmall,

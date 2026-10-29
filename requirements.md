@@ -33,15 +33,22 @@ related work starts. This file is the single source of truth for the build; the 
   (usually left = delete, right = keep), so users will otherwise guess wrong on destructive swipes.
 - NOTE: mockups generated 25 Oct 2026 show the opposite mapping (DELETE left / KEEP right). They are
   SUPERSEDED by this section and must be regenerated before being used as design reference.
-- AMENDED 26 Oct 2026 (owner decision, ADR-013, Clean deck only): a right swipe still marks first,
+- AMENDED 26 Oct 2026 (owner decision, ADR-013, Clean deck only): a delete swipe still marks first,
   but the mark confirms after a 2-second undo window, or at once when the next photo is swiped —
   the photo then leaves the deck for the batched native trash run, and Review is no longer the
   mandatory gate for Clean-deck deletes. Smart decks keep the mark → review → native sheet flow
   unchanged. The native sheet remains the only path to Trash.
+- AMENDED 27 Oct 2026 (owner decision, Wipe swipe rework): Gesture mapping defaults to
+  Swipe RIGHT = Keep, Swipe LEFT = Delete. Vertical swipes (up = Maybe, down = Favourite) are
+  completely removed from gesture input (Maybe and Favourite actions remain accessible via the
+  bottom action bar). Edge labels are reduced to left and right edges. A "Swipe directions" setting
+  in Settings allows switching between "Right = Keep, Left = Delete" (default) and
+  "Right = Delete, Left = Keep", applied live immediately. While dragging, a bottom-anchored
+  gradient tint appears on the photo card along with a large action icon and label (Keep / Delete).
 
 ## 4. Core flow (non-negotiable trust rules)
 
-1. Swipe only MARKS a photo (keep / delete / maybe / favourite). No swipe ever deletes anything.
+1. Swipe only MARKS a photo (keep / delete). No swipe ever deletes anything.
 2. Review screen: editable grid of marked photos with counts and MB. User can unmark here.
    Photos are always shown revealed (no blur, no tap-to-reveal, no document guard). Long-press
    or the Select text button enters selection mode: taps then toggle selection, Select becomes
@@ -64,6 +71,22 @@ related work starts. This file is the single source of truth for the build; the 
   and permanent deletion still happens only via emptying or expiry. This amendment CONFLICTS with
   the earlier "never skip review" rule; the owner's explicit 26 Oct 2026 order outranks it, and
   the conflict is recorded here and in ADR-013 rather than silently resolved.
+- AMENDED 26 Oct 2026 (owner decision, ADR-014, Review delete is permanent): Review's delete button
+  (bottom bar "Delete N photos" / "Delete X") permanently deletes photos via the native delete
+  confirmation (MediaStore.createDeleteRequest on API 30+) instead of moving them to Trash.
+  Permanently deleted photos never enter Trash and their space is counted directly as freed.
+  Rules 4–5 no longer apply to Review deletes. Whole-set Review delete returns directly to the deck
+  (never the Trash screen). Denied photos return to the deck. This amendment CONFLICTS with the
+  earlier "every deletion enters Trash" rule; the owner's explicit 26 Oct 2026 order outranks it,
+  and the conflict is recorded here and in ADR-014 rather than silently resolved.
+- AMENDED 26 Oct 2026 (owner decision, ADR-015, Shell Trash tab shows union set): The shell Trash tab
+  displays the union of Clean-deck delete-marked photos (pending + awaiting) and all smart-deck
+  delete-marked photos (persisted sessions under 'smart:<deck>' and live SmartDeckController). Order
+  is visit-stable: Clean deck first (awaiting then queued), followed by smart decks sorted
+  alphabetically by session key with newest swipes last. All Review actions (unmark, keep, permanent
+  delete, denied delete) sync back to the origin deck of each photo independently without corrupting
+  per-deck sessions. Smart decks' own internal review flow from inside a folder continues to work
+  scoped to its own set. Smart decks remain marks-only without an undo window.
 
 ## 5. Permissions and platform rules
 

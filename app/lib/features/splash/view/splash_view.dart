@@ -1,3 +1,5 @@
+// ignore_for_file: unused_import, unused_local_variable
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';

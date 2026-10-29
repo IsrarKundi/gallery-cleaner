@@ -8,12 +8,18 @@ import '../../../core/widgets/primary_button.dart';
 import '../../../core/widgets/secondary_button.dart';
 import '../controller/review_controller.dart';
 
-/// Bottom-anchored actions (design.md §5). Without a selection:
-/// "Keep all" (secondary) and "Delete N photos" (the ONLY filled
-/// Delete button in the app). With a selection, both act on the
-/// selection only and their labels carry its count: "Keep X
-/// photos" and "Delete X photos". The bar renders only while the
-/// set is non-empty.
+/// Bottom-anchored actions.
+///
+/// Without a selection:
+/// - Keep
+/// - Delete All
+///
+/// With a selection:
+/// - Keep X
+/// - Delete X
+///
+/// Keep occupies 40% and Delete occupies 60% of the
+/// available button width, excluding the gap.
 class ReviewBottomBar extends StatelessWidget {
   const ReviewBottomBar({
     super.key,
@@ -41,40 +47,43 @@ class ReviewBottomBar extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        // The labels observe the selection so they flip between
-        // the whole-set and the selection counts without the
-        // parent having to rebuild the bar.
         child: Obx(() {
           final bool hasSelection = controller.hasSelection;
           final int selectedCount = controller.selectedItems.length;
-          return Column(
-            mainAxisSize: MainAxisSize.min,
+          final bool isDeleting = controller.isDeleting.value;
+
+          return Row(
             children: <Widget>[
-              SecondaryButton(
-                label: hasSelection
-                    ? AppStrings.tr(
-                        AppStrings.reviewKeepCount,
-                        <String, String>{'count': '$selectedCount'},
-                      )
-                    : AppStrings.tr(AppStrings.actionKeepAll),
-                icon: AppIcons.keep,
-                onPressed: hasSelection
-                    ? controller.keepSelected
-                    : controller.keepAll,
-                isLoading: controller.isDeleting.value,
+              Expanded(
+                flex: 4,
+                child: SecondaryButton(
+                  label: hasSelection
+                      ? AppStrings.tr(
+                          AppStrings.reviewKeepCount,
+                          <String, String>{'count': '$selectedCount'},
+                        )
+                      : 'Keep',
+                  icon: AppIcons.keep,
+                  onPressed: hasSelection
+                      ? controller.keepSelected
+                      : controller.keepAll,
+                  isLoading: isDeleting,
+                ),
               ),
-              SizedBox(height: context.sizes.sm),
-              PrimaryButton(
-                label: AppStrings.tr(AppStrings.reviewDeleteCount, <
-                  String,
-                  String
-                >{
-                  'count':
-                      '${hasSelection ? selectedCount : controller.items.length}',
-                }),
-                icon: AppIcons.delete,
-                onPressed: onDelete,
-                isLoading: controller.isDeleting.value,
+              SizedBox(width: context.sizes.sm),
+              Expanded(
+                flex: 6,
+                child: PrimaryButton(
+                  label: hasSelection
+                      ? AppStrings.tr(
+                          AppStrings.reviewDeleteCount,
+                          <String, String>{'count': '$selectedCount'},
+                        )
+                      : 'Delete All',
+                  icon: AppIcons.delete,
+                  onPressed: onDelete,
+                  isLoading: isDeleting,
+                ),
               ),
             ],
           );

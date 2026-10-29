@@ -377,17 +377,17 @@ void main() {
     expect(find.byType(SwipeCard), findsOneWidget);
     expect(find.byIcon(AppIcons.undo), findsOneWidget);
 
-    // Mark one asset delete via swipe right (gesture path).
-    await tester.drag(find.byType(SwipeCard), const Offset(200, 0));
+    // Mark one asset delete via swipe left (gesture path).
+    await tester.drag(find.byType(SwipeCard), const Offset(-200, 0));
     await tester.pumpAndSettle();
 
     // Review tab (Trash) in bottom nav opens the review screen.
     await tester.tap(find.text('Trash'));
     await tester.pumpAndSettle();
-    expect(find.text('Delete 1 photos'), findsOneWidget);
+    expect(find.text('Delete All'), findsOneWidget);
 
     // Confirm permanent delete (fake native-confirmation success).
-    await tester.tap(find.text('Delete 1 photos'));
+    await tester.tap(find.text('Delete All'));
     await tester.pumpAndSettle();
 
     // Returns directly to deck: photo is permanently deleted, never trashed.

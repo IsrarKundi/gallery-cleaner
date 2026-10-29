@@ -41,8 +41,9 @@ class DecksView extends GetView<DecksController> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
+      title: AppStrings.tr(AppStrings.screenDecks),
       bottomNav: showBottomNav ? const AppBottomNav(currentIndex: 1) : null,
-      body: SafeArea(child: _Body(controller: controller)),
+      body: _Body(controller: controller),
     );
   }
 }
@@ -138,7 +139,7 @@ class _HubBody extends StatelessWidget {
           //   DecksScanningBanner(controller: controller),
           // ],
           if (onThisDayAssets.isNotEmpty) ...<Widget>[
-            SizedBox(height: context.sizes.sm),
+            // SizedBox(height: context.sizes.sm),
             Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: context.sizes.screenPadding,

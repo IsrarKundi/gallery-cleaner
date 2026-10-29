@@ -50,13 +50,13 @@ class OnThisDayHeroCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.palette.primary,
         borderRadius: BorderRadius.circular(context.sizes.radiusLg),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: context.palette.primary.withValues(alpha: 0.25),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        // boxShadow: <BoxShadow>[
+        //   BoxShadow(
+        //     color: context.palette.primary.withValues(alpha: 0.25),
+        //     blurRadius: 16,
+        //     offset: const Offset(0, 6),
+        //   ),
+        // ],
       ),
       child: Material(
         color: Colors.transparent,

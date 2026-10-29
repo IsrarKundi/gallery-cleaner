@@ -1,6 +1,9 @@
+// ignore_for_file: unused_element, unused_local_variable
+
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 import '../../../core/constants/app_sizes.dart';
 import '../../../core/strings/app_strings.dart';
@@ -8,6 +11,7 @@ import '../../../core/constants/app_icons.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../core/utils/decode_size.dart';
 import '../../../services/local/local_service.dart';
+import '../../settings/controller/settings_controller.dart';
 import '../model/swipe_direction.dart';
 import '../model/thumbnail_preloader.dart';
 
@@ -49,10 +53,20 @@ class SwipeCard extends StatefulWidget {
     required this.thumbnail,
     required this.thumbnailFailed,
     required this.onSwiped,
+    this.swipeDirections,
+    this.dragNotifier,
     this.onRetry,
     this.onExitStart,
     this.onExitEnd,
   });
+
+  /// Optional notifier for drag offset updates (used by background indicators).
+  final ValueNotifier<Offset>? dragNotifier;
+
+  /// Optional swipe direction mapping override. When null, falls back
+  /// to [SettingsController.swipeDirections] if registered, or default
+  /// [SwipeDirections.rightKeepLeftDelete].
+  final SwipeDirections? swipeDirections;
 
   /// Thumbnail bytes, or null while still loading.
   final Uint8List? thumbnail;
@@ -106,10 +120,27 @@ class _SwipeCardState extends State<SwipeCard>
   Cubic get _easeOut => const AppSizes().easeOut;
 
   @override
+  void initState() {
+    super.initState();
+    _exitController.addListener(_onExitTick);
+  }
+
+  void _onExitTick() {
+    widget.dragNotifier?.value = _offsetTween.value;
+  }
+
+  @override
   void dispose() {
+    _exitController.removeListener(_onExitTick);
     _exitController.dispose();
     super.dispose();
   }
+
+  SwipeDirections get _directions =>
+      widget.swipeDirections ??
+      (Get.isRegistered<SettingsController>()
+          ? Get.find<SettingsController>().swipeDirections
+          : SwipeDirections.rightKeepLeftDelete);
 
   void _onPanStart(DragStartDetails details) {
     // Grabbing mid-spring-back cancels the spring at its current
@@ -119,6 +150,7 @@ class _SwipeCardState extends State<SwipeCard>
       _dragOffset = _offsetTween.value;
       _springing = false;
     }
+    widget.dragNotifier?.value = _dragOffset;
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
@@ -128,6 +160,7 @@ class _SwipeCardState extends State<SwipeCard>
     setState(() {
       _dragOffset += details.delta;
     });
+    widget.dragNotifier?.value = _dragOffset;
   }
 
   void _onPanEnd(DragEndDetails details) {
@@ -138,11 +171,13 @@ class _SwipeCardState extends State<SwipeCard>
       _dragOffset.dx,
       _dragOffset.dy,
       _swipeThreshold,
+      directions: _directions,
     );
     if (mark == null) {
       // Below threshold: spring back to centre on the same
       // controller (opacity stays 1 — nothing fades on a cancel).
       if (_dragOffset == Offset.zero) {
+        widget.dragNotifier?.value = Offset.zero;
         return;
       }
       _springing = true;
@@ -159,6 +194,7 @@ class _SwipeCardState extends State<SwipeCard>
           _springing = false;
           _dragOffset = Offset.zero;
         });
+        widget.dragNotifier?.value = Offset.zero;
       });
       return;
     }
@@ -168,9 +204,10 @@ class _SwipeCardState extends State<SwipeCard>
     }
     final Size size = MediaQuery.sizeOf(context);
     final double exit = size.width > size.height ? size.width : size.height;
+    final bool rightIsKeep = _directions == SwipeDirections.rightKeepLeftDelete;
     final Offset target = switch (mark) {
-      DeckMark.keep => Offset(-exit, 0),
-      DeckMark.delete => Offset(exit, 0),
+      DeckMark.keep => Offset(rightIsKeep ? exit : -exit, 0),
+      DeckMark.delete => Offset(rightIsKeep ? -exit : exit, 0),
       DeckMark.maybe => Offset(0, -exit),
       DeckMark.favourite => Offset(0, exit),
     };
@@ -262,9 +299,8 @@ class _SwipeCardState extends State<SwipeCard>
               fit: StackFit.expand,
               children: <Widget>[
                 child!,
-                // Labels ride the same transform + opacity as the
-                // photo, and highlight with the effective offset
-                // (drag, or exit flight toward the committed mark).
+                _EdgeLabels(drag: offset, directions: _directions),
+                _SwipeTintOverlay(drag: offset, directions: _directions),
               ],
             ),
           ),
@@ -275,18 +311,14 @@ class _SwipeCardState extends State<SwipeCard>
   }
 }
 
-/// Persistent edge labels (requirements §3, design.md §7): plain
-/// text at the four edges, always visible, highlighting toward the
-/// drag direction — opacity and scale rise with drag distance up to
-/// the swipe threshold, and the label's semantic colour replaces
-/// white once any highlight is present. Decorative (the action bar
-/// carries the same actions accessibly), so semantics are excluded
-/// and gestures pass through.
+/// Persistent edge labels (requirements §3 amendment 27 Oct 2026): plain
+/// text at left and right edges, highlighting toward the drag direction.
 class _EdgeLabels extends StatelessWidget {
-  const _EdgeLabels({required this.drag});
+  const _EdgeLabels({required this.drag, required this.directions});
 
   /// Effective card offset: drag offset, or exit-flight offset.
   final Offset drag;
+  final SwipeDirections directions;
 
   static const double _threshold = 80;
   static const double _baseOpacity = 0.45;
@@ -297,43 +329,104 @@ class _EdgeLabels extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double keep = _intensity(-drag.dx);
-    final double delete = _intensity(drag.dx);
-    final double maybe = _intensity(-drag.dy);
-    final double favourite = _intensity(drag.dy);
+    final bool rightIsKeep = directions == SwipeDirections.rightKeepLeftDelete;
+    final double right = _intensity(drag.dx);
+    final double left = _intensity(-drag.dx);
     return IgnorePointer(
       child: ExcludeSemantics(
         child: Stack(
           children: <Widget>[
-            _EdgeLabel(
-              alignment: Alignment.centerLeft,
-              padding: EdgeInsets.only(left: context.sizes.lg),
-              text: AppStrings.tr(AppStrings.edgeKeep),
-              highlight: keep,
-              highlightColor: context.palette.success,
-            ),
-            _EdgeLabel(
-              alignment: Alignment.centerRight,
-              padding: EdgeInsets.only(right: context.sizes.lg),
-              text: AppStrings.tr(AppStrings.edgeDelete),
-              highlight: delete,
-              highlightColor: context.palette.error,
-            ),
-            _EdgeLabel(
-              alignment: Alignment.topCenter,
-              padding: EdgeInsets.only(top: context.sizes.lg),
-              text: AppStrings.tr(AppStrings.edgeMaybe),
-              highlight: maybe,
-              highlightColor: context.palette.warning,
-            ),
-            _EdgeLabel(
-              alignment: Alignment.bottomCenter,
-              padding: EdgeInsets.only(bottom: context.sizes.lg),
-              text: AppStrings.tr(AppStrings.edgeFavourite),
-              highlight: favourite,
-              highlightColor: context.palette.primary,
-            ),
+            // _EdgeLabel(
+            //   alignment: Alignment.centerLeft,
+            //   padding: EdgeInsets.only(left: context.sizes.lg),
+            //   text: AppStrings.tr(
+            //     rightIsKeep ? AppStrings.edgeDelete : AppStrings.edgeKeep,
+            //   ),
+            //   highlight: left,
+            //   highlightColor: rightIsKeep
+            //       ? context.palette.error
+            //       : context.palette.success,
+            // ),
+            // _EdgeLabel(
+            //   alignment: Alignment.centerRight,
+            //   padding: EdgeInsets.only(right: context.sizes.lg),
+            //   text: AppStrings.tr(
+            //     rightIsKeep ? AppStrings.edgeKeep : AppStrings.edgeDelete,
+            //   ),
+            //   highlight: right,
+            //   highlightColor: rightIsKeep
+            //       ? context.palette.success
+            //       : context.palette.error,
+            // ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom gradient tint on the photo card (requirements §3 / design §7).
+///
+/// Anchored to the bottom of the card only.
+/// Fades from solid color at the bottom to transparent toward the middle.
+/// Scales with drag progress intensity curve.
+class _SwipeTintOverlay extends StatelessWidget {
+  const _SwipeTintOverlay({required this.drag, required this.directions});
+
+  final Offset drag;
+  final SwipeDirections directions;
+
+  static const double _threshold = 80;
+
+  @override
+  Widget build(BuildContext context) {
+    final double dx = drag.dx;
+    if (dx.abs() < 1.0) {
+      return const SizedBox.shrink();
+    }
+
+    final double intensity = (dx.abs() / _threshold).clamp(0.0, 1.0);
+    if (intensity <= 0.01) {
+      return const SizedBox.shrink();
+    }
+
+    final bool isRight = dx > 0;
+    final bool rightIsKeep = directions == SwipeDirections.rightKeepLeftDelete;
+    final bool isKeep = isRight ? rightIsKeep : !rightIsKeep;
+
+    final Color actionColor = isKeep
+        ? context.palette.success
+        : context.palette.error;
+
+    return IgnorePointer(
+      child: ExcludeSemantics(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(context.sizes.radiusLg),
+          child: Stack(
+            fit: StackFit.expand,
+            children: <Widget>[
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: 260,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: <Color>[
+                        actionColor.withValues(alpha: 0.85 * intensity),
+                        actionColor.withValues(alpha: 0.40 * intensity),
+                        actionColor.withValues(alpha: 0.0),
+                      ],
+                      stops: const <double>[0.0, 0.45, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
