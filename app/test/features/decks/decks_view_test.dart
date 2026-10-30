@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:image/image.dart' as img;
 import 'package:klara/core/theme/app_theme.dart';
+import 'package:klara/core/utils/formatters.dart';
 import 'package:klara/core/utils/result.dart';
 import 'package:klara/features/deck/widgets/swipe_card.dart';
 import 'package:klara/features/decks/binding/decks_binding.dart';
@@ -387,7 +388,13 @@ void main() {
       WidgetTester tester,
     ) async {
       await pumpDuplicates(tester);
-      expect(find.text('3 duplicate photos'), findsOneWidget);
+      // Stage 7 layout: the summary counts the NON-KEEPERS (b, c)
+      // and their size; the group header does the same per group.
+      expect(
+        find.text('2 photos · ${Formatters.formatBytes(2000)}'),
+        findsOneWidget,
+      );
+      expect(find.text('2 duplicates'), findsOneWidget);
       expect(find.text('Keeper'), findsOneWidget);
       // Stage 4 (owner decision, fix plan Stages 4+7): the
       // similarity slider is gone — matching is the scan's fixed
@@ -400,11 +407,18 @@ void main() {
       expect(Get.find<DuplicatesController>().groups.first.keeperId, 'b');
     });
 
-    testWidgets('mark non-keepers navigates to review with two photos', (
+    testWidgets('mark selected navigates to review with two photos', (
       WidgetTester tester,
     ) async {
       await pumpDuplicates(tester);
-      await tester.tap(find.text('Mark others for deletion'));
+      // Stage 7: the per-card buttons are gone; the one sticky
+      // button carries the live totals of the selected (both
+      // non-keepers start selected).
+      await tester.tap(
+        find.text(
+          'Mark 2 duplicates for review · ${Formatters.formatBytes(2000)}',
+        ),
+      );
       await tester.pumpAndSettle();
       expect(find.text('Review 2'), findsOneWidget);
     });

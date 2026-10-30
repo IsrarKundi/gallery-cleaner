@@ -47,8 +47,12 @@ Future<void> _pumpCard(
               for (final MediaAsset a in assets) a.id: _png,
             },
             failedThumbnails: <String>{},
+            selectedIds: <String>{
+              for (final MediaAsset a in assets)
+                if (a.id != keeperId) a.id,
+            },
             onKeeperTap: (_) {},
-            onMarkNonKeepers: () {},
+            onToggleSelection: (_) {},
           ),
         ),
       ),
@@ -68,6 +72,13 @@ void main() {
     expect(tester.widgetList(find.byType(Image)).length, 20);
     expect(find.text('+5'), findsOneWidget);
 
+    // Stage 7: tiles are large now, so the overflow tile sits far
+    // down the collapsed card — scroll it into view before tapping.
+    await tester.scrollUntilVisible(
+      find.text('+5'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('+5'));
     await tester.pumpAndSettle();
     expect(tester.widgetList(find.byType(Image)).length, 25);
@@ -85,6 +96,11 @@ void main() {
     expect(tester.widgetList(find.byType(Image)).length, 21);
     expect(find.text('+4'), findsOneWidget);
 
+    await tester.scrollUntilVisible(
+      find.text('+4'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.text('+4'));
     await tester.pumpAndSettle();
     expect(tester.widgetList(find.byType(Image)).length, 25);

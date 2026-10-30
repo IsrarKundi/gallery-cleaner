@@ -304,7 +304,7 @@ void main() {
       expect(controller.groups.first.keeperId, 'b');
     });
 
-    test('markNonKeepers writes the group marks to the duplicates '
+    test('markSelected writes the selected marks to the duplicates '
         'session', () async {
       final _Local local = _Local();
       final DuplicatesController controller = DuplicatesController(
@@ -315,11 +315,76 @@ void main() {
       // Navigation needs a GetMaterialApp (widget test covers
       // it); here only the durable write is asserted — the marks
       // must exist before any navigation would matter.
-      await controller.markNonKeepers(0).catchError((_) {});
+      await controller.markSelected().catchError((_) {});
       final DeckSession? session = local.sessions['duplicates'];
       expect(session, isNotNull);
       expect(session!.marks['a'], DeckMark.keep);
       expect(session.marks['b'], DeckMark.delete);
+    });
+
+    group('selection (Stage 7)', () {
+      Future<DuplicatesController> ready(_Local local) async {
+        final DuplicatesController controller = DuplicatesController(
+          media: _Media(),
+          local: local,
+        );
+        await controller.init();
+        return controller;
+      }
+
+      test('every non-keeper starts selected; totals follow', () async {
+        final DuplicatesController controller = await ready(_Local());
+        expect(controller.duplicateCount, 1);
+        expect(controller.duplicateBytes, 1000);
+        expect(controller.selectedCount, 1);
+        expect(controller.selectedBytes, 1000);
+        expect(controller.isSelected('b'), isTrue);
+        expect(controller.allSelected, isTrue);
+        expect(controller.anySelected, isTrue);
+      });
+
+      test('toggling spares and re-selects; keepers never toggle', () async {
+        final DuplicatesController controller = await ready(_Local());
+        controller.toggleSelection('b');
+        expect(controller.selectedCount, 0);
+        expect(controller.anySelected, isFalse);
+        controller.toggleSelection('b');
+        expect(controller.selectedCount, 1);
+        // The keeper and unknown ids are not selectable.
+        controller.toggleSelection('a');
+        controller.toggleSelection('ghost');
+        expect(controller.selectedIds, <String>{'b'});
+      });
+
+      test('select all / deselect all cover every non-keeper', () async {
+        final DuplicatesController controller = await ready(_Local());
+        controller.deselectAll();
+        expect(controller.selectedCount, 0);
+        controller.selectAll();
+        expect(controller.selectedIds, <String>{'b'});
+      });
+
+      test('keeper change moves the selection with the keeper', () async {
+        final DuplicatesController controller = await ready(_Local());
+        controller.toggleSelection('b'); // spare b first
+        controller.changeKeeper(0, 'b');
+        // b is the keeper now: unselected. a, the previous keeper,
+        // is an ordinary non-keeper: selected by default.
+        expect(controller.isSelected('b'), isFalse);
+        expect(controller.isSelected('a'), isTrue);
+        expect(controller.selectedCount, 1);
+      });
+
+      test('markSelected with everything spared writes nothing', () async {
+        final _Local local = _Local();
+        final DuplicatesController controller = await ready(local);
+        controller.deselectAll();
+        await controller.markSelected();
+        expect(local.sessions.containsKey('duplicates'), isFalse);
+      });
+      // The mixed case — a spared non-keeper gets no mark while a
+      // selected one is marked delete — needs 2+ non-keepers and
+      // is covered in duplicates_view_test.dart.
     });
 
     test('denied permission shows the denied state', () async {

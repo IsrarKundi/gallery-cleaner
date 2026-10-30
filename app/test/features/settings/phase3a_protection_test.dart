@@ -349,7 +349,7 @@ void main() {
       final DuplicatesController controller = await make(true);
       expect(controller.groups.length, 1);
       expect(controller.groups.first.keeperId, 'a');
-      await controller.markNonKeepers(0);
+      await controller.markSelected();
       expect(controller.protectedExcludedCount.value, 1);
       final DeckSession? saved = (await controller.local.loadSession(
         DuplicatesController.sessionKey,
@@ -364,7 +364,7 @@ void main() {
       // test); the session write happens before navigation, so a
       // navigation error here must not mask the mark assertions.
       try {
-        await controller.markNonKeepers(0);
+        await controller.markSelected();
       } catch (_) {}
       expect(controller.protectedExcludedCount.value, 0);
       final DeckSession? saved = (await controller.local.loadSession(

@@ -138,8 +138,9 @@ void main() {
           // Failed (not loading) thumbnails, so no spinner keeps
           // pumpAndSettle from ever settling.
           failedThumbnails: <String>{'k1', 'o1'},
+          selectedIds: <String>{'o1'},
           onKeeperTap: (_) {},
-          onMarkNonKeepers: () {},
+          onToggleSelection: (_) {},
         ),
       ),
       surface: const Size(600, 1200),

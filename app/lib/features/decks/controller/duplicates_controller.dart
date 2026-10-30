@@ -9,14 +9,17 @@
 // longer exists, and Cleanup's rule is a fixed compare table,
 // not a user threshold.
 //
-// Keeper changes are local until "Mark others for deletion":
-// that action writes delete marks for the group's non-keepers
-// (and keep marks for the keeper, so it never reappears
-// undecided) into the `duplicates` session and navigates to
-// /review with the non-keeper list — the same arguments +
-// filterKey contract the deck uses. Nothing is deleted here;
-// review + native confirmation still own removal
-// (requirements §4).
+// Keeper changes are local until the screen's one mark action
+// (fix plan Stage 7): every non-keeper starts SELECTED; tapping
+// a photo's round mark spares it. "Mark N duplicates for review"
+// writes delete marks for the selected non-keepers across ALL
+// groups (and keep marks for the keeper of each group that
+// contributes, so it never reappears undecided) into the
+// `duplicates` session and navigates to /review with the marked
+// list — the same arguments + filterKey contract the deck uses.
+// Nothing is deleted here; review + native confirmation still
+// own removal (requirements §4). Spared non-keepers get no mark
+// at all: they stay undecided for a later run.
 
 import 'dart:async';
 import 'dart:typed_data';
@@ -68,7 +71,7 @@ class DuplicatesController extends GetxController {
   /// Phase 2.3: bytes live in the shared thumbnail service.
   final ThumbnailService _thumbnails;
 
-  /// Session key for marks written by "mark non-keepers".
+  /// Session key for marks written by the mark action.
   static const String sessionKey = 'duplicates';
 
   /// Grid tile thumbnail edge in pixels.
@@ -77,6 +80,48 @@ class DuplicatesController extends GetxController {
   final Rx<DecksStatus> status = DecksStatus.loading.obs;
   final RxString errorKey = ''.obs;
   final RxList<DuplicateGroup> groups = <DuplicateGroup>[].obs;
+
+  /// Stage 7: the selection the mark action will write — the ids
+  /// of the non-keepers currently selected for marking. Every
+  /// non-keeper starts selected (Cleanup's pre-selected list);
+  /// sparing removes an id here, it never touches the groups.
+  /// Screen state only: nothing persists until the mark action
+  /// writes the session.
+  final RxSet<String> selectedIds = <String>{}.obs;
+
+  /// Total duplicate photos: the non-keepers across all groups.
+  int get duplicateCount => groups.fold<int>(
+    0,
+    (int sum, DuplicateGroup g) => sum + g.nonKeepers.length,
+  );
+
+  /// Total size of those non-keepers.
+  int get duplicateBytes => groups.fold<int>(
+    0,
+    (int sum, DuplicateGroup g) =>
+        sum +
+        g.nonKeepers.fold<int>(0, (int s, MediaAsset a) => s + a.sizeBytes),
+  );
+
+  /// The selected non-keepers, in group order.
+  List<MediaAsset> get selectedNonKeepers => <MediaAsset>[
+    for (final DuplicateGroup group in groups)
+      for (final MediaAsset asset in group.nonKeepers)
+        if (selectedIds.contains(asset.id)) asset,
+  ];
+
+  int get selectedCount => selectedNonKeepers.length;
+
+  int get selectedBytes => selectedNonKeepers.fold<int>(
+    0,
+    (int sum, MediaAsset a) => sum + a.sizeBytes,
+  );
+
+  bool isSelected(String assetId) => selectedIds.contains(assetId);
+
+  bool get allSelected => duplicateCount > 0 && selectedCount == duplicateCount;
+
+  bool get anySelected => selectedCount > 0;
 
   /// Phase 2.3: service-owned bytes / failures for the grid size.
   /// Views read through these getters unchanged.
@@ -222,6 +267,7 @@ class DuplicatesController extends GetxController {
     groups.assignAll(
       groupsFromMemberships(byId, scan.memberships, ScanGroupKind.duplicate),
     );
+    _resetSelection();
     // One prefetch for all member tiles (deduped by the service).
     _thumbnails.prefetch(<String>[
       for (final DuplicateGroup group in groups)
@@ -239,8 +285,25 @@ class DuplicatesController extends GetxController {
     await media.openAppSettings();
   }
 
+  /// Every non-keeper selected: the state each fresh group list
+  /// starts in (Stage 7).
+  void _resetSelection() {
+    selectedIds
+      ..clear()
+      ..addAll(<String>[
+        for (final DuplicateGroup group in groups)
+          for (final MediaAsset asset in group.nonKeepers) asset.id,
+      ]);
+  }
+
   /// User picks another keeper in [groupIndex]. Only member ids are
   /// offered by the view, so the keeper always stays in the group.
+  ///
+  /// Selection follows the keeper (Stage 7): the new keeper leaves
+  /// the selection (a keeper is never marked), and the previous
+  /// keeper — now an ordinary non-keeper — joins it, selected like
+  /// every non-keeper. A spare the user set on it earlier is
+  /// superseded by the keeper change itself.
   void changeKeeper(int groupIndex, String assetId) {
     if (groupIndex < 0 || groupIndex >= groups.length) {
       return;
@@ -249,28 +312,59 @@ class DuplicatesController extends GetxController {
     if (!group.assets.any((MediaAsset a) => a.id == assetId)) {
       return;
     }
+    final String previousKeeper = group.keeperId;
     groups[groupIndex] = group.copyWithKeeper(assetId);
+    selectedIds.remove(assetId);
+    if (previousKeeper != assetId) {
+      selectedIds.add(previousKeeper);
+    }
   }
 
-  /// Writes this group's marks (non-keepers delete, keeper keep) to
-  /// the `duplicates` session, then navigates to review with the
-  /// non-keeper list. On a session-write failure nothing navigates:
-  /// the marks must be durable before review edits them.
+  /// Spares a selected non-keeper, or re-selects a spared one.
+  /// Keepers and unknown ids are not selectable: no-op.
+  void toggleSelection(String assetId) {
+    final bool isNonKeeper = groups.any(
+      (DuplicateGroup g) =>
+          g.keeperId != assetId &&
+          g.assets.any((MediaAsset a) => a.id == assetId),
+    );
+    if (!isNonKeeper) {
+      return;
+    }
+    if (selectedIds.contains(assetId)) {
+      selectedIds.remove(assetId);
+    } else {
+      selectedIds.add(assetId);
+    }
+  }
+
+  /// Selects every non-keeper in every group.
+  void selectAll() => _resetSelection();
+
+  /// Spares everything: the mark action has nothing to write.
+  void deselectAll() => selectedIds.clear();
+
+  /// The screen's one mark action (Stage 7): writes the SELECTED
+  /// non-keepers' marks (delete; keeper keep for each group that
+  /// contributes at least one) to the `duplicates` session, then
+  /// navigates to review with the marked list. On a session-write
+  /// failure nothing navigates: the marks must be durable before
+  /// review edits them. Spared non-keepers and groups contributing
+  /// nothing are left completely untouched.
   ///
   /// Phase 3A protection: when protection is ON, a favourited
-  /// non-keeper is NOT marked delete — it is marked keep instead
-  /// (keeper-protected: decided, so it never reappears undecided)
-  /// and excluded from the review list, with
+  /// selected non-keeper is NOT marked delete — it is marked keep
+  /// instead (keeper-protected: decided, so it never reappears
+  /// undecided) and excluded from the review list, with
   /// [protectedExcludedCount] explaining how many. When every
-  /// non-keeper is protected there is nothing to review, so no
-  /// navigation happens — the banner is the whole outcome.
-  Future<void> markNonKeepers(int groupIndex) async {
-    if (groupIndex < 0 || groupIndex >= groups.length) {
+  /// selected non-keeper is protected there is nothing to review,
+  /// so no navigation happens — the banner is the whole outcome.
+  Future<void> markSelected() async {
+    if (selectedCount == 0) {
       return;
     }
     errorKey.value = '';
     protectedExcludedCount.value = 0;
-    final DuplicateGroup group = groups[groupIndex];
     final Result<DeckSession?> loaded = await local.loadSession(sessionKey);
     DeckSession? session;
     final bool loadOk = loaded.fold(
@@ -295,17 +389,25 @@ class DuplicatesController extends GetxController {
       session?.marks ?? <String, DeckMark>{},
     );
     final List<MediaAsset> toReview = <MediaAsset>[];
-    for (final MediaAsset asset in group.nonKeepers) {
-      if (protectionOn &&
-          isProtected(asset, klaraFavourites: klaraFavourites)) {
-        marks[asset.id] = DeckMark.keep;
-        protectedExcludedCount.value += 1;
-      } else {
-        marks[asset.id] = DeckMark.delete;
-        toReview.add(asset);
+    for (final DuplicateGroup group in groups) {
+      final List<MediaAsset> chosen = group.nonKeepers
+          .where((MediaAsset a) => selectedIds.contains(a.id))
+          .toList();
+      if (chosen.isEmpty) {
+        continue;
       }
+      for (final MediaAsset asset in chosen) {
+        if (protectionOn &&
+            isProtected(asset, klaraFavourites: klaraFavourites)) {
+          marks[asset.id] = DeckMark.keep;
+          protectedExcludedCount.value += 1;
+        } else {
+          marks[asset.id] = DeckMark.delete;
+          toReview.add(asset);
+        }
+      }
+      marks[group.keeperId] = DeckMark.keep;
     }
-    marks[group.keeperId] = DeckMark.keep;
     final Result<void> saved = await local.saveSession(
       DeckSession(
         filterKey: sessionKey,
