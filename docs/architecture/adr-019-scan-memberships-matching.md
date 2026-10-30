@@ -84,6 +84,9 @@ dependencies at once:
    Cleanup's own (unknown, server-tuned) measure scales.
    The numbers were NOT retuned in this stage; a calibration
    decision is the owner's (see the report's stuck point).
+   **Superseded in part by ADR-023 (30 Oct 2026):** the owner
+   set the threshold to wipe.'s own 4.2; the weights, the
+   measures and the null rule in this decision stand.
 
 7. **The Duplicates slider is removed** (owner decision,
    Stage 7, given early because the engine replacement forces

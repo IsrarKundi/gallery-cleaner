@@ -8,10 +8,13 @@
 // inspection — they are wipe.'s definitions, not a claim about
 // Cleanup's internals.
 //
-// The DECISION RULE is the teardown's, with the plan's fallback
-// numbers (Cleanup's live values are server-side, UNKNOWN):
+// The SCORE is the teardown's formula with the plan's fallback
+// weights (Cleanup's live values are server-side, UNKNOWN):
 //   score = 2.3 * reblur + 1.0 * edgeWidth + 0.75 * coherence
-//   blurry  <=>  score >= 2.2
+// The LINE is wipe.'s own: Stage 4 shipped Cleanup's fallback
+// 2.2, whose sample validation flagged sharp photos too; the
+// owner set the line at 4.2 on 30 Oct 2026 (ADR-023).
+//   blurry  <=>  score >= 4.2
 // Missing measures count as 0, and when BOTH reblur and edgeWidth
 // are unavailable the photo is NOT flagged (the teardown's null
 // rule). A photo is read at a small size for this pass: the
@@ -39,11 +42,17 @@ import 'dart:math' as math;
 
 import 'package:image/image.dart' as img;
 
-/// Cleanup's fallback weights and threshold (plan Stage 4; their
-/// live values are server-side and UNKNOWN — see file doc).
+/// Cleanup's fallback weights (plan Stage 4; their live values
+/// are server-side and UNKNOWN — see file doc).
 const double blurReblurWeight = 2.3;
 const double blurCoherenceWeight = 0.75;
-const double blurScoreThreshold = 2.2;
+
+/// The blur line: wipe.'s own, set by the owner at 4.2
+/// (ADR-023). Stage 4 shipped Cleanup's fallback 2.2, which
+/// flagged the sharp validation samples too (2.62–3.78); 4.2
+/// separates them from radius ≥ 2 blur on those samples
+/// (min 4.54) and accepts missing very light (radius-1) blur.
+const double blurScoreThreshold = 4.2;
 
 /// Edge pixels: magnitude at least this fraction of the peak.
 const double edgeThresholdFraction = 0.2;

@@ -33,7 +33,12 @@ import '../media/media_asset.dart';
 /// persisted product — a version 1 snapshot has none, so it is
 /// stale by this check alone and the first Stage 6 scan
 /// recomputes the whole matching phase, videos included.
-const int scanMembershipAlgorithmVersion = 2;
+/// Version 3 (blur calibration, ADR-023): the blur line moved
+/// from Cleanup's fallback 2.2 to wipe.'s owner-set 4.2 — a
+/// version 2 snapshot's Blurry set was built under the old
+/// line, so it is stale by this check alone and the first
+/// scan under this build recomputes and restamps.
+const int scanMembershipAlgorithmVersion = 3;
 
 /// Meta key (in the stores' key/value area) holding the
 /// persisted membership algorithm version.

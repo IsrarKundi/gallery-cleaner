@@ -358,7 +358,9 @@ void main() {
       ];
       final Map<String, PhotoAssessment> assessments = _map(<PhotoAssessment>[
         _assessment('a'),
-        _assessment('b', blurScore: 3.5),
+        // 5.0: clearly over the blur line (4.2 since ADR-023;
+        // this fixture was 3.5 under the old 2.2 line).
+        _assessment('b', blurScore: 5.0),
         _assessment('dark', dHash: 0xFFFFFFFF, luminance: 10),
       ]);
       final ScanMemberships m = buildScanMemberships(

@@ -1,7 +1,8 @@
 // Stage 4 blur measures on synthetic images (requirements §7):
 // flat colour (Cleanup's no-measures rule), sharp edges and
 // blurred edges must order as expected under the fallback score
-// 2.3*reblur + 1.0*edgeWidth + 0.75*coherence, blurry at >= 2.2.
+// 2.3*reblur + 1.0*edgeWidth + 0.75*coherence, blurry at >= 4.2
+// (wipe.'s owner-set line, ADR-023).
 // The three native measure formulas are Cleanup-side UNKNOWN
 // (algorithms.md §4) — these tests pin OUR implementation's
 // behaviour, not Cleanup's numbers.
@@ -30,11 +31,11 @@ img.Image _step(int size) {
   return image;
 }
 
-img.Image _texture(int size) {
+img.Image _texture(int size, {int block = 4}) {
   final img.Image image = img.Image(width: size, height: size);
   for (int y = 0; y < size; y++) {
     for (int x = 0; x < size; x++) {
-      final int v = ((x ~/ 4) + (y ~/ 4)) % 2 == 0 ? 230 : 25;
+      final int v = ((x ~/ block) + (y ~/ block)) % 2 == 0 ? 230 : 25;
       image.setPixelRgb(x, y, v, v, v);
     }
   }
@@ -66,9 +67,17 @@ void main() {
     });
 
     test('a heavily blurred texture is flagged blurry', () {
+      // Photo-scale blocks: at the old fixture's 4 px blocks a
+      // radius-8 blur flattens the texture to near-uniform
+      // (score 2.30 — the measures' extreme-blur flattening,
+      // close to the flat-frame null case), so it cannot stand
+      // for a blurred photo under the 4.2 line (ADR-023). At
+      // 16 px blocks the same radius-8 blur leaves wide soft
+      // edges and scores 22.1.
       final BlurAssessment blurred = assessBlur(
-        img.gaussianBlur(_texture(128), radius: 8),
+        img.gaussianBlur(_texture(128, block: 16), radius: 8),
       );
+      expect(blurred.score, greaterThan(blurScoreThreshold));
       expect(blurred.isBlurry, isTrue);
     });
 
@@ -91,7 +100,8 @@ void main() {
       expect(none.isBlurry, isFalse);
     });
 
-    test('the blur threshold is the fallback 2.2', () {
+    test('the blur threshold is wipe.\'s owner-set 4.2 (ADR-023)', () {
+      expect(blurScoreThreshold, 4.2);
       const BlurAssessment at = BlurAssessment(edgeWidth: blurScoreThreshold);
       expect(at.isBlurry, isTrue);
       const BlurAssessment under = BlurAssessment(
