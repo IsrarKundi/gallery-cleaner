@@ -16,7 +16,6 @@ import 'dart:async';
 import '../../core/utils/result.dart';
 import '../local/local_service.dart';
 import '../local/review_ask_store.dart';
-import '../share/share_service.dart';
 import '../trash/trash_entry.dart';
 import 'review_ask.dart';
 import 'review_ask_service.dart';
@@ -27,13 +26,11 @@ class ReviewAskServiceImpl implements ReviewAskService {
     required this.local,
     required this.store,
     required this.gateway,
-    required this.share,
   });
 
   final LocalService local;
   final ReviewAskStore store;
   final ReviewGateway gateway;
-  final ShareService share;
 
   ReviewAskState? _state;
   Future<void> _tail = Future<void>.value();
@@ -194,15 +191,16 @@ class ReviewAskServiceImpl implements ReviewAskService {
   }
 
   @override
-  Future<void> answerWithFeedback(String text) async {
+  Future<void> answerWithFeedback() async {
+    // Marking the answer is the whole path: the submitted
+    // text stays in the sheet that collected it and is
+    // discarded with it — it never reaches this service, so
+    // nothing can send, share, or store it (owner decision
+    // 30 Oct 2026, ADR-020 addendum). A real feedback
+    // channel is a future decision.
     await _update(
       (ReviewAskState s) => reviewAskAnswered(s, ReviewAnswer.feedback),
     );
-    // The user picks the destination in the share sheet and
-    // sends it themselves — nothing is sent silently
-    // (decision 11). A dismissed sheet still counts as the
-    // feedback answer: the user wrote it and chose not to send.
-    await share.shareSummary(text: text);
   }
 
   @override

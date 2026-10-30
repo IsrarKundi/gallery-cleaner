@@ -162,7 +162,6 @@ class InitialBinding extends Bindings {
         local: Get.find<LocalService>(),
         store: Get.find<ReviewAskStore>(),
         gateway: Get.find<ReviewGateway>(),
-        share: Get.find<ShareService>(),
       ),
       fenix: true,
     );

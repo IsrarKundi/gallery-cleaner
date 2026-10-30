@@ -1,10 +1,11 @@
 // ReviewAskService tests (fix plan Stage 5, ADR-020 decisions
-// 6, 10, 11): the one-time seed counts from the app's real
+// 6, 10; feedback per the ADR-020 addendum, owner decision
+// 30 Oct 2026): the one-time seed counts from the app's real
 // records; counters move at the real events; the answers mark
-// first and hand over second (store prompt with listing
-// fallback; feedback via the share sheet, never sent silently).
-
-import 'dart:typed_data';
+// first (store prompt with listing fallback; feedback marks
+// the answer and the text is discarded — the service is
+// constructed with no share/send dependency at all, so
+// nothing can send, share, or store it).
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klara/core/utils/result.dart';
@@ -13,7 +14,6 @@ import 'package:klara/services/local/review_ask_store.dart';
 import 'package:klara/services/review_ask/review_ask.dart';
 import 'package:klara/services/review_ask/review_ask_service_impl.dart';
 import 'package:klara/services/review_ask/review_gateway.dart';
-import 'package:klara/services/share/share_service.dart';
 import 'package:klara/services/trash/trash_entry.dart';
 
 class _Local extends Fake implements LocalService {
@@ -74,19 +74,6 @@ class _Gateway implements ReviewGateway {
   }
 }
 
-class _Share extends Fake implements ShareService {
-  final List<String> texts = <String>[];
-
-  @override
-  Future<Result<void>> shareSummary({
-    required String text,
-    Uint8List? imagePng,
-  }) async {
-    texts.add(text);
-    return const Success<void>(null);
-  }
-}
-
 TrashEntry _entry(String id) => TrashEntry(
   assetId: id,
   typeInt: 1,
@@ -109,19 +96,16 @@ void main() {
   late _Local local;
   late _Store store;
   late _Gateway gateway;
-  late _Share share;
   late ReviewAskServiceImpl service;
 
   setUp(() {
     local = _Local();
     store = _Store();
     gateway = _Gateway();
-    share = _Share();
     service = ReviewAskServiceImpl(
       local: local,
       store: store,
       gateway: gateway,
-      share: share,
     );
   });
 
@@ -182,7 +166,6 @@ void main() {
         local: local,
         store: store,
         gateway: gateway,
-        share: share,
       );
       final ReviewAskState state = await reloaded.state();
       expect(state.totalDeletes, 4);
@@ -262,13 +245,18 @@ void main() {
       expect(store.stored.answered, ReviewAnswer.review);
     });
 
-    test('feedback: marks answered and hands the text to the '
-        'share sheet — nothing is sent anywhere else', () async {
-      await service.answerWithFeedback('The deck feels slow');
+    test('feedback: marks answered and that is all — the text '
+        'is discarded, nothing is sent, shared, or stored', () async {
+      await service.answerWithFeedback();
       expect(store.stored.answered, ReviewAnswer.feedback);
-      expect(share.texts, <String>['The deck feels slow']);
       expect(gateway.requests, 0);
       expect(gateway.listings, 0);
+      // The persisted record holds only the answer (the state
+      // has no field that could hold the submitted text), and
+      // the answer silences every place, as before.
+      expect(await service.isDue(ReviewAskPlace.delete), isFalse);
+      expect(await service.isDue(ReviewAskPlace.swipe), isFalse);
+      expect(await service.isDue(ReviewAskPlace.home), isFalse);
     });
   });
 

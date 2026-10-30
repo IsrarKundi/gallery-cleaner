@@ -1,9 +1,12 @@
 // ReviewAskSheet tests (fix plan Stage 5, ADR-020 decisions
-// 8–11): the decided sheet — kitten, stars, the owner's copy —
-// presents only when due; Let's Go routes to the store answer;
-// Maybe Later and barrier dismissal count as dismissals; the
-// unhappy path swaps the same sheet to the feedback form and
-// submitting hands the text to the service (share hand-off).
+// 8–10; feedback per the ADR-020 addendum, owner decision
+// 30 Oct 2026): the decided sheet — kitten, stars, the
+// owner's copy — presents only when due; Let's Go routes to
+// the store answer; Maybe Later and barrier dismissal count
+// as dismissals; the unhappy path swaps the same sheet to
+// the feedback form and submitting answers the ask — the
+// service interface takes no text, so the written words are
+// discarded with the sheet by construction.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,7 +22,7 @@ class _AskService extends Fake implements ReviewAskService {
   final List<ReviewAskPlace> shown = <ReviewAskPlace>[];
   final List<ReviewAskPlace> dismissed = <ReviewAskPlace>[];
   int reviewAnswers = 0;
-  final List<String> feedback = <String>[];
+  int feedbackAnswers = 0;
 
   @override
   Future<bool> isDue(ReviewAskPlace place) async => due;
@@ -40,8 +43,8 @@ class _AskService extends Fake implements ReviewAskService {
   }
 
   @override
-  Future<void> answerWithFeedback(String text) async {
-    feedback.add(text);
+  Future<void> answerWithFeedback() async {
+    feedbackAnswers++;
   }
 
   @override
@@ -120,7 +123,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(service.reviewAnswers, 1);
     expect(service.dismissed, isEmpty);
-    expect(service.feedback, isEmpty);
+    expect(service.feedbackAnswers, 0);
   });
 
   testWidgets('Maybe Later is a dismissal (re-arms at double)', (
@@ -145,7 +148,9 @@ void main() {
   });
 
   testWidgets('the unhappy path swaps to the feedback form in the '
-      'same sheet; submit hands the text over', (WidgetTester tester) async {
+      'same sheet; submit answers and discards the text', (
+    WidgetTester tester,
+  ) async {
     final _AskService service = _AskService();
     await pumpAndOpen(tester, service);
     await tester.tap(find.text("Not happy? Tell us what's wrong"));
@@ -157,7 +162,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Send feedback'));
     await tester.pumpAndSettle();
-    expect(service.feedback, <String>['Swiping feels laggy']);
+    // The answer is recorded; the text itself went nowhere —
+    // the fake cannot even receive it (the interface takes
+    // no text), and the sheet still shows the thanks.
+    expect(service.feedbackAnswers, 1);
     expect(service.dismissed, isEmpty);
     expect(find.text(AppStrings.tr(AppStrings.feedbackThanks)), findsOneWidget);
   });
@@ -171,7 +179,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text(AppStrings.tr(AppStrings.actionCancel)));
     await tester.pumpAndSettle();
-    expect(service.feedback, isEmpty);
+    expect(service.feedbackAnswers, 0);
     expect(service.dismissed, <ReviewAskPlace>[ReviewAskPlace.swipe]);
   });
 }

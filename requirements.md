@@ -160,8 +160,9 @@ re-arms that place only at double the count (10 → 20 → 40; 60 → 120 → 24
 feedback given anywhere silences every place forever. The ask is two steps: wipe.'s own sheet
 first (the owner's kitten artwork; "You just freed up {amount}" with the same real amount the
 finish screen shows), then the Play in-app review prompt for "Let's Go!", or a feedback form
-for unhappy users — submitted through the system share sheet so the user picks the destination
-(the app has no support channel; nothing is ever sent silently). (c) Empty-state pictures are
+for unhappy users — submitting it only marks the ask answered and discards the text (owner
+decision 30 Oct 2026, ADR-020 addendum: the app has no support channel, so feedback is not
+sent, shared, or stored anywhere until the owner adds one). (c) Empty-state pictures are
 limited to History and Trash only; every other empty screen keeps its icon.
 
 AMENDED 30 Oct 2026 (owner decision, wipe. fix plan Stage 6, ADR-021): a Similar Videos smart

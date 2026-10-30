@@ -4,7 +4,8 @@
 // once from the app's real records, counts swipes and delete
 // batches at the events that produce them, answers the places'
 // due checks, and performs the two answers (store prompt via
-// [ReviewGateway]; feedback via the share sheet — decision 11).
+// [ReviewGateway]; feedback marks the answer and the text is
+// discarded — owner decision 30 Oct 2026, ADR-020 addendum).
 // Every method is best-effort: a storage or store failure must
 // never break swiping, deleting, or navigation, so nothing here
 // throws.
@@ -42,11 +43,13 @@ abstract class ReviewAskService {
   /// back to the store listing when the dialog is unavailable.
   Future<void> answerWithReview();
 
-  /// The feedback path: marks the ask answered (feedback), then
-  /// hands [text] to the system share sheet so the USER picks
-  /// the destination and sends it — the app has no support
-  /// channel, and nothing is ever sent silently (decision 11).
-  Future<void> answerWithFeedback(String text);
+  /// The feedback path: marks the ask answered (feedback) —
+  /// that is all. The submitted text is discarded: it never
+  /// reaches this service, and is never sent, shared, or
+  /// stored anywhere (owner decision 30 Oct 2026, ADR-020
+  /// addendum, superseding decision 11). A real feedback
+  /// channel is a future decision.
+  Future<void> answerWithFeedback();
 
   /// The sheet amount for places with no batch of their own:
   /// the last batch's bytes, else the lifetime freed bytes from

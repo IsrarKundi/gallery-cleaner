@@ -6,10 +6,10 @@
 // up {amount}", "Let's Go!" / "Maybe Later". "Let's Go!" hands
 // over to the store prompt; the negative path ("Not happy?
 // Tell us what's wrong") swaps THIS sheet to a feedback form —
-// sheets never stack (design.md §6) — and submitting hands the
-// text to the system share sheet via the service, so the user
-// picks the destination; nothing is sent silently (decision
-// 11).
+// sheets never stack (design.md §6) — and submitting only
+// marks the ask answered: the text is discarded with the
+// sheet and goes nowhere (owner decision 30 Oct 2026,
+// ADR-020 addendum).
 //
 // Shared by the three ask places (finish screen, deck session
 // end, home), so it lives in the shared kit; it drives the
@@ -28,14 +28,15 @@ import 'app_snackbar.dart';
 import 'primary_button.dart';
 import 'secondary_button.dart';
 
-/// What the sheet produced.
+/// What the sheet produced. The feedback text is deliberately
+/// NOT carried out of the sheet: it dies with the sheet's
+/// text controller (owner decision 30 Oct 2026).
 enum _Outcome { dismissed, review, feedback }
 
 class _Result {
-  const _Result(this.outcome, [this.text]);
+  const _Result(this.outcome);
 
   final _Outcome outcome;
-  final String? text;
 }
 
 class ReviewAskSheet {
@@ -46,7 +47,8 @@ class ReviewAskSheet {
 
   /// Presents [place]'s ask when it is due, then routes the
   /// outcome through [service]: review → store prompt, feedback
-  /// → share hand-off, dismissal → re-arm at double the count.
+  /// → answered (text discarded), dismissal → re-arm at
+  /// double the count.
   /// Records the presentation before showing, so a crash
   /// mid-sheet still counts the place as shown. Returns true
   /// when a sheet was presented.
@@ -85,7 +87,7 @@ class ReviewAskSheet {
       case _Outcome.review:
         await service.answerWithReview();
       case _Outcome.feedback:
-        await service.answerWithFeedback(result.text ?? '');
+        await service.answerWithFeedback();
         if (context.mounted) {
           AppSnackbar.show(
             context,
@@ -225,8 +227,8 @@ class _SheetContentState extends State<_SheetContent> {
           label: AppStrings.tr(AppStrings.feedbackSubmit),
           onPressed: _feedbackText.text.trim().isEmpty
               ? null
-              : () => Navigator.of(context)
-                    .pop(_Result(_Outcome.feedback, _feedbackText.text.trim())),
+              : () =>
+                    Navigator.of(context).pop(const _Result(_Outcome.feedback)),
         ),
         SizedBox(height: context.sizes.sm),
         SecondaryButton(

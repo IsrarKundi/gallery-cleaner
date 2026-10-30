@@ -182,3 +182,20 @@ show comes from the app's real records — no invented statistics.
     documented cross-feature exception of the same kind as the
     decks feature importing the deck's `retention.dart`: a pure
     data class, no behaviour, no state.
+
+## Addendum — 30 Oct 2026: decision 11 SUPERSEDED (owner decision)
+
+The owner ruled: **feedback goes nowhere.** Decision 11's
+share-sheet resolution is superseded. The feedback form
+stays exactly as it is — the user writes, submits, and sees
+the "Thanks" confirmation — but submitting now does only one
+thing: it marks the ask answered (feedback; decision 7's
+silencing is unchanged). The text is simply discarded: the
+sheet keeps it in its own text field and never passes it
+out, the service's feedback answer takes no text at all, and
+the review-ask service no longer holds a `ShareService`
+dependency. Nothing is sent, shared, or stored. A real
+feedback channel is a future owner decision, not this
+change. The form's fields and the cancel-as-dismissal path
+are unchanged, and `ShareService` itself is untouched — the
+deck's session-summary share still uses it.
