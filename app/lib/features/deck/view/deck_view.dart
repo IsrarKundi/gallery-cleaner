@@ -227,7 +227,12 @@ class _Stage5WatcherState extends State<_Stage5Watcher> {
     }
     _presenting = true;
     _controller.lastFinishSummary.value = null;
-    await Get.toNamed<dynamic>(AppRoutes.finish, arguments: summary);
+    // Via the delete-moment celebration hop (ADR-024): it plays
+    // the 2 s popper, forwards this summary to the finish
+    // screen, and removes itself when the finish screen pops —
+    // so this await still spans the whole finish visit, exactly
+    // as the direct navigation did.
+    await Get.toNamed<dynamic>(AppRoutes.celebration, arguments: summary);
     _presenting = false;
     // A session that finished under the finish screen still
     // gets its session-end ask moment afterwards.

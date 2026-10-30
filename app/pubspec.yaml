@@ -83,6 +83,9 @@ flutter:
     - assets/icons/wipe_logo.svg
     - assets/animations/klara_logo_lottie.json
     - assets/animations/klara_logo_lottie_white.json
+    # Delete-moment celebration (ADR-024): the owner's approved
+    # 2 s popper Lottie, played once before the finish screen.
+    - assets/animations/delete_celebration_lottie.json
     # Fix plan Stage 5 (ADR-020): finish-screen popper (Fluent
     # Emoji, MIT), review-sheet kitten + stars (owner's assets),
     # and the two decided empty-state pictures.

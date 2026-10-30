@@ -7,6 +7,8 @@ import '../../features/decks/binding/smart_deck_binding.dart';
 import '../../features/decks/view/decks_view.dart';
 import '../../features/decks/view/duplicates_view.dart';
 import '../../features/decks/view/smart_deck_view.dart';
+import '../../features/celebration/binding/celebration_binding.dart';
+import '../../features/celebration/view/celebration_view.dart';
 import '../../features/finish/binding/finish_binding.dart';
 import '../../features/finish/view/finish_view.dart';
 import '../../features/history/binding/history_binding.dart';
@@ -66,6 +68,11 @@ class AppPages {
       name: AppRoutes.review,
       page: ReviewView.new,
       binding: ReviewBinding(),
+    ),
+    GetPage<dynamic>(
+      name: AppRoutes.celebration,
+      page: CelebrationView.new,
+      binding: CelebrationBinding(),
     ),
     GetPage<dynamic>(
       name: AppRoutes.finish,

@@ -402,7 +402,10 @@ void main() {
 
     // Stage 5 (ADR-020): a completed batch lands on the finish
     // screen first — the photo is permanently deleted, never
-    // trashed, and the space row says so.
+    // trashed, and the space row says so. The ADR-024
+    // celebration hop sits in between, but this harness runs
+    // with reduced motion on, so the hop skips straight here;
+    // the playing hop is covered by the celebration tests.
     expect(find.text('Congratulations!'), findsOneWidget);
     expect(find.text('Freed from your storage'), findsOneWidget);
     expect(trash.entries, isEmpty);

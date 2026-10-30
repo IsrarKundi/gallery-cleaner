@@ -78,6 +78,17 @@ class AppSizes {
   double get celebrationArt => 200;
   double get emptyArt => 160;
 
+  // Delete-moment celebration (ADR-024): the stage width for the
+  // 2 s popper Lottie that plays before the finish screen. The
+  // composition is a square 500-unit canvas with the confetti fan
+  // around the popper, so the stage is wider than the finish
+  // screen's tight-cropped popper art above. The fallback is the
+  // hop's never-stuck guarantee: if playback neither completes
+  // nor errors by then, the finish screen opens anyway (the
+  // splash hold-timer pattern).
+  double get celebrationAnim => 360;
+  Duration get celebrationFallback => const Duration(seconds: 3);
+
   // Splash (design.md §13): logo width on the splash screen, and the
   // hold-timer fallback. The Lottie itself is ~1.67s, so the timer only
   // fires if Lottie playback fails; it is cancelled on Lottie finish.

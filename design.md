@@ -114,7 +114,9 @@ For Klara — a utility, not a portfolio piece — borrow the boring parts: one 
   (MIT artwork) on top, "Congratulations!", then two tonal result rows (white-circle icon,
   big value, caption): photos deleted, and the space with its true state ("Freed from your
   storage" / "In Trash — freed on [date]"). One primary "Done" pinned at the bottom. No
-  saved-time row, ever.
+  saved-time row, ever. The screen is preceded by the delete-moment celebration (ADR-024):
+  a 2 s Lottie of the same popper firing, played once at batch completion; reduced motion
+  goes straight to this screen.
 - **Review-ask sheet (Stage 5, ADR-020):** the owner's decided design — heart-paws kitten
   photo, five soft gold stars (static), the title carrying the real freed amount, one primary
   ("Let's Go!"), "Maybe Later" as its text dismissal, and a quieter text action for the

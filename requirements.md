@@ -94,7 +94,9 @@ related work starts. This file is the single source of truth for the build; the 
   batch, the date read from the recorded Trash entries). This amends only the LANDING in the
   ADR-014 amendment above ("returns directly to the deck" becomes "via the finish screen, whose
   Done returns to the deck"); the delete mechanics of ADR-013/014/015 are unchanged. No
-  "saved time" figure is ever shown — there is no honest way to measure it.
+  "saved time" figure is ever shown — there is no honest way to measure it. The finish landing
+  is preceded by the delete-moment celebration (ADR-024): a two-second animation played once
+  at batch completion; with reduced motion on, the user goes straight to the finish screen.
 
 ## 5. Permissions and platform rules
 

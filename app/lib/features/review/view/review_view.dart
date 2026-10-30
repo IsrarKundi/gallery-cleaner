@@ -76,7 +76,11 @@ class ReviewView extends GetView<ReviewController> {
         // with the rest of the set. A whole-set run empties the
         // grid — the batch is complete, so the finish screen
         // replaces Review (fix plan Stage 5, ADR-020 decision 1;
-        // ADR-014's permanent delete is unchanged).
+        // ADR-014's permanent delete is unchanged) — via the
+        // delete-moment celebration hop (ADR-024), which plays
+        // the 2 s popper and forwards this same summary to the
+        // finish screen (or goes straight there when reduced
+        // motion is on).
         if (controller.items.isNotEmpty) {
           AppSnackbar.show(
             context,
@@ -88,7 +92,7 @@ class ReviewView extends GetView<ReviewController> {
           break;
         }
         Get.offNamed<dynamic>(
-          AppRoutes.finish,
+          AppRoutes.celebration,
           arguments: controller.finishSummary,
         );
       case ReviewDeleteOutcome.denied:

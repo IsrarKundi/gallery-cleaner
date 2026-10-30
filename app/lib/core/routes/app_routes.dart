@@ -17,6 +17,12 @@ class AppRoutes {
   /// (a FinishSummary).
   static const String finish = '/finish';
 
+  /// Delete-moment celebration (ADR-024): the short-lived hop
+  /// both delete completions route through on their way to the
+  /// finish screen. It receives the same FinishSummary argument
+  /// and forwards it untouched.
+  static const String celebration = '/celebration';
+
   /// 30-day Trash with restore.
   static const String trash = '/trash';
 
