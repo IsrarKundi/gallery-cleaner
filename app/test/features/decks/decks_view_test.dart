@@ -26,6 +26,7 @@ import 'package:klara/features/decks/view/smart_deck_view.dart';
 import 'package:klara/services/detection/photo_analysis.dart';
 import 'package:klara/services/detection/smart_decks.dart';
 import 'package:klara/services/local/local_service.dart';
+import 'package:klara/services/detection/scan_memberships.dart';
 import 'package:klara/services/media/media_asset.dart';
 import 'package:klara/services/media/media_service.dart';
 import 'package:klara/services/trash/trash_entry.dart';
@@ -34,6 +35,7 @@ MediaAsset _asset(
   String id, {
   String album = 'Camera',
   MediaAssetType type = MediaAssetType.image,
+  bool screenshot = false,
 }) {
   return MediaAsset(
     id: id,
@@ -44,7 +46,26 @@ MediaAsset _asset(
     createDate: DateTime(2026, 10, 20),
     title: '$id.jpg',
     albumName: album,
+    // Stage 4: the screenshots deck follows the enumeration's
+    // name marking, not the album name.
+    isScreenshot: screenshot,
   );
+}
+
+/// Stage 4: the scan makes three worker-isolate hops
+/// (fingerprint, blur, membership build). An isolate reply lands
+/// only when the fake zone pumps AND real time passes, so waiting
+/// interleaves both — bounded, so a broken scan fails the test's
+/// expects instead of hanging.
+Future<void> _waitForScan(WidgetTester tester, bool Function() done) async {
+  int rounds = 0;
+  while (!done() && rounds < 100) {
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    rounds++;
+  }
 }
 
 Uint8List _png() {
@@ -68,7 +89,7 @@ class _Media implements MediaService {
     : assets =
           assets ??
           <MediaAsset>[
-            _asset('shot', album: 'Screenshots'),
+            _asset('shot', album: 'Screenshots', screenshot: true),
             _asset('cam', album: 'Camera'),
           ];
 
@@ -116,6 +137,15 @@ class _Media implements MediaService {
 }
 
 class _Local implements LocalService {
+  // Stage 4: memberships default to "none stored" in this fake.
+  @override
+  Future<Result<ScanMemberships>> loadScanMemberships() async =>
+      const Success<ScanMemberships>(ScanMemberships.empty);
+
+  @override
+  Future<Result<void>> saveScanMemberships(ScanMemberships memberships) async =>
+      const Success<void>(null);
+
   @override
   Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
     return const Success<int>(0);
@@ -250,22 +280,6 @@ class _Local implements LocalService {
   }
 }
 
-PhotoAnalysis _analysis(String id, int hash, double blur) {
-  return PhotoAnalysis(
-    assetId: id,
-    hash: hash,
-    width: 10,
-    height: 10,
-    blurScore: blur,
-    meanLuminance: 128,
-    // Phase 5.3: seeded cache entries must carry the fingerprint
-    // of the asset they describe (size 1000, no modified date,
-    // matching _asset above) or the scanner rightly treats them
-    // as stale pre-5.3 entries and re-analyses.
-    sizeBytes: 1000,
-  );
-}
-
 void main() {
   tearDown(Get.reset);
 
@@ -293,22 +307,16 @@ void main() {
           ],
         ),
       );
-      // Phase 5.1: the hub scan analyses on a worker isolate, and
-      // isolate replies are real async events that starve under
-      // testWidgets' fake-async pumps — so wait for the scan in
-      // real async (bounded; a broken scan fails the expects
-      // below instead of hanging). Later pumps need no isolate
-      // work, so the rest of the test is unchanged.
-      await tester.runAsync(() async {
-        final DecksController controller = Get.find<DecksController>();
-        int waits = 0;
-        while ((controller.status.value == DecksStatus.loading ||
-                controller.status.value == DecksStatus.scanning) &&
-            waits < 500) {
-          await Future<void>.delayed(const Duration(milliseconds: 20));
-          waits++;
-        }
-      });
+      // The hub scan computes on worker isolates; replies starve
+      // under fake-async pumps alone — wait interleaved (bounded;
+      // a broken scan fails the expects below instead of hanging).
+      final DecksController hub = Get.find<DecksController>();
+      await _waitForScan(
+        tester,
+        () =>
+            hub.status.value != DecksStatus.loading &&
+            hub.status.value != DecksStatus.scanning,
+      );
       await tester.pumpAndSettle();
       await tester.scrollUntilVisible(
         find.text('Screenshots'),
@@ -329,18 +337,15 @@ void main() {
 
   group('duplicates view', () {
     Future<void> pumpDuplicates(WidgetTester tester) async {
+      // Stage 4: no seeded cache — the scan computes fingerprints
+      // from the fake's thumbnails. All three assets share the
+      // same PNG bytes and the same facts, so they form ONE exact
+      // -duplicate group with 'a' as keeper (equal blur, equal
+      // size, earliest first).
       Get.put<MediaService>(
         _Media(assets: <MediaAsset>[_asset('a'), _asset('b'), _asset('c')]),
       );
-      Get.put<LocalService>(
-        _Local(
-          analyses: <String, PhotoAnalysis>{
-            'a': _analysis('a', 0, 900),
-            'b': _analysis('b', 0, 10),
-            'c': _analysis('c', 63, 500),
-          },
-        ),
-      );
+      Get.put<LocalService>(_Local());
       await tester.pumpWidget(
         GetMaterialApp(
           theme: AppTheme.light,
@@ -368,19 +373,13 @@ void main() {
           ],
         ),
       );
-      // Phase 5.2: Duplicates init regroups off-isolate, and
-      // isolate replies starve under testWidgets' fake-async
-      // pumps — same remedy as the hub test above: wait for
-      // ready in real async (bounded), then settle outside it.
-      await tester.runAsync(() async {
-        final DuplicatesController controller =
-            Get.find<DuplicatesController>();
-        int waits = 0;
-        while (controller.status.value != DecksStatus.ready && waits < 500) {
-          await Future<void>.delayed(const Duration(milliseconds: 20));
-          waits++;
-        }
-      });
+      // The duplicates screen is fed by the shared library scan
+      // (worker isolates) — wait interleaved like the hub test.
+      final DuplicatesController controller = Get.find<DuplicatesController>();
+      await _waitForScan(
+        tester,
+        () => controller.status.value == DecksStatus.ready,
+      );
       await tester.pumpAndSettle();
     }
 
@@ -388,9 +387,12 @@ void main() {
       WidgetTester tester,
     ) async {
       await pumpDuplicates(tester);
-      expect(find.text('2 similar photos'), findsOneWidget);
+      expect(find.text('3 duplicate photos'), findsOneWidget);
       expect(find.text('Keeper'), findsOneWidget);
-      expect(find.byType(Slider), findsOneWidget);
+      // Stage 4 (owner decision, fix plan Stages 4+7): the
+      // similarity slider is gone — matching is the scan's fixed
+      // rule, there is no threshold control on this screen.
+      expect(find.byType(Slider), findsNothing);
       // Second thumbnail is 'b': tapping it makes 'b' the keeper.
       await tester.tap(find.byType(Image).at(1));
       await tester.pumpAndSettle();
@@ -398,13 +400,13 @@ void main() {
       expect(Get.find<DuplicatesController>().groups.first.keeperId, 'b');
     });
 
-    testWidgets('mark non-keepers navigates to review with one photo', (
+    testWidgets('mark non-keepers navigates to review with two photos', (
       WidgetTester tester,
     ) async {
       await pumpDuplicates(tester);
       await tester.tap(find.text('Mark others for deletion'));
       await tester.pumpAndSettle();
-      expect(find.text('Review 1'), findsOneWidget);
+      expect(find.text('Review 2'), findsOneWidget);
     });
   });
 

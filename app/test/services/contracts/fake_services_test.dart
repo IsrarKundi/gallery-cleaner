@@ -15,6 +15,7 @@ import 'package:klara/core/strings/app_strings.dart';
 import 'package:klara/core/utils/result.dart';
 import 'package:klara/services/detection/photo_analysis.dart';
 import 'package:klara/services/local/local_service.dart';
+import 'package:klara/services/detection/scan_memberships.dart';
 import 'package:klara/services/media/media_asset.dart';
 import 'package:klara/services/media/media_service.dart';
 import 'package:klara/services/trash/trash_entry.dart';
@@ -25,6 +26,15 @@ import 'package:photo_manager/photo_manager.dart';
 
 /// In-memory [LocalService] for contract and trash tests.
 class FakeLocalService implements LocalService {
+  // Stage 4: memberships default to "none stored" in this fake.
+  @override
+  Future<Result<ScanMemberships>> loadScanMemberships() async =>
+      const Success<ScanMemberships>(ScanMemberships.empty);
+
+  @override
+  Future<Result<void>> saveScanMemberships(ScanMemberships memberships) async =>
+      const Success<void>(null);
+
   final Map<String, DeckSession> sessions = <String, DeckSession>{};
   final List<TrashEntry> trash = <TrashEntry>[];
   final List<HistoryRecord> history = <HistoryRecord>[];

@@ -3,11 +3,12 @@
 part of 'klara_database.dart';
 
 // ignore_for_file: type=lint
-class $AnalysesTable extends Analyses with TableInfo<$AnalysesTable, Analyse> {
+class $AssetInfosTable extends AssetInfos
+    with TableInfo<$AssetInfosTable, AssetInfoRow> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
-  $AnalysesTable(this.attachedDatabase, [this._alias]);
+  $AssetInfosTable(this.attachedDatabase, [this._alias]);
   static const VerificationMeta _assetIdMeta = const VerificationMeta(
     'assetId',
   );
@@ -19,13 +20,13 @@ class $AnalysesTable extends Analyses with TableInfo<$AnalysesTable, Analyse> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _hashMeta = const VerificationMeta('hash');
+  static const VerificationMeta _typeMeta = const VerificationMeta('type');
   @override
-  late final GeneratedColumn<int> hash = GeneratedColumn<int>(
-    'hash',
+  late final GeneratedColumn<String> type = GeneratedColumn<String>(
+    'type',
     aliasedName,
     false,
-    type: DriftSqlType.int,
+    type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
   static const VerificationMeta _widthMeta = const VerificationMeta('width');
@@ -44,28 +45,6 @@ class $AnalysesTable extends Analyses with TableInfo<$AnalysesTable, Analyse> {
     aliasedName,
     false,
     type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _blurScoreMeta = const VerificationMeta(
-    'blurScore',
-  );
-  @override
-  late final GeneratedColumn<double> blurScore = GeneratedColumn<double>(
-    'blur_score',
-    aliasedName,
-    false,
-    type: DriftSqlType.double,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _meanLuminanceMeta = const VerificationMeta(
-    'meanLuminance',
-  );
-  @override
-  late final GeneratedColumn<double> meanLuminance = GeneratedColumn<double>(
-    'mean_luminance',
-    aliasedName,
-    false,
-    type: DriftSqlType.double,
     requiredDuringInsert: true,
   );
   static const VerificationMeta _sizeBytesMeta = const VerificationMeta(
@@ -90,37 +69,53 @@ class $AnalysesTable extends Analyses with TableInfo<$AnalysesTable, Analyse> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _algorithmVersionMeta = const VerificationMeta(
-    'algorithmVersion',
+  static const VerificationMeta _isEditedMeta = const VerificationMeta(
+    'isEdited',
   );
   @override
-  late final GeneratedColumn<int> algorithmVersion = GeneratedColumn<int>(
-    'algorithm_version',
+  late final GeneratedColumn<bool> isEdited = GeneratedColumn<bool>(
+    'is_edited',
     aliasedName,
     false,
-    type: DriftSqlType.int,
+    type: DriftSqlType.bool,
     requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_edited" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _isScreenshotMeta = const VerificationMeta(
+    'isScreenshot',
+  );
+  @override
+  late final GeneratedColumn<bool> isScreenshot = GeneratedColumn<bool>(
+    'is_screenshot',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_screenshot" IN (0, 1))',
+    ),
   );
   @override
   List<GeneratedColumn> get $columns => [
     assetId,
-    hash,
+    type,
     width,
     height,
-    blurScore,
-    meanLuminance,
     sizeBytes,
     modifiedDateMs,
-    algorithmVersion,
+    isEdited,
+    isScreenshot,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
   String get actualTableName => $name;
-  static const String $name = 'analyses';
+  static const String $name = 'asset_infos';
   @override
   VerificationContext validateIntegrity(
-    Insertable<Analyse> instance, {
+    Insertable<AssetInfoRow> instance, {
     bool isInserting = false,
   }) {
     final context = VerificationContext();
@@ -133,13 +128,13 @@ class $AnalysesTable extends Analyses with TableInfo<$AnalysesTable, Analyse> {
     } else if (isInserting) {
       context.missing(_assetIdMeta);
     }
-    if (data.containsKey('hash')) {
+    if (data.containsKey('type')) {
       context.handle(
-        _hashMeta,
-        hash.isAcceptableOrUnknown(data['hash']!, _hashMeta),
+        _typeMeta,
+        type.isAcceptableOrUnknown(data['type']!, _typeMeta),
       );
     } else if (isInserting) {
-      context.missing(_hashMeta);
+      context.missing(_typeMeta);
     }
     if (data.containsKey('width')) {
       context.handle(
@@ -157,25 +152,6 @@ class $AnalysesTable extends Analyses with TableInfo<$AnalysesTable, Analyse> {
     } else if (isInserting) {
       context.missing(_heightMeta);
     }
-    if (data.containsKey('blur_score')) {
-      context.handle(
-        _blurScoreMeta,
-        blurScore.isAcceptableOrUnknown(data['blur_score']!, _blurScoreMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_blurScoreMeta);
-    }
-    if (data.containsKey('mean_luminance')) {
-      context.handle(
-        _meanLuminanceMeta,
-        meanLuminance.isAcceptableOrUnknown(
-          data['mean_luminance']!,
-          _meanLuminanceMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_meanLuminanceMeta);
-    }
     if (data.containsKey('size_bytes')) {
       context.handle(
         _sizeBytesMeta,
@@ -191,16 +167,24 @@ class $AnalysesTable extends Analyses with TableInfo<$AnalysesTable, Analyse> {
         ),
       );
     }
-    if (data.containsKey('algorithm_version')) {
+    if (data.containsKey('is_edited')) {
       context.handle(
-        _algorithmVersionMeta,
-        algorithmVersion.isAcceptableOrUnknown(
-          data['algorithm_version']!,
-          _algorithmVersionMeta,
+        _isEditedMeta,
+        isEdited.isAcceptableOrUnknown(data['is_edited']!, _isEditedMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_isEditedMeta);
+    }
+    if (data.containsKey('is_screenshot')) {
+      context.handle(
+        _isScreenshotMeta,
+        isScreenshot.isAcceptableOrUnknown(
+          data['is_screenshot']!,
+          _isScreenshotMeta,
         ),
       );
     } else if (isInserting) {
-      context.missing(_algorithmVersionMeta);
+      context.missing(_isScreenshotMeta);
     }
     return context;
   }
@@ -208,16 +192,16 @@ class $AnalysesTable extends Analyses with TableInfo<$AnalysesTable, Analyse> {
   @override
   Set<GeneratedColumn> get $primaryKey => {assetId};
   @override
-  Analyse map(Map<String, dynamic> data, {String? tablePrefix}) {
+  AssetInfoRow map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
-    return Analyse(
+    return AssetInfoRow(
       assetId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}asset_id'],
       )!,
-      hash: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}hash'],
+      type: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}type'],
       )!,
       width: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
@@ -227,14 +211,6 @@ class $AnalysesTable extends Analyses with TableInfo<$AnalysesTable, Analyse> {
         DriftSqlType.int,
         data['${effectivePrefix}height'],
       )!,
-      blurScore: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}blur_score'],
-      )!,
-      meanLuminance: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}mean_luminance'],
-      )!,
       sizeBytes: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}size_bytes'],
@@ -243,92 +219,93 @@ class $AnalysesTable extends Analyses with TableInfo<$AnalysesTable, Analyse> {
         DriftSqlType.int,
         data['${effectivePrefix}modified_date_ms'],
       ),
-      algorithmVersion: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}algorithm_version'],
+      isEdited: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_edited'],
+      )!,
+      isScreenshot: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_screenshot'],
       )!,
     );
   }
 
   @override
-  $AnalysesTable createAlias(String alias) {
-    return $AnalysesTable(attachedDatabase, alias);
+  $AssetInfosTable createAlias(String alias) {
+    return $AssetInfosTable(attachedDatabase, alias);
   }
 }
 
-class Analyse extends DataClass implements Insertable<Analyse> {
+class AssetInfoRow extends DataClass implements Insertable<AssetInfoRow> {
   final String assetId;
-  final int hash;
+
+  /// MediaAssetType.name ('image' / 'video').
+  final String type;
   final int width;
   final int height;
-  final double blurScore;
-  final double meanLuminance;
   final int? sizeBytes;
   final int? modifiedDateMs;
-  final int algorithmVersion;
-  const Analyse({
+  final bool isEdited;
+  final bool isScreenshot;
+  const AssetInfoRow({
     required this.assetId,
-    required this.hash,
+    required this.type,
     required this.width,
     required this.height,
-    required this.blurScore,
-    required this.meanLuminance,
     this.sizeBytes,
     this.modifiedDateMs,
-    required this.algorithmVersion,
+    required this.isEdited,
+    required this.isScreenshot,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['asset_id'] = Variable<String>(assetId);
-    map['hash'] = Variable<int>(hash);
+    map['type'] = Variable<String>(type);
     map['width'] = Variable<int>(width);
     map['height'] = Variable<int>(height);
-    map['blur_score'] = Variable<double>(blurScore);
-    map['mean_luminance'] = Variable<double>(meanLuminance);
     if (!nullToAbsent || sizeBytes != null) {
       map['size_bytes'] = Variable<int>(sizeBytes);
     }
     if (!nullToAbsent || modifiedDateMs != null) {
       map['modified_date_ms'] = Variable<int>(modifiedDateMs);
     }
-    map['algorithm_version'] = Variable<int>(algorithmVersion);
+    map['is_edited'] = Variable<bool>(isEdited);
+    map['is_screenshot'] = Variable<bool>(isScreenshot);
     return map;
   }
 
-  AnalysesCompanion toCompanion(bool nullToAbsent) {
-    return AnalysesCompanion(
+  AssetInfosCompanion toCompanion(bool nullToAbsent) {
+    return AssetInfosCompanion(
       assetId: Value(assetId),
-      hash: Value(hash),
+      type: Value(type),
       width: Value(width),
       height: Value(height),
-      blurScore: Value(blurScore),
-      meanLuminance: Value(meanLuminance),
       sizeBytes: sizeBytes == null && nullToAbsent
           ? const Value.absent()
           : Value(sizeBytes),
       modifiedDateMs: modifiedDateMs == null && nullToAbsent
           ? const Value.absent()
           : Value(modifiedDateMs),
-      algorithmVersion: Value(algorithmVersion),
+      isEdited: Value(isEdited),
+      isScreenshot: Value(isScreenshot),
     );
   }
 
-  factory Analyse.fromJson(
+  factory AssetInfoRow.fromJson(
     Map<String, dynamic> json, {
     ValueSerializer? serializer,
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
-    return Analyse(
+    return AssetInfoRow(
       assetId: serializer.fromJson<String>(json['assetId']),
-      hash: serializer.fromJson<int>(json['hash']),
+      type: serializer.fromJson<String>(json['type']),
       width: serializer.fromJson<int>(json['width']),
       height: serializer.fromJson<int>(json['height']),
-      blurScore: serializer.fromJson<double>(json['blurScore']),
-      meanLuminance: serializer.fromJson<double>(json['meanLuminance']),
       sizeBytes: serializer.fromJson<int?>(json['sizeBytes']),
       modifiedDateMs: serializer.fromJson<int?>(json['modifiedDateMs']),
-      algorithmVersion: serializer.fromJson<int>(json['algorithmVersion']),
+      isEdited: serializer.fromJson<bool>(json['isEdited']),
+      isScreenshot: serializer.fromJson<bool>(json['isScreenshot']),
     );
   }
   @override
@@ -336,72 +313,65 @@ class Analyse extends DataClass implements Insertable<Analyse> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'assetId': serializer.toJson<String>(assetId),
-      'hash': serializer.toJson<int>(hash),
+      'type': serializer.toJson<String>(type),
       'width': serializer.toJson<int>(width),
       'height': serializer.toJson<int>(height),
-      'blurScore': serializer.toJson<double>(blurScore),
-      'meanLuminance': serializer.toJson<double>(meanLuminance),
       'sizeBytes': serializer.toJson<int?>(sizeBytes),
       'modifiedDateMs': serializer.toJson<int?>(modifiedDateMs),
-      'algorithmVersion': serializer.toJson<int>(algorithmVersion),
+      'isEdited': serializer.toJson<bool>(isEdited),
+      'isScreenshot': serializer.toJson<bool>(isScreenshot),
     };
   }
 
-  Analyse copyWith({
+  AssetInfoRow copyWith({
     String? assetId,
-    int? hash,
+    String? type,
     int? width,
     int? height,
-    double? blurScore,
-    double? meanLuminance,
     Value<int?> sizeBytes = const Value.absent(),
     Value<int?> modifiedDateMs = const Value.absent(),
-    int? algorithmVersion,
-  }) => Analyse(
+    bool? isEdited,
+    bool? isScreenshot,
+  }) => AssetInfoRow(
     assetId: assetId ?? this.assetId,
-    hash: hash ?? this.hash,
+    type: type ?? this.type,
     width: width ?? this.width,
     height: height ?? this.height,
-    blurScore: blurScore ?? this.blurScore,
-    meanLuminance: meanLuminance ?? this.meanLuminance,
     sizeBytes: sizeBytes.present ? sizeBytes.value : this.sizeBytes,
     modifiedDateMs: modifiedDateMs.present
         ? modifiedDateMs.value
         : this.modifiedDateMs,
-    algorithmVersion: algorithmVersion ?? this.algorithmVersion,
+    isEdited: isEdited ?? this.isEdited,
+    isScreenshot: isScreenshot ?? this.isScreenshot,
   );
-  Analyse copyWithCompanion(AnalysesCompanion data) {
-    return Analyse(
+  AssetInfoRow copyWithCompanion(AssetInfosCompanion data) {
+    return AssetInfoRow(
       assetId: data.assetId.present ? data.assetId.value : this.assetId,
-      hash: data.hash.present ? data.hash.value : this.hash,
+      type: data.type.present ? data.type.value : this.type,
       width: data.width.present ? data.width.value : this.width,
       height: data.height.present ? data.height.value : this.height,
-      blurScore: data.blurScore.present ? data.blurScore.value : this.blurScore,
-      meanLuminance: data.meanLuminance.present
-          ? data.meanLuminance.value
-          : this.meanLuminance,
       sizeBytes: data.sizeBytes.present ? data.sizeBytes.value : this.sizeBytes,
       modifiedDateMs: data.modifiedDateMs.present
           ? data.modifiedDateMs.value
           : this.modifiedDateMs,
-      algorithmVersion: data.algorithmVersion.present
-          ? data.algorithmVersion.value
-          : this.algorithmVersion,
+      isEdited: data.isEdited.present ? data.isEdited.value : this.isEdited,
+      isScreenshot: data.isScreenshot.present
+          ? data.isScreenshot.value
+          : this.isScreenshot,
     );
   }
 
   @override
   String toString() {
-    return (StringBuffer('Analyse(')
+    return (StringBuffer('AssetInfoRow(')
           ..write('assetId: $assetId, ')
-          ..write('hash: $hash, ')
+          ..write('type: $type, ')
           ..write('width: $width, ')
           ..write('height: $height, ')
-          ..write('blurScore: $blurScore, ')
-          ..write('meanLuminance: $meanLuminance, ')
           ..write('sizeBytes: $sizeBytes, ')
           ..write('modifiedDateMs: $modifiedDateMs, ')
-          ..write('algorithmVersion: $algorithmVersion')
+          ..write('isEdited: $isEdited, ')
+          ..write('isScreenshot: $isScreenshot')
           ..write(')'))
         .toString();
   }
@@ -409,119 +379,109 @@ class Analyse extends DataClass implements Insertable<Analyse> {
   @override
   int get hashCode => Object.hash(
     assetId,
-    hash,
+    type,
     width,
     height,
-    blurScore,
-    meanLuminance,
     sizeBytes,
     modifiedDateMs,
-    algorithmVersion,
+    isEdited,
+    isScreenshot,
   );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      (other is Analyse &&
+      (other is AssetInfoRow &&
           other.assetId == this.assetId &&
-          other.hash == this.hash &&
+          other.type == this.type &&
           other.width == this.width &&
           other.height == this.height &&
-          other.blurScore == this.blurScore &&
-          other.meanLuminance == this.meanLuminance &&
           other.sizeBytes == this.sizeBytes &&
           other.modifiedDateMs == this.modifiedDateMs &&
-          other.algorithmVersion == this.algorithmVersion);
+          other.isEdited == this.isEdited &&
+          other.isScreenshot == this.isScreenshot);
 }
 
-class AnalysesCompanion extends UpdateCompanion<Analyse> {
+class AssetInfosCompanion extends UpdateCompanion<AssetInfoRow> {
   final Value<String> assetId;
-  final Value<int> hash;
+  final Value<String> type;
   final Value<int> width;
   final Value<int> height;
-  final Value<double> blurScore;
-  final Value<double> meanLuminance;
   final Value<int?> sizeBytes;
   final Value<int?> modifiedDateMs;
-  final Value<int> algorithmVersion;
+  final Value<bool> isEdited;
+  final Value<bool> isScreenshot;
   final Value<int> rowid;
-  const AnalysesCompanion({
+  const AssetInfosCompanion({
     this.assetId = const Value.absent(),
-    this.hash = const Value.absent(),
+    this.type = const Value.absent(),
     this.width = const Value.absent(),
     this.height = const Value.absent(),
-    this.blurScore = const Value.absent(),
-    this.meanLuminance = const Value.absent(),
     this.sizeBytes = const Value.absent(),
     this.modifiedDateMs = const Value.absent(),
-    this.algorithmVersion = const Value.absent(),
+    this.isEdited = const Value.absent(),
+    this.isScreenshot = const Value.absent(),
     this.rowid = const Value.absent(),
   });
-  AnalysesCompanion.insert({
+  AssetInfosCompanion.insert({
     required String assetId,
-    required int hash,
+    required String type,
     required int width,
     required int height,
-    required double blurScore,
-    required double meanLuminance,
     this.sizeBytes = const Value.absent(),
     this.modifiedDateMs = const Value.absent(),
-    required int algorithmVersion,
+    required bool isEdited,
+    required bool isScreenshot,
     this.rowid = const Value.absent(),
   }) : assetId = Value(assetId),
-       hash = Value(hash),
+       type = Value(type),
        width = Value(width),
        height = Value(height),
-       blurScore = Value(blurScore),
-       meanLuminance = Value(meanLuminance),
-       algorithmVersion = Value(algorithmVersion);
-  static Insertable<Analyse> custom({
+       isEdited = Value(isEdited),
+       isScreenshot = Value(isScreenshot);
+  static Insertable<AssetInfoRow> custom({
     Expression<String>? assetId,
-    Expression<int>? hash,
+    Expression<String>? type,
     Expression<int>? width,
     Expression<int>? height,
-    Expression<double>? blurScore,
-    Expression<double>? meanLuminance,
     Expression<int>? sizeBytes,
     Expression<int>? modifiedDateMs,
-    Expression<int>? algorithmVersion,
+    Expression<bool>? isEdited,
+    Expression<bool>? isScreenshot,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (assetId != null) 'asset_id': assetId,
-      if (hash != null) 'hash': hash,
+      if (type != null) 'type': type,
       if (width != null) 'width': width,
       if (height != null) 'height': height,
-      if (blurScore != null) 'blur_score': blurScore,
-      if (meanLuminance != null) 'mean_luminance': meanLuminance,
       if (sizeBytes != null) 'size_bytes': sizeBytes,
       if (modifiedDateMs != null) 'modified_date_ms': modifiedDateMs,
-      if (algorithmVersion != null) 'algorithm_version': algorithmVersion,
+      if (isEdited != null) 'is_edited': isEdited,
+      if (isScreenshot != null) 'is_screenshot': isScreenshot,
       if (rowid != null) 'rowid': rowid,
     });
   }
 
-  AnalysesCompanion copyWith({
+  AssetInfosCompanion copyWith({
     Value<String>? assetId,
-    Value<int>? hash,
+    Value<String>? type,
     Value<int>? width,
     Value<int>? height,
-    Value<double>? blurScore,
-    Value<double>? meanLuminance,
     Value<int?>? sizeBytes,
     Value<int?>? modifiedDateMs,
-    Value<int>? algorithmVersion,
+    Value<bool>? isEdited,
+    Value<bool>? isScreenshot,
     Value<int>? rowid,
   }) {
-    return AnalysesCompanion(
+    return AssetInfosCompanion(
       assetId: assetId ?? this.assetId,
-      hash: hash ?? this.hash,
+      type: type ?? this.type,
       width: width ?? this.width,
       height: height ?? this.height,
-      blurScore: blurScore ?? this.blurScore,
-      meanLuminance: meanLuminance ?? this.meanLuminance,
       sizeBytes: sizeBytes ?? this.sizeBytes,
       modifiedDateMs: modifiedDateMs ?? this.modifiedDateMs,
-      algorithmVersion: algorithmVersion ?? this.algorithmVersion,
+      isEdited: isEdited ?? this.isEdited,
+      isScreenshot: isScreenshot ?? this.isScreenshot,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -532,8 +492,8 @@ class AnalysesCompanion extends UpdateCompanion<Analyse> {
     if (assetId.present) {
       map['asset_id'] = Variable<String>(assetId.value);
     }
-    if (hash.present) {
-      map['hash'] = Variable<int>(hash.value);
+    if (type.present) {
+      map['type'] = Variable<String>(type.value);
     }
     if (width.present) {
       map['width'] = Variable<int>(width.value);
@@ -541,20 +501,17 @@ class AnalysesCompanion extends UpdateCompanion<Analyse> {
     if (height.present) {
       map['height'] = Variable<int>(height.value);
     }
-    if (blurScore.present) {
-      map['blur_score'] = Variable<double>(blurScore.value);
-    }
-    if (meanLuminance.present) {
-      map['mean_luminance'] = Variable<double>(meanLuminance.value);
-    }
     if (sizeBytes.present) {
       map['size_bytes'] = Variable<int>(sizeBytes.value);
     }
     if (modifiedDateMs.present) {
       map['modified_date_ms'] = Variable<int>(modifiedDateMs.value);
     }
-    if (algorithmVersion.present) {
-      map['algorithm_version'] = Variable<int>(algorithmVersion.value);
+    if (isEdited.present) {
+      map['is_edited'] = Variable<bool>(isEdited.value);
+    }
+    if (isScreenshot.present) {
+      map['is_screenshot'] = Variable<bool>(isScreenshot.value);
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -564,16 +521,1083 @@ class AnalysesCompanion extends UpdateCompanion<Analyse> {
 
   @override
   String toString() {
-    return (StringBuffer('AnalysesCompanion(')
+    return (StringBuffer('AssetInfosCompanion(')
           ..write('assetId: $assetId, ')
-          ..write('hash: $hash, ')
+          ..write('type: $type, ')
           ..write('width: $width, ')
           ..write('height: $height, ')
-          ..write('blurScore: $blurScore, ')
-          ..write('meanLuminance: $meanLuminance, ')
           ..write('sizeBytes: $sizeBytes, ')
           ..write('modifiedDateMs: $modifiedDateMs, ')
-          ..write('algorithmVersion: $algorithmVersion, ')
+          ..write('isEdited: $isEdited, ')
+          ..write('isScreenshot: $isScreenshot, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ScanGroupsTable extends ScanGroups
+    with TableInfo<$ScanGroupsTable, ScanGroupRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ScanGroupsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _kindMeta = const VerificationMeta('kind');
+  @override
+  late final GeneratedColumn<String> kind = GeneratedColumn<String>(
+    'kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _seedIdMeta = const VerificationMeta('seedId');
+  @override
+  late final GeneratedColumn<String> seedId = GeneratedColumn<String>(
+    'seed_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _keeperIdMeta = const VerificationMeta(
+    'keeperId',
+  );
+  @override
+  late final GeneratedColumn<String> keeperId = GeneratedColumn<String>(
+    'keeper_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, kind, seedId, keeperId];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'scan_groups';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ScanGroupRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('kind')) {
+      context.handle(
+        _kindMeta,
+        kind.isAcceptableOrUnknown(data['kind']!, _kindMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_kindMeta);
+    }
+    if (data.containsKey('seed_id')) {
+      context.handle(
+        _seedIdMeta,
+        seedId.isAcceptableOrUnknown(data['seed_id']!, _seedIdMeta),
+      );
+    }
+    if (data.containsKey('keeper_id')) {
+      context.handle(
+        _keeperIdMeta,
+        keeperId.isAcceptableOrUnknown(data['keeper_id']!, _keeperIdMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ScanGroupRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ScanGroupRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      kind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}kind'],
+      )!,
+      seedId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}seed_id'],
+      ),
+      keeperId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}keeper_id'],
+      ),
+    );
+  }
+
+  @override
+  $ScanGroupsTable createAlias(String alias) {
+    return $ScanGroupsTable(attachedDatabase, alias);
+  }
+}
+
+class ScanGroupRow extends DataClass implements Insertable<ScanGroupRow> {
+  final int id;
+
+  /// ScanGroupKind.name: 'similar' / 'duplicate' / 'blurry' /
+  /// 'dark'.
+  final String kind;
+  final String? seedId;
+  final String? keeperId;
+  const ScanGroupRow({
+    required this.id,
+    required this.kind,
+    this.seedId,
+    this.keeperId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['kind'] = Variable<String>(kind);
+    if (!nullToAbsent || seedId != null) {
+      map['seed_id'] = Variable<String>(seedId);
+    }
+    if (!nullToAbsent || keeperId != null) {
+      map['keeper_id'] = Variable<String>(keeperId);
+    }
+    return map;
+  }
+
+  ScanGroupsCompanion toCompanion(bool nullToAbsent) {
+    return ScanGroupsCompanion(
+      id: Value(id),
+      kind: Value(kind),
+      seedId: seedId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(seedId),
+      keeperId: keeperId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(keeperId),
+    );
+  }
+
+  factory ScanGroupRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ScanGroupRow(
+      id: serializer.fromJson<int>(json['id']),
+      kind: serializer.fromJson<String>(json['kind']),
+      seedId: serializer.fromJson<String?>(json['seedId']),
+      keeperId: serializer.fromJson<String?>(json['keeperId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'kind': serializer.toJson<String>(kind),
+      'seedId': serializer.toJson<String?>(seedId),
+      'keeperId': serializer.toJson<String?>(keeperId),
+    };
+  }
+
+  ScanGroupRow copyWith({
+    int? id,
+    String? kind,
+    Value<String?> seedId = const Value.absent(),
+    Value<String?> keeperId = const Value.absent(),
+  }) => ScanGroupRow(
+    id: id ?? this.id,
+    kind: kind ?? this.kind,
+    seedId: seedId.present ? seedId.value : this.seedId,
+    keeperId: keeperId.present ? keeperId.value : this.keeperId,
+  );
+  ScanGroupRow copyWithCompanion(ScanGroupsCompanion data) {
+    return ScanGroupRow(
+      id: data.id.present ? data.id.value : this.id,
+      kind: data.kind.present ? data.kind.value : this.kind,
+      seedId: data.seedId.present ? data.seedId.value : this.seedId,
+      keeperId: data.keeperId.present ? data.keeperId.value : this.keeperId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ScanGroupRow(')
+          ..write('id: $id, ')
+          ..write('kind: $kind, ')
+          ..write('seedId: $seedId, ')
+          ..write('keeperId: $keeperId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, kind, seedId, keeperId);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ScanGroupRow &&
+          other.id == this.id &&
+          other.kind == this.kind &&
+          other.seedId == this.seedId &&
+          other.keeperId == this.keeperId);
+}
+
+class ScanGroupsCompanion extends UpdateCompanion<ScanGroupRow> {
+  final Value<int> id;
+  final Value<String> kind;
+  final Value<String?> seedId;
+  final Value<String?> keeperId;
+  const ScanGroupsCompanion({
+    this.id = const Value.absent(),
+    this.kind = const Value.absent(),
+    this.seedId = const Value.absent(),
+    this.keeperId = const Value.absent(),
+  });
+  ScanGroupsCompanion.insert({
+    this.id = const Value.absent(),
+    required String kind,
+    this.seedId = const Value.absent(),
+    this.keeperId = const Value.absent(),
+  }) : kind = Value(kind);
+  static Insertable<ScanGroupRow> custom({
+    Expression<int>? id,
+    Expression<String>? kind,
+    Expression<String>? seedId,
+    Expression<String>? keeperId,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (kind != null) 'kind': kind,
+      if (seedId != null) 'seed_id': seedId,
+      if (keeperId != null) 'keeper_id': keeperId,
+    });
+  }
+
+  ScanGroupsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? kind,
+    Value<String?>? seedId,
+    Value<String?>? keeperId,
+  }) {
+    return ScanGroupsCompanion(
+      id: id ?? this.id,
+      kind: kind ?? this.kind,
+      seedId: seedId ?? this.seedId,
+      keeperId: keeperId ?? this.keeperId,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (kind.present) {
+      map['kind'] = Variable<String>(kind.value);
+    }
+    if (seedId.present) {
+      map['seed_id'] = Variable<String>(seedId.value);
+    }
+    if (keeperId.present) {
+      map['keeper_id'] = Variable<String>(keeperId.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ScanGroupsCompanion(')
+          ..write('id: $id, ')
+          ..write('kind: $kind, ')
+          ..write('seedId: $seedId, ')
+          ..write('keeperId: $keeperId')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ScanGroupMembersTable extends ScanGroupMembers
+    with TableInfo<$ScanGroupMembersTable, ScanGroupMemberRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ScanGroupMembersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _groupRowIdMeta = const VerificationMeta(
+    'groupRowId',
+  );
+  @override
+  late final GeneratedColumn<int> groupRowId = GeneratedColumn<int>(
+    'group_row_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _assetIdMeta = const VerificationMeta(
+    'assetId',
+  );
+  @override
+  late final GeneratedColumn<String> assetId = GeneratedColumn<String>(
+    'asset_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _memberIndexMeta = const VerificationMeta(
+    'memberIndex',
+  );
+  @override
+  late final GeneratedColumn<int> memberIndex = GeneratedColumn<int>(
+    'member_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [groupRowId, assetId, memberIndex];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'scan_group_members';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ScanGroupMemberRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('group_row_id')) {
+      context.handle(
+        _groupRowIdMeta,
+        groupRowId.isAcceptableOrUnknown(
+          data['group_row_id']!,
+          _groupRowIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_groupRowIdMeta);
+    }
+    if (data.containsKey('asset_id')) {
+      context.handle(
+        _assetIdMeta,
+        assetId.isAcceptableOrUnknown(data['asset_id']!, _assetIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_assetIdMeta);
+    }
+    if (data.containsKey('member_index')) {
+      context.handle(
+        _memberIndexMeta,
+        memberIndex.isAcceptableOrUnknown(
+          data['member_index']!,
+          _memberIndexMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_memberIndexMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {groupRowId, assetId};
+  @override
+  ScanGroupMemberRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ScanGroupMemberRow(
+      groupRowId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}group_row_id'],
+      )!,
+      assetId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}asset_id'],
+      )!,
+      memberIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}member_index'],
+      )!,
+    );
+  }
+
+  @override
+  $ScanGroupMembersTable createAlias(String alias) {
+    return $ScanGroupMembersTable(attachedDatabase, alias);
+  }
+}
+
+class ScanGroupMemberRow extends DataClass
+    implements Insertable<ScanGroupMemberRow> {
+  final int groupRowId;
+  final String assetId;
+  final int memberIndex;
+  const ScanGroupMemberRow({
+    required this.groupRowId,
+    required this.assetId,
+    required this.memberIndex,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['group_row_id'] = Variable<int>(groupRowId);
+    map['asset_id'] = Variable<String>(assetId);
+    map['member_index'] = Variable<int>(memberIndex);
+    return map;
+  }
+
+  ScanGroupMembersCompanion toCompanion(bool nullToAbsent) {
+    return ScanGroupMembersCompanion(
+      groupRowId: Value(groupRowId),
+      assetId: Value(assetId),
+      memberIndex: Value(memberIndex),
+    );
+  }
+
+  factory ScanGroupMemberRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ScanGroupMemberRow(
+      groupRowId: serializer.fromJson<int>(json['groupRowId']),
+      assetId: serializer.fromJson<String>(json['assetId']),
+      memberIndex: serializer.fromJson<int>(json['memberIndex']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'groupRowId': serializer.toJson<int>(groupRowId),
+      'assetId': serializer.toJson<String>(assetId),
+      'memberIndex': serializer.toJson<int>(memberIndex),
+    };
+  }
+
+  ScanGroupMemberRow copyWith({
+    int? groupRowId,
+    String? assetId,
+    int? memberIndex,
+  }) => ScanGroupMemberRow(
+    groupRowId: groupRowId ?? this.groupRowId,
+    assetId: assetId ?? this.assetId,
+    memberIndex: memberIndex ?? this.memberIndex,
+  );
+  ScanGroupMemberRow copyWithCompanion(ScanGroupMembersCompanion data) {
+    return ScanGroupMemberRow(
+      groupRowId: data.groupRowId.present
+          ? data.groupRowId.value
+          : this.groupRowId,
+      assetId: data.assetId.present ? data.assetId.value : this.assetId,
+      memberIndex: data.memberIndex.present
+          ? data.memberIndex.value
+          : this.memberIndex,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ScanGroupMemberRow(')
+          ..write('groupRowId: $groupRowId, ')
+          ..write('assetId: $assetId, ')
+          ..write('memberIndex: $memberIndex')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(groupRowId, assetId, memberIndex);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ScanGroupMemberRow &&
+          other.groupRowId == this.groupRowId &&
+          other.assetId == this.assetId &&
+          other.memberIndex == this.memberIndex);
+}
+
+class ScanGroupMembersCompanion extends UpdateCompanion<ScanGroupMemberRow> {
+  final Value<int> groupRowId;
+  final Value<String> assetId;
+  final Value<int> memberIndex;
+  final Value<int> rowid;
+  const ScanGroupMembersCompanion({
+    this.groupRowId = const Value.absent(),
+    this.assetId = const Value.absent(),
+    this.memberIndex = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ScanGroupMembersCompanion.insert({
+    required int groupRowId,
+    required String assetId,
+    required int memberIndex,
+    this.rowid = const Value.absent(),
+  }) : groupRowId = Value(groupRowId),
+       assetId = Value(assetId),
+       memberIndex = Value(memberIndex);
+  static Insertable<ScanGroupMemberRow> custom({
+    Expression<int>? groupRowId,
+    Expression<String>? assetId,
+    Expression<int>? memberIndex,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (groupRowId != null) 'group_row_id': groupRowId,
+      if (assetId != null) 'asset_id': assetId,
+      if (memberIndex != null) 'member_index': memberIndex,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ScanGroupMembersCompanion copyWith({
+    Value<int>? groupRowId,
+    Value<String>? assetId,
+    Value<int>? memberIndex,
+    Value<int>? rowid,
+  }) {
+    return ScanGroupMembersCompanion(
+      groupRowId: groupRowId ?? this.groupRowId,
+      assetId: assetId ?? this.assetId,
+      memberIndex: memberIndex ?? this.memberIndex,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (groupRowId.present) {
+      map['group_row_id'] = Variable<int>(groupRowId.value);
+    }
+    if (assetId.present) {
+      map['asset_id'] = Variable<String>(assetId.value);
+    }
+    if (memberIndex.present) {
+      map['member_index'] = Variable<int>(memberIndex.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ScanGroupMembersCompanion(')
+          ..write('groupRowId: $groupRowId, ')
+          ..write('assetId: $assetId, ')
+          ..write('memberIndex: $memberIndex, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DuplicateReferencesTable extends DuplicateReferences
+    with TableInfo<$DuplicateReferencesTable, DuplicateReferenceRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DuplicateReferencesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _mainIdMeta = const VerificationMeta('mainId');
+  @override
+  late final GeneratedColumn<String> mainId = GeneratedColumn<String>(
+    'main_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, mainId];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'duplicate_references';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DuplicateReferenceRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('main_id')) {
+      context.handle(
+        _mainIdMeta,
+        mainId.isAcceptableOrUnknown(data['main_id']!, _mainIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_mainIdMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  DuplicateReferenceRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DuplicateReferenceRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      mainId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}main_id'],
+      )!,
+    );
+  }
+
+  @override
+  $DuplicateReferencesTable createAlias(String alias) {
+    return $DuplicateReferencesTable(attachedDatabase, alias);
+  }
+}
+
+class DuplicateReferenceRow extends DataClass
+    implements Insertable<DuplicateReferenceRow> {
+  final int id;
+  final String mainId;
+  const DuplicateReferenceRow({required this.id, required this.mainId});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['main_id'] = Variable<String>(mainId);
+    return map;
+  }
+
+  DuplicateReferencesCompanion toCompanion(bool nullToAbsent) {
+    return DuplicateReferencesCompanion(id: Value(id), mainId: Value(mainId));
+  }
+
+  factory DuplicateReferenceRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DuplicateReferenceRow(
+      id: serializer.fromJson<int>(json['id']),
+      mainId: serializer.fromJson<String>(json['mainId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'mainId': serializer.toJson<String>(mainId),
+    };
+  }
+
+  DuplicateReferenceRow copyWith({int? id, String? mainId}) =>
+      DuplicateReferenceRow(id: id ?? this.id, mainId: mainId ?? this.mainId);
+  DuplicateReferenceRow copyWithCompanion(DuplicateReferencesCompanion data) {
+    return DuplicateReferenceRow(
+      id: data.id.present ? data.id.value : this.id,
+      mainId: data.mainId.present ? data.mainId.value : this.mainId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DuplicateReferenceRow(')
+          ..write('id: $id, ')
+          ..write('mainId: $mainId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, mainId);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DuplicateReferenceRow &&
+          other.id == this.id &&
+          other.mainId == this.mainId);
+}
+
+class DuplicateReferencesCompanion
+    extends UpdateCompanion<DuplicateReferenceRow> {
+  final Value<int> id;
+  final Value<String> mainId;
+  const DuplicateReferencesCompanion({
+    this.id = const Value.absent(),
+    this.mainId = const Value.absent(),
+  });
+  DuplicateReferencesCompanion.insert({
+    this.id = const Value.absent(),
+    required String mainId,
+  }) : mainId = Value(mainId);
+  static Insertable<DuplicateReferenceRow> custom({
+    Expression<int>? id,
+    Expression<String>? mainId,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (mainId != null) 'main_id': mainId,
+    });
+  }
+
+  DuplicateReferencesCompanion copyWith({
+    Value<int>? id,
+    Value<String>? mainId,
+  }) {
+    return DuplicateReferencesCompanion(
+      id: id ?? this.id,
+      mainId: mainId ?? this.mainId,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (mainId.present) {
+      map['main_id'] = Variable<String>(mainId.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DuplicateReferencesCompanion(')
+          ..write('id: $id, ')
+          ..write('mainId: $mainId')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $DuplicateReferenceMembersTable extends DuplicateReferenceMembers
+    with
+        TableInfo<
+          $DuplicateReferenceMembersTable,
+          DuplicateReferenceMemberRow
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DuplicateReferenceMembersTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _referenceRowIdMeta = const VerificationMeta(
+    'referenceRowId',
+  );
+  @override
+  late final GeneratedColumn<int> referenceRowId = GeneratedColumn<int>(
+    'reference_row_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _assetIdMeta = const VerificationMeta(
+    'assetId',
+  );
+  @override
+  late final GeneratedColumn<String> assetId = GeneratedColumn<String>(
+    'asset_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _memberIndexMeta = const VerificationMeta(
+    'memberIndex',
+  );
+  @override
+  late final GeneratedColumn<int> memberIndex = GeneratedColumn<int>(
+    'member_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [referenceRowId, assetId, memberIndex];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'duplicate_reference_members';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<DuplicateReferenceMemberRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('reference_row_id')) {
+      context.handle(
+        _referenceRowIdMeta,
+        referenceRowId.isAcceptableOrUnknown(
+          data['reference_row_id']!,
+          _referenceRowIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_referenceRowIdMeta);
+    }
+    if (data.containsKey('asset_id')) {
+      context.handle(
+        _assetIdMeta,
+        assetId.isAcceptableOrUnknown(data['asset_id']!, _assetIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_assetIdMeta);
+    }
+    if (data.containsKey('member_index')) {
+      context.handle(
+        _memberIndexMeta,
+        memberIndex.isAcceptableOrUnknown(
+          data['member_index']!,
+          _memberIndexMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_memberIndexMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {referenceRowId, assetId};
+  @override
+  DuplicateReferenceMemberRow map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DuplicateReferenceMemberRow(
+      referenceRowId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}reference_row_id'],
+      )!,
+      assetId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}asset_id'],
+      )!,
+      memberIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}member_index'],
+      )!,
+    );
+  }
+
+  @override
+  $DuplicateReferenceMembersTable createAlias(String alias) {
+    return $DuplicateReferenceMembersTable(attachedDatabase, alias);
+  }
+}
+
+class DuplicateReferenceMemberRow extends DataClass
+    implements Insertable<DuplicateReferenceMemberRow> {
+  final int referenceRowId;
+  final String assetId;
+  final int memberIndex;
+  const DuplicateReferenceMemberRow({
+    required this.referenceRowId,
+    required this.assetId,
+    required this.memberIndex,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['reference_row_id'] = Variable<int>(referenceRowId);
+    map['asset_id'] = Variable<String>(assetId);
+    map['member_index'] = Variable<int>(memberIndex);
+    return map;
+  }
+
+  DuplicateReferenceMembersCompanion toCompanion(bool nullToAbsent) {
+    return DuplicateReferenceMembersCompanion(
+      referenceRowId: Value(referenceRowId),
+      assetId: Value(assetId),
+      memberIndex: Value(memberIndex),
+    );
+  }
+
+  factory DuplicateReferenceMemberRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DuplicateReferenceMemberRow(
+      referenceRowId: serializer.fromJson<int>(json['referenceRowId']),
+      assetId: serializer.fromJson<String>(json['assetId']),
+      memberIndex: serializer.fromJson<int>(json['memberIndex']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'referenceRowId': serializer.toJson<int>(referenceRowId),
+      'assetId': serializer.toJson<String>(assetId),
+      'memberIndex': serializer.toJson<int>(memberIndex),
+    };
+  }
+
+  DuplicateReferenceMemberRow copyWith({
+    int? referenceRowId,
+    String? assetId,
+    int? memberIndex,
+  }) => DuplicateReferenceMemberRow(
+    referenceRowId: referenceRowId ?? this.referenceRowId,
+    assetId: assetId ?? this.assetId,
+    memberIndex: memberIndex ?? this.memberIndex,
+  );
+  DuplicateReferenceMemberRow copyWithCompanion(
+    DuplicateReferenceMembersCompanion data,
+  ) {
+    return DuplicateReferenceMemberRow(
+      referenceRowId: data.referenceRowId.present
+          ? data.referenceRowId.value
+          : this.referenceRowId,
+      assetId: data.assetId.present ? data.assetId.value : this.assetId,
+      memberIndex: data.memberIndex.present
+          ? data.memberIndex.value
+          : this.memberIndex,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DuplicateReferenceMemberRow(')
+          ..write('referenceRowId: $referenceRowId, ')
+          ..write('assetId: $assetId, ')
+          ..write('memberIndex: $memberIndex')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(referenceRowId, assetId, memberIndex);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DuplicateReferenceMemberRow &&
+          other.referenceRowId == this.referenceRowId &&
+          other.assetId == this.assetId &&
+          other.memberIndex == this.memberIndex);
+}
+
+class DuplicateReferenceMembersCompanion
+    extends UpdateCompanion<DuplicateReferenceMemberRow> {
+  final Value<int> referenceRowId;
+  final Value<String> assetId;
+  final Value<int> memberIndex;
+  final Value<int> rowid;
+  const DuplicateReferenceMembersCompanion({
+    this.referenceRowId = const Value.absent(),
+    this.assetId = const Value.absent(),
+    this.memberIndex = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  DuplicateReferenceMembersCompanion.insert({
+    required int referenceRowId,
+    required String assetId,
+    required int memberIndex,
+    this.rowid = const Value.absent(),
+  }) : referenceRowId = Value(referenceRowId),
+       assetId = Value(assetId),
+       memberIndex = Value(memberIndex);
+  static Insertable<DuplicateReferenceMemberRow> custom({
+    Expression<int>? referenceRowId,
+    Expression<String>? assetId,
+    Expression<int>? memberIndex,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (referenceRowId != null) 'reference_row_id': referenceRowId,
+      if (assetId != null) 'asset_id': assetId,
+      if (memberIndex != null) 'member_index': memberIndex,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  DuplicateReferenceMembersCompanion copyWith({
+    Value<int>? referenceRowId,
+    Value<String>? assetId,
+    Value<int>? memberIndex,
+    Value<int>? rowid,
+  }) {
+    return DuplicateReferenceMembersCompanion(
+      referenceRowId: referenceRowId ?? this.referenceRowId,
+      assetId: assetId ?? this.assetId,
+      memberIndex: memberIndex ?? this.memberIndex,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (referenceRowId.present) {
+      map['reference_row_id'] = Variable<int>(referenceRowId.value);
+    }
+    if (assetId.present) {
+      map['asset_id'] = Variable<String>(assetId.value);
+    }
+    if (memberIndex.present) {
+      map['member_index'] = Variable<int>(memberIndex.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DuplicateReferenceMembersCompanion(')
+          ..write('referenceRowId: $referenceRowId, ')
+          ..write('assetId: $assetId, ')
+          ..write('memberIndex: $memberIndex, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -607,35 +1631,8 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _marksJsonMeta = const VerificationMeta(
-    'marksJson',
-  );
   @override
-  late final GeneratedColumn<String> marksJson = GeneratedColumn<String>(
-    'marks_json',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _favouritesJsonMeta = const VerificationMeta(
-    'favouritesJson',
-  );
-  @override
-  late final GeneratedColumn<String> favouritesJson = GeneratedColumn<String>(
-    'favourites_json',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
-  @override
-  List<GeneratedColumn> get $columns => [
-    filterKey,
-    currentIndex,
-    marksJson,
-    favouritesJson,
-  ];
+  List<GeneratedColumn> get $columns => [filterKey, currentIndex];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -667,25 +1664,6 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
     } else if (isInserting) {
       context.missing(_currentIndexMeta);
     }
-    if (data.containsKey('marks_json')) {
-      context.handle(
-        _marksJsonMeta,
-        marksJson.isAcceptableOrUnknown(data['marks_json']!, _marksJsonMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_marksJsonMeta);
-    }
-    if (data.containsKey('favourites_json')) {
-      context.handle(
-        _favouritesJsonMeta,
-        favouritesJson.isAcceptableOrUnknown(
-          data['favourites_json']!,
-          _favouritesJsonMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_favouritesJsonMeta);
-    }
     return context;
   }
 
@@ -703,14 +1681,6 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
         DriftSqlType.int,
         data['${effectivePrefix}current_index'],
       )!,
-      marksJson: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}marks_json'],
-      )!,
-      favouritesJson: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}favourites_json'],
-      )!,
     );
   }
 
@@ -723,21 +1693,12 @@ class $SessionsTable extends Sessions with TableInfo<$SessionsTable, Session> {
 class Session extends DataClass implements Insertable<Session> {
   final String filterKey;
   final int currentIndex;
-  final String marksJson;
-  final String favouritesJson;
-  const Session({
-    required this.filterKey,
-    required this.currentIndex,
-    required this.marksJson,
-    required this.favouritesJson,
-  });
+  const Session({required this.filterKey, required this.currentIndex});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['filter_key'] = Variable<String>(filterKey);
     map['current_index'] = Variable<int>(currentIndex);
-    map['marks_json'] = Variable<String>(marksJson);
-    map['favourites_json'] = Variable<String>(favouritesJson);
     return map;
   }
 
@@ -745,8 +1706,6 @@ class Session extends DataClass implements Insertable<Session> {
     return SessionsCompanion(
       filterKey: Value(filterKey),
       currentIndex: Value(currentIndex),
-      marksJson: Value(marksJson),
-      favouritesJson: Value(favouritesJson),
     );
   }
 
@@ -758,8 +1717,6 @@ class Session extends DataClass implements Insertable<Session> {
     return Session(
       filterKey: serializer.fromJson<String>(json['filterKey']),
       currentIndex: serializer.fromJson<int>(json['currentIndex']),
-      marksJson: serializer.fromJson<String>(json['marksJson']),
-      favouritesJson: serializer.fromJson<String>(json['favouritesJson']),
     );
   }
   @override
@@ -768,21 +1725,12 @@ class Session extends DataClass implements Insertable<Session> {
     return <String, dynamic>{
       'filterKey': serializer.toJson<String>(filterKey),
       'currentIndex': serializer.toJson<int>(currentIndex),
-      'marksJson': serializer.toJson<String>(marksJson),
-      'favouritesJson': serializer.toJson<String>(favouritesJson),
     };
   }
 
-  Session copyWith({
-    String? filterKey,
-    int? currentIndex,
-    String? marksJson,
-    String? favouritesJson,
-  }) => Session(
+  Session copyWith({String? filterKey, int? currentIndex}) => Session(
     filterKey: filterKey ?? this.filterKey,
     currentIndex: currentIndex ?? this.currentIndex,
-    marksJson: marksJson ?? this.marksJson,
-    favouritesJson: favouritesJson ?? this.favouritesJson,
   );
   Session copyWithCompanion(SessionsCompanion data) {
     return Session(
@@ -790,10 +1738,6 @@ class Session extends DataClass implements Insertable<Session> {
       currentIndex: data.currentIndex.present
           ? data.currentIndex.value
           : this.currentIndex,
-      marksJson: data.marksJson.present ? data.marksJson.value : this.marksJson,
-      favouritesJson: data.favouritesJson.present
-          ? data.favouritesJson.value
-          : this.favouritesJson,
     );
   }
 
@@ -801,61 +1745,44 @@ class Session extends DataClass implements Insertable<Session> {
   String toString() {
     return (StringBuffer('Session(')
           ..write('filterKey: $filterKey, ')
-          ..write('currentIndex: $currentIndex, ')
-          ..write('marksJson: $marksJson, ')
-          ..write('favouritesJson: $favouritesJson')
+          ..write('currentIndex: $currentIndex')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(filterKey, currentIndex, marksJson, favouritesJson);
+  int get hashCode => Object.hash(filterKey, currentIndex);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Session &&
           other.filterKey == this.filterKey &&
-          other.currentIndex == this.currentIndex &&
-          other.marksJson == this.marksJson &&
-          other.favouritesJson == this.favouritesJson);
+          other.currentIndex == this.currentIndex);
 }
 
 class SessionsCompanion extends UpdateCompanion<Session> {
   final Value<String> filterKey;
   final Value<int> currentIndex;
-  final Value<String> marksJson;
-  final Value<String> favouritesJson;
   final Value<int> rowid;
   const SessionsCompanion({
     this.filterKey = const Value.absent(),
     this.currentIndex = const Value.absent(),
-    this.marksJson = const Value.absent(),
-    this.favouritesJson = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   SessionsCompanion.insert({
     required String filterKey,
     required int currentIndex,
-    required String marksJson,
-    required String favouritesJson,
     this.rowid = const Value.absent(),
   }) : filterKey = Value(filterKey),
-       currentIndex = Value(currentIndex),
-       marksJson = Value(marksJson),
-       favouritesJson = Value(favouritesJson);
+       currentIndex = Value(currentIndex);
   static Insertable<Session> custom({
     Expression<String>? filterKey,
     Expression<int>? currentIndex,
-    Expression<String>? marksJson,
-    Expression<String>? favouritesJson,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (filterKey != null) 'filter_key': filterKey,
       if (currentIndex != null) 'current_index': currentIndex,
-      if (marksJson != null) 'marks_json': marksJson,
-      if (favouritesJson != null) 'favourites_json': favouritesJson,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -863,15 +1790,11 @@ class SessionsCompanion extends UpdateCompanion<Session> {
   SessionsCompanion copyWith({
     Value<String>? filterKey,
     Value<int>? currentIndex,
-    Value<String>? marksJson,
-    Value<String>? favouritesJson,
     Value<int>? rowid,
   }) {
     return SessionsCompanion(
       filterKey: filterKey ?? this.filterKey,
       currentIndex: currentIndex ?? this.currentIndex,
-      marksJson: marksJson ?? this.marksJson,
-      favouritesJson: favouritesJson ?? this.favouritesJson,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -885,12 +1808,6 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     if (currentIndex.present) {
       map['current_index'] = Variable<int>(currentIndex.value);
     }
-    if (marksJson.present) {
-      map['marks_json'] = Variable<String>(marksJson.value);
-    }
-    if (favouritesJson.present) {
-      map['favourites_json'] = Variable<String>(favouritesJson.value);
-    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -902,8 +1819,487 @@ class SessionsCompanion extends UpdateCompanion<Session> {
     return (StringBuffer('SessionsCompanion(')
           ..write('filterKey: $filterKey, ')
           ..write('currentIndex: $currentIndex, ')
-          ..write('marksJson: $marksJson, ')
-          ..write('favouritesJson: $favouritesJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $MarksTable extends Marks with TableInfo<$MarksTable, Mark> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MarksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _filterKeyMeta = const VerificationMeta(
+    'filterKey',
+  );
+  @override
+  late final GeneratedColumn<String> filterKey = GeneratedColumn<String>(
+    'filter_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _assetIdMeta = const VerificationMeta(
+    'assetId',
+  );
+  @override
+  late final GeneratedColumn<String> assetId = GeneratedColumn<String>(
+    'asset_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _markMeta = const VerificationMeta('mark');
+  @override
+  late final GeneratedColumn<String> mark = GeneratedColumn<String>(
+    'mark',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [filterKey, assetId, mark];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'marks';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Mark> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('filter_key')) {
+      context.handle(
+        _filterKeyMeta,
+        filterKey.isAcceptableOrUnknown(data['filter_key']!, _filterKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_filterKeyMeta);
+    }
+    if (data.containsKey('asset_id')) {
+      context.handle(
+        _assetIdMeta,
+        assetId.isAcceptableOrUnknown(data['asset_id']!, _assetIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_assetIdMeta);
+    }
+    if (data.containsKey('mark')) {
+      context.handle(
+        _markMeta,
+        mark.isAcceptableOrUnknown(data['mark']!, _markMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_markMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {filterKey, assetId};
+  @override
+  Mark map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Mark(
+      filterKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}filter_key'],
+      )!,
+      assetId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}asset_id'],
+      )!,
+      mark: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mark'],
+      )!,
+    );
+  }
+
+  @override
+  $MarksTable createAlias(String alias) {
+    return $MarksTable(attachedDatabase, alias);
+  }
+}
+
+class Mark extends DataClass implements Insertable<Mark> {
+  final String filterKey;
+  final String assetId;
+  final String mark;
+  const Mark({
+    required this.filterKey,
+    required this.assetId,
+    required this.mark,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['filter_key'] = Variable<String>(filterKey);
+    map['asset_id'] = Variable<String>(assetId);
+    map['mark'] = Variable<String>(mark);
+    return map;
+  }
+
+  MarksCompanion toCompanion(bool nullToAbsent) {
+    return MarksCompanion(
+      filterKey: Value(filterKey),
+      assetId: Value(assetId),
+      mark: Value(mark),
+    );
+  }
+
+  factory Mark.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Mark(
+      filterKey: serializer.fromJson<String>(json['filterKey']),
+      assetId: serializer.fromJson<String>(json['assetId']),
+      mark: serializer.fromJson<String>(json['mark']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'filterKey': serializer.toJson<String>(filterKey),
+      'assetId': serializer.toJson<String>(assetId),
+      'mark': serializer.toJson<String>(mark),
+    };
+  }
+
+  Mark copyWith({String? filterKey, String? assetId, String? mark}) => Mark(
+    filterKey: filterKey ?? this.filterKey,
+    assetId: assetId ?? this.assetId,
+    mark: mark ?? this.mark,
+  );
+  Mark copyWithCompanion(MarksCompanion data) {
+    return Mark(
+      filterKey: data.filterKey.present ? data.filterKey.value : this.filterKey,
+      assetId: data.assetId.present ? data.assetId.value : this.assetId,
+      mark: data.mark.present ? data.mark.value : this.mark,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Mark(')
+          ..write('filterKey: $filterKey, ')
+          ..write('assetId: $assetId, ')
+          ..write('mark: $mark')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(filterKey, assetId, mark);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Mark &&
+          other.filterKey == this.filterKey &&
+          other.assetId == this.assetId &&
+          other.mark == this.mark);
+}
+
+class MarksCompanion extends UpdateCompanion<Mark> {
+  final Value<String> filterKey;
+  final Value<String> assetId;
+  final Value<String> mark;
+  final Value<int> rowid;
+  const MarksCompanion({
+    this.filterKey = const Value.absent(),
+    this.assetId = const Value.absent(),
+    this.mark = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  MarksCompanion.insert({
+    required String filterKey,
+    required String assetId,
+    required String mark,
+    this.rowid = const Value.absent(),
+  }) : filterKey = Value(filterKey),
+       assetId = Value(assetId),
+       mark = Value(mark);
+  static Insertable<Mark> custom({
+    Expression<String>? filterKey,
+    Expression<String>? assetId,
+    Expression<String>? mark,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (filterKey != null) 'filter_key': filterKey,
+      if (assetId != null) 'asset_id': assetId,
+      if (mark != null) 'mark': mark,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  MarksCompanion copyWith({
+    Value<String>? filterKey,
+    Value<String>? assetId,
+    Value<String>? mark,
+    Value<int>? rowid,
+  }) {
+    return MarksCompanion(
+      filterKey: filterKey ?? this.filterKey,
+      assetId: assetId ?? this.assetId,
+      mark: mark ?? this.mark,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (filterKey.present) {
+      map['filter_key'] = Variable<String>(filterKey.value);
+    }
+    if (assetId.present) {
+      map['asset_id'] = Variable<String>(assetId.value);
+    }
+    if (mark.present) {
+      map['mark'] = Variable<String>(mark.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MarksCompanion(')
+          ..write('filterKey: $filterKey, ')
+          ..write('assetId: $assetId, ')
+          ..write('mark: $mark, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $SessionFavouritesTable extends SessionFavourites
+    with TableInfo<$SessionFavouritesTable, SessionFavourite> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SessionFavouritesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _filterKeyMeta = const VerificationMeta(
+    'filterKey',
+  );
+  @override
+  late final GeneratedColumn<String> filterKey = GeneratedColumn<String>(
+    'filter_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _assetIdMeta = const VerificationMeta(
+    'assetId',
+  );
+  @override
+  late final GeneratedColumn<String> assetId = GeneratedColumn<String>(
+    'asset_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [filterKey, assetId];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'session_favourites';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SessionFavourite> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('filter_key')) {
+      context.handle(
+        _filterKeyMeta,
+        filterKey.isAcceptableOrUnknown(data['filter_key']!, _filterKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_filterKeyMeta);
+    }
+    if (data.containsKey('asset_id')) {
+      context.handle(
+        _assetIdMeta,
+        assetId.isAcceptableOrUnknown(data['asset_id']!, _assetIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_assetIdMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {filterKey, assetId};
+  @override
+  SessionFavourite map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SessionFavourite(
+      filterKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}filter_key'],
+      )!,
+      assetId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}asset_id'],
+      )!,
+    );
+  }
+
+  @override
+  $SessionFavouritesTable createAlias(String alias) {
+    return $SessionFavouritesTable(attachedDatabase, alias);
+  }
+}
+
+class SessionFavourite extends DataClass
+    implements Insertable<SessionFavourite> {
+  final String filterKey;
+  final String assetId;
+  const SessionFavourite({required this.filterKey, required this.assetId});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['filter_key'] = Variable<String>(filterKey);
+    map['asset_id'] = Variable<String>(assetId);
+    return map;
+  }
+
+  SessionFavouritesCompanion toCompanion(bool nullToAbsent) {
+    return SessionFavouritesCompanion(
+      filterKey: Value(filterKey),
+      assetId: Value(assetId),
+    );
+  }
+
+  factory SessionFavourite.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SessionFavourite(
+      filterKey: serializer.fromJson<String>(json['filterKey']),
+      assetId: serializer.fromJson<String>(json['assetId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'filterKey': serializer.toJson<String>(filterKey),
+      'assetId': serializer.toJson<String>(assetId),
+    };
+  }
+
+  SessionFavourite copyWith({String? filterKey, String? assetId}) =>
+      SessionFavourite(
+        filterKey: filterKey ?? this.filterKey,
+        assetId: assetId ?? this.assetId,
+      );
+  SessionFavourite copyWithCompanion(SessionFavouritesCompanion data) {
+    return SessionFavourite(
+      filterKey: data.filterKey.present ? data.filterKey.value : this.filterKey,
+      assetId: data.assetId.present ? data.assetId.value : this.assetId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SessionFavourite(')
+          ..write('filterKey: $filterKey, ')
+          ..write('assetId: $assetId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(filterKey, assetId);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SessionFavourite &&
+          other.filterKey == this.filterKey &&
+          other.assetId == this.assetId);
+}
+
+class SessionFavouritesCompanion extends UpdateCompanion<SessionFavourite> {
+  final Value<String> filterKey;
+  final Value<String> assetId;
+  final Value<int> rowid;
+  const SessionFavouritesCompanion({
+    this.filterKey = const Value.absent(),
+    this.assetId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SessionFavouritesCompanion.insert({
+    required String filterKey,
+    required String assetId,
+    this.rowid = const Value.absent(),
+  }) : filterKey = Value(filterKey),
+       assetId = Value(assetId);
+  static Insertable<SessionFavourite> custom({
+    Expression<String>? filterKey,
+    Expression<String>? assetId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (filterKey != null) 'filter_key': filterKey,
+      if (assetId != null) 'asset_id': assetId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SessionFavouritesCompanion copyWith({
+    Value<String>? filterKey,
+    Value<String>? assetId,
+    Value<int>? rowid,
+  }) {
+    return SessionFavouritesCompanion(
+      filterKey: filterKey ?? this.filterKey,
+      assetId: assetId ?? this.assetId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (filterKey.present) {
+      map['filter_key'] = Variable<String>(filterKey.value);
+    }
+    if (assetId.present) {
+      map['asset_id'] = Variable<String>(assetId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SessionFavouritesCompanion(')
+          ..write('filterKey: $filterKey, ')
+          ..write('assetId: $assetId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2230,8 +3626,19 @@ class MetaEntriesCompanion extends UpdateCompanion<MetaEntry> {
 abstract class _$KlaraDatabase extends GeneratedDatabase {
   _$KlaraDatabase(QueryExecutor e) : super(e);
   $KlaraDatabaseManager get managers => $KlaraDatabaseManager(this);
-  late final $AnalysesTable analyses = $AnalysesTable(this);
+  late final $AssetInfosTable assetInfos = $AssetInfosTable(this);
+  late final $ScanGroupsTable scanGroups = $ScanGroupsTable(this);
+  late final $ScanGroupMembersTable scanGroupMembers = $ScanGroupMembersTable(
+    this,
+  );
+  late final $DuplicateReferencesTable duplicateReferences =
+      $DuplicateReferencesTable(this);
+  late final $DuplicateReferenceMembersTable duplicateReferenceMembers =
+      $DuplicateReferenceMembersTable(this);
   late final $SessionsTable sessions = $SessionsTable(this);
+  late final $MarksTable marks = $MarksTable(this);
+  late final $SessionFavouritesTable sessionFavourites =
+      $SessionFavouritesTable(this);
   late final $TrashEntriesTable trashEntries = $TrashEntriesTable(this);
   late final $HistoryRecordsTable historyRecords = $HistoryRecordsTable(this);
   late final $SnoozesTable snoozes = $SnoozesTable(this);
@@ -2242,8 +3649,14 @@ abstract class _$KlaraDatabase extends GeneratedDatabase {
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
-    analyses,
+    assetInfos,
+    scanGroups,
+    scanGroupMembers,
+    duplicateReferences,
+    duplicateReferenceMembers,
     sessions,
+    marks,
+    sessionFavourites,
     trashEntries,
     historyRecords,
     snoozes,
@@ -2252,34 +3665,32 @@ abstract class _$KlaraDatabase extends GeneratedDatabase {
   ];
 }
 
-typedef $$AnalysesTableCreateCompanionBuilder = AnalysesCompanion Function({
+typedef $$AssetInfosTableCreateCompanionBuilder = AssetInfosCompanion Function({
   required String assetId,
-  required int hash,
+  required String type,
   required int width,
   required int height,
-  required double blurScore,
-  required double meanLuminance,
   Value<int?> sizeBytes,
   Value<int?> modifiedDateMs,
-  required int algorithmVersion,
+  required bool isEdited,
+  required bool isScreenshot,
   Value<int> rowid,
 });
-typedef $$AnalysesTableUpdateCompanionBuilder = AnalysesCompanion Function({
+typedef $$AssetInfosTableUpdateCompanionBuilder = AssetInfosCompanion Function({
   Value<String> assetId,
-  Value<int> hash,
+  Value<String> type,
   Value<int> width,
   Value<int> height,
-  Value<double> blurScore,
-  Value<double> meanLuminance,
   Value<int?> sizeBytes,
   Value<int?> modifiedDateMs,
-  Value<int> algorithmVersion,
+  Value<bool> isEdited,
+  Value<bool> isScreenshot,
   Value<int> rowid,
 });
 
-class $$AnalysesTableFilterComposer
-    extends Composer<_$KlaraDatabase, $AnalysesTable> {
-  $$AnalysesTableFilterComposer({
+class $$AssetInfosTableFilterComposer
+    extends Composer<_$KlaraDatabase, $AssetInfosTable> {
+  $$AssetInfosTableFilterComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -2291,8 +3702,8 @@ class $$AnalysesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get hash => $composableBuilder(
-    column: $table.hash,
+  ColumnFilters<String> get type => $composableBuilder(
+    column: $table.type,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2306,16 +3717,6 @@ class $$AnalysesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get blurScore => $composableBuilder(
-    column: $table.blurScore,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get meanLuminance => $composableBuilder(
-    column: $table.meanLuminance,
-    builder: (column) => ColumnFilters(column),
-  );
-
   ColumnFilters<int> get sizeBytes => $composableBuilder(
     column: $table.sizeBytes,
     builder: (column) => ColumnFilters(column),
@@ -2326,15 +3727,20 @@ class $$AnalysesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get algorithmVersion => $composableBuilder(
-    column: $table.algorithmVersion,
+  ColumnFilters<bool> get isEdited => $composableBuilder(
+    column: $table.isEdited,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isScreenshot => $composableBuilder(
+    column: $table.isScreenshot,
     builder: (column) => ColumnFilters(column),
   );
 }
 
-class $$AnalysesTableOrderingComposer
-    extends Composer<_$KlaraDatabase, $AnalysesTable> {
-  $$AnalysesTableOrderingComposer({
+class $$AssetInfosTableOrderingComposer
+    extends Composer<_$KlaraDatabase, $AssetInfosTable> {
+  $$AssetInfosTableOrderingComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -2346,8 +3752,8 @@ class $$AnalysesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get hash => $composableBuilder(
-    column: $table.hash,
+  ColumnOrderings<String> get type => $composableBuilder(
+    column: $table.type,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -2361,16 +3767,6 @@ class $$AnalysesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get blurScore => $composableBuilder(
-    column: $table.blurScore,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get meanLuminance => $composableBuilder(
-    column: $table.meanLuminance,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<int> get sizeBytes => $composableBuilder(
     column: $table.sizeBytes,
     builder: (column) => ColumnOrderings(column),
@@ -2381,15 +3777,20 @@ class $$AnalysesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get algorithmVersion => $composableBuilder(
-    column: $table.algorithmVersion,
+  ColumnOrderings<bool> get isEdited => $composableBuilder(
+    column: $table.isEdited,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isScreenshot => $composableBuilder(
+    column: $table.isScreenshot,
     builder: (column) => ColumnOrderings(column),
   );
 }
 
-class $$AnalysesTableAnnotationComposer
-    extends Composer<_$KlaraDatabase, $AnalysesTable> {
-  $$AnalysesTableAnnotationComposer({
+class $$AssetInfosTableAnnotationComposer
+    extends Composer<_$KlaraDatabase, $AssetInfosTable> {
+  $$AssetInfosTableAnnotationComposer({
     required super.$db,
     required super.$table,
     super.joinBuilder,
@@ -2399,22 +3800,14 @@ class $$AnalysesTableAnnotationComposer
   GeneratedColumn<String> get assetId =>
       $composableBuilder(column: $table.assetId, builder: (column) => column);
 
-  GeneratedColumn<int> get hash =>
-      $composableBuilder(column: $table.hash, builder: (column) => column);
+  GeneratedColumn<String> get type =>
+      $composableBuilder(column: $table.type, builder: (column) => column);
 
   GeneratedColumn<int> get width =>
       $composableBuilder(column: $table.width, builder: (column) => column);
 
   GeneratedColumn<int> get height =>
       $composableBuilder(column: $table.height, builder: (column) => column);
-
-  GeneratedColumn<double> get blurScore =>
-      $composableBuilder(column: $table.blurScore, builder: (column) => column);
-
-  GeneratedColumn<double> get meanLuminance => $composableBuilder(
-    column: $table.meanLuminance,
-    builder: (column) => column,
-  );
 
   GeneratedColumn<int> get sizeBytes =>
       $composableBuilder(column: $table.sizeBytes, builder: (column) => column);
@@ -2424,95 +3817,97 @@ class $$AnalysesTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<int> get algorithmVersion => $composableBuilder(
-    column: $table.algorithmVersion,
+  GeneratedColumn<bool> get isEdited =>
+      $composableBuilder(column: $table.isEdited, builder: (column) => column);
+
+  GeneratedColumn<bool> get isScreenshot => $composableBuilder(
+    column: $table.isScreenshot,
     builder: (column) => column,
   );
 }
 
-class $$AnalysesTableTableManager
+class $$AssetInfosTableTableManager
     extends
         RootTableManager<
           _$KlaraDatabase,
-          $AnalysesTable,
-          Analyse,
-          $$AnalysesTableFilterComposer,
-          $$AnalysesTableOrderingComposer,
-          $$AnalysesTableAnnotationComposer,
-          $$AnalysesTableCreateCompanionBuilder,
-          $$AnalysesTableUpdateCompanionBuilder,
-          (Analyse, BaseReferences<_$KlaraDatabase, $AnalysesTable, Analyse>),
-          Analyse,
+          $AssetInfosTable,
+          AssetInfoRow,
+          $$AssetInfosTableFilterComposer,
+          $$AssetInfosTableOrderingComposer,
+          $$AssetInfosTableAnnotationComposer,
+          $$AssetInfosTableCreateCompanionBuilder,
+          $$AssetInfosTableUpdateCompanionBuilder,
+          (
+            AssetInfoRow,
+            BaseReferences<_$KlaraDatabase, $AssetInfosTable, AssetInfoRow>,
+          ),
+          AssetInfoRow,
           PrefetchHooks Function()
         > {
-  $$AnalysesTableTableManager(_$KlaraDatabase db, $AnalysesTable table)
+  $$AssetInfosTableTableManager(_$KlaraDatabase db, $AssetInfosTable table)
     : super(
         TableManagerState(
           db: db,
           table: table,
           createFilteringComposer: () =>
-              $$AnalysesTableFilterComposer($db: db, $table: table),
+              $$AssetInfosTableFilterComposer($db: db, $table: table),
           createOrderingComposer: () =>
-              $$AnalysesTableOrderingComposer($db: db, $table: table),
+              $$AssetInfosTableOrderingComposer($db: db, $table: table),
           createComputedFieldComposer: () =>
-              $$AnalysesTableAnnotationComposer($db: db, $table: table),
+              $$AssetInfosTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
                 Value<String> assetId = const Value.absent(),
-                Value<int> hash = const Value.absent(),
+                Value<String> type = const Value.absent(),
                 Value<int> width = const Value.absent(),
                 Value<int> height = const Value.absent(),
-                Value<double> blurScore = const Value.absent(),
-                Value<double> meanLuminance = const Value.absent(),
                 Value<int?> sizeBytes = const Value.absent(),
                 Value<int?> modifiedDateMs = const Value.absent(),
-                Value<int> algorithmVersion = const Value.absent(),
+                Value<bool> isEdited = const Value.absent(),
+                Value<bool> isScreenshot = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
-              }) => AnalysesCompanion(
+              }) => AssetInfosCompanion(
                 assetId: assetId,
-                hash: hash,
+                type: type,
                 width: width,
                 height: height,
-                blurScore: blurScore,
-                meanLuminance: meanLuminance,
                 sizeBytes: sizeBytes,
                 modifiedDateMs: modifiedDateMs,
-                algorithmVersion: algorithmVersion,
+                isEdited: isEdited,
+                isScreenshot: isScreenshot,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
                 required String assetId,
-                required int hash,
+                required String type,
                 required int width,
                 required int height,
-                required double blurScore,
-                required double meanLuminance,
                 Value<int?> sizeBytes = const Value.absent(),
                 Value<int?> modifiedDateMs = const Value.absent(),
-                required int algorithmVersion,
+                required bool isEdited,
+                required bool isScreenshot,
                 Value<int> rowid = const Value.absent(),
-              }) => AnalysesCompanion.insert(
+              }) => AssetInfosCompanion.insert(
                 assetId: assetId,
-                hash: hash,
+                type: type,
                 width: width,
                 height: height,
-                blurScore: blurScore,
-                meanLuminance: meanLuminance,
                 sizeBytes: sizeBytes,
                 modifiedDateMs: modifiedDateMs,
-                algorithmVersion: algorithmVersion,
+                isEdited: isEdited,
+                isScreenshot: isScreenshot,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable<$AnalysesTable, Analyse>(table),
-                  BaseReferences<_$KlaraDatabase, $AnalysesTable, Analyse>(
-                    db,
-                    table,
-                    e,
-                  ),
+                  e.readTable<$AssetInfosTable, AssetInfoRow>(table),
+                  BaseReferences<
+                    _$KlaraDatabase,
+                    $AssetInfosTable,
+                    AssetInfoRow
+                  >(db, table, e),
                 ),
               )
               .toList(),
@@ -2521,32 +3916,753 @@ class $$AnalysesTableTableManager
       );
 }
 
-typedef $$AnalysesTableProcessedTableManager =
+typedef $$AssetInfosTableProcessedTableManager =
     ProcessedTableManager<
       _$KlaraDatabase,
-      $AnalysesTable,
-      Analyse,
-      $$AnalysesTableFilterComposer,
-      $$AnalysesTableOrderingComposer,
-      $$AnalysesTableAnnotationComposer,
-      $$AnalysesTableCreateCompanionBuilder,
-      $$AnalysesTableUpdateCompanionBuilder,
-      (Analyse, BaseReferences<_$KlaraDatabase, $AnalysesTable, Analyse>),
-      Analyse,
+      $AssetInfosTable,
+      AssetInfoRow,
+      $$AssetInfosTableFilterComposer,
+      $$AssetInfosTableOrderingComposer,
+      $$AssetInfosTableAnnotationComposer,
+      $$AssetInfosTableCreateCompanionBuilder,
+      $$AssetInfosTableUpdateCompanionBuilder,
+      (
+        AssetInfoRow,
+        BaseReferences<_$KlaraDatabase, $AssetInfosTable, AssetInfoRow>,
+      ),
+      AssetInfoRow,
+      PrefetchHooks Function()
+    >;
+typedef $$ScanGroupsTableCreateCompanionBuilder = ScanGroupsCompanion Function({
+  Value<int> id,
+  required String kind,
+  Value<String?> seedId,
+  Value<String?> keeperId,
+});
+typedef $$ScanGroupsTableUpdateCompanionBuilder = ScanGroupsCompanion Function({
+  Value<int> id,
+  Value<String> kind,
+  Value<String?> seedId,
+  Value<String?> keeperId,
+});
+
+class $$ScanGroupsTableFilterComposer
+    extends Composer<_$KlaraDatabase, $ScanGroupsTable> {
+  $$ScanGroupsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get seedId => $composableBuilder(
+    column: $table.seedId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get keeperId => $composableBuilder(
+    column: $table.keeperId,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ScanGroupsTableOrderingComposer
+    extends Composer<_$KlaraDatabase, $ScanGroupsTable> {
+  $$ScanGroupsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get kind => $composableBuilder(
+    column: $table.kind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get seedId => $composableBuilder(
+    column: $table.seedId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get keeperId => $composableBuilder(
+    column: $table.keeperId,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ScanGroupsTableAnnotationComposer
+    extends Composer<_$KlaraDatabase, $ScanGroupsTable> {
+  $$ScanGroupsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get kind =>
+      $composableBuilder(column: $table.kind, builder: (column) => column);
+
+  GeneratedColumn<String> get seedId =>
+      $composableBuilder(column: $table.seedId, builder: (column) => column);
+
+  GeneratedColumn<String> get keeperId =>
+      $composableBuilder(column: $table.keeperId, builder: (column) => column);
+}
+
+class $$ScanGroupsTableTableManager
+    extends
+        RootTableManager<
+          _$KlaraDatabase,
+          $ScanGroupsTable,
+          ScanGroupRow,
+          $$ScanGroupsTableFilterComposer,
+          $$ScanGroupsTableOrderingComposer,
+          $$ScanGroupsTableAnnotationComposer,
+          $$ScanGroupsTableCreateCompanionBuilder,
+          $$ScanGroupsTableUpdateCompanionBuilder,
+          (
+            ScanGroupRow,
+            BaseReferences<_$KlaraDatabase, $ScanGroupsTable, ScanGroupRow>,
+          ),
+          ScanGroupRow,
+          PrefetchHooks Function()
+        > {
+  $$ScanGroupsTableTableManager(_$KlaraDatabase db, $ScanGroupsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ScanGroupsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ScanGroupsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ScanGroupsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> kind = const Value.absent(),
+                Value<String?> seedId = const Value.absent(),
+                Value<String?> keeperId = const Value.absent(),
+              }) => ScanGroupsCompanion(
+                id: id,
+                kind: kind,
+                seedId: seedId,
+                keeperId: keeperId,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String kind,
+                Value<String?> seedId = const Value.absent(),
+                Value<String?> keeperId = const Value.absent(),
+              }) => ScanGroupsCompanion.insert(
+                id: id,
+                kind: kind,
+                seedId: seedId,
+                keeperId: keeperId,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$ScanGroupsTable, ScanGroupRow>(table),
+                  BaseReferences<
+                    _$KlaraDatabase,
+                    $ScanGroupsTable,
+                    ScanGroupRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ScanGroupsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$KlaraDatabase,
+      $ScanGroupsTable,
+      ScanGroupRow,
+      $$ScanGroupsTableFilterComposer,
+      $$ScanGroupsTableOrderingComposer,
+      $$ScanGroupsTableAnnotationComposer,
+      $$ScanGroupsTableCreateCompanionBuilder,
+      $$ScanGroupsTableUpdateCompanionBuilder,
+      (
+        ScanGroupRow,
+        BaseReferences<_$KlaraDatabase, $ScanGroupsTable, ScanGroupRow>,
+      ),
+      ScanGroupRow,
+      PrefetchHooks Function()
+    >;
+typedef $$ScanGroupMembersTableCreateCompanionBuilder =
+    ScanGroupMembersCompanion Function({
+      required int groupRowId,
+      required String assetId,
+      required int memberIndex,
+      Value<int> rowid,
+    });
+typedef $$ScanGroupMembersTableUpdateCompanionBuilder =
+    ScanGroupMembersCompanion Function({
+      Value<int> groupRowId,
+      Value<String> assetId,
+      Value<int> memberIndex,
+      Value<int> rowid,
+    });
+
+class $$ScanGroupMembersTableFilterComposer
+    extends Composer<_$KlaraDatabase, $ScanGroupMembersTable> {
+  $$ScanGroupMembersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get groupRowId => $composableBuilder(
+    column: $table.groupRowId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get assetId => $composableBuilder(
+    column: $table.assetId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get memberIndex => $composableBuilder(
+    column: $table.memberIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ScanGroupMembersTableOrderingComposer
+    extends Composer<_$KlaraDatabase, $ScanGroupMembersTable> {
+  $$ScanGroupMembersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get groupRowId => $composableBuilder(
+    column: $table.groupRowId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get assetId => $composableBuilder(
+    column: $table.assetId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get memberIndex => $composableBuilder(
+    column: $table.memberIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ScanGroupMembersTableAnnotationComposer
+    extends Composer<_$KlaraDatabase, $ScanGroupMembersTable> {
+  $$ScanGroupMembersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get groupRowId => $composableBuilder(
+    column: $table.groupRowId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get assetId =>
+      $composableBuilder(column: $table.assetId, builder: (column) => column);
+
+  GeneratedColumn<int> get memberIndex => $composableBuilder(
+    column: $table.memberIndex,
+    builder: (column) => column,
+  );
+}
+
+class $$ScanGroupMembersTableTableManager
+    extends
+        RootTableManager<
+          _$KlaraDatabase,
+          $ScanGroupMembersTable,
+          ScanGroupMemberRow,
+          $$ScanGroupMembersTableFilterComposer,
+          $$ScanGroupMembersTableOrderingComposer,
+          $$ScanGroupMembersTableAnnotationComposer,
+          $$ScanGroupMembersTableCreateCompanionBuilder,
+          $$ScanGroupMembersTableUpdateCompanionBuilder,
+          (
+            ScanGroupMemberRow,
+            BaseReferences<
+              _$KlaraDatabase,
+              $ScanGroupMembersTable,
+              ScanGroupMemberRow
+            >,
+          ),
+          ScanGroupMemberRow,
+          PrefetchHooks Function()
+        > {
+  $$ScanGroupMembersTableTableManager(
+    _$KlaraDatabase db,
+    $ScanGroupMembersTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ScanGroupMembersTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ScanGroupMembersTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ScanGroupMembersTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> groupRowId = const Value.absent(),
+                Value<String> assetId = const Value.absent(),
+                Value<int> memberIndex = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ScanGroupMembersCompanion(
+                groupRowId: groupRowId,
+                assetId: assetId,
+                memberIndex: memberIndex,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required int groupRowId,
+                required String assetId,
+                required int memberIndex,
+                Value<int> rowid = const Value.absent(),
+              }) => ScanGroupMembersCompanion.insert(
+                groupRowId: groupRowId,
+                assetId: assetId,
+                memberIndex: memberIndex,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$ScanGroupMembersTable, ScanGroupMemberRow>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$KlaraDatabase,
+                    $ScanGroupMembersTable,
+                    ScanGroupMemberRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ScanGroupMembersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$KlaraDatabase,
+      $ScanGroupMembersTable,
+      ScanGroupMemberRow,
+      $$ScanGroupMembersTableFilterComposer,
+      $$ScanGroupMembersTableOrderingComposer,
+      $$ScanGroupMembersTableAnnotationComposer,
+      $$ScanGroupMembersTableCreateCompanionBuilder,
+      $$ScanGroupMembersTableUpdateCompanionBuilder,
+      (
+        ScanGroupMemberRow,
+        BaseReferences<
+          _$KlaraDatabase,
+          $ScanGroupMembersTable,
+          ScanGroupMemberRow
+        >,
+      ),
+      ScanGroupMemberRow,
+      PrefetchHooks Function()
+    >;
+typedef $$DuplicateReferencesTableCreateCompanionBuilder =
+    DuplicateReferencesCompanion Function({
+      Value<int> id,
+      required String mainId,
+    });
+typedef $$DuplicateReferencesTableUpdateCompanionBuilder =
+    DuplicateReferencesCompanion Function({
+      Value<int> id,
+      Value<String> mainId,
+    });
+
+class $$DuplicateReferencesTableFilterComposer
+    extends Composer<_$KlaraDatabase, $DuplicateReferencesTable> {
+  $$DuplicateReferencesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mainId => $composableBuilder(
+    column: $table.mainId,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DuplicateReferencesTableOrderingComposer
+    extends Composer<_$KlaraDatabase, $DuplicateReferencesTable> {
+  $$DuplicateReferencesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mainId => $composableBuilder(
+    column: $table.mainId,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DuplicateReferencesTableAnnotationComposer
+    extends Composer<_$KlaraDatabase, $DuplicateReferencesTable> {
+  $$DuplicateReferencesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get mainId =>
+      $composableBuilder(column: $table.mainId, builder: (column) => column);
+}
+
+class $$DuplicateReferencesTableTableManager
+    extends
+        RootTableManager<
+          _$KlaraDatabase,
+          $DuplicateReferencesTable,
+          DuplicateReferenceRow,
+          $$DuplicateReferencesTableFilterComposer,
+          $$DuplicateReferencesTableOrderingComposer,
+          $$DuplicateReferencesTableAnnotationComposer,
+          $$DuplicateReferencesTableCreateCompanionBuilder,
+          $$DuplicateReferencesTableUpdateCompanionBuilder,
+          (
+            DuplicateReferenceRow,
+            BaseReferences<
+              _$KlaraDatabase,
+              $DuplicateReferencesTable,
+              DuplicateReferenceRow
+            >,
+          ),
+          DuplicateReferenceRow,
+          PrefetchHooks Function()
+        > {
+  $$DuplicateReferencesTableTableManager(
+    _$KlaraDatabase db,
+    $DuplicateReferencesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DuplicateReferencesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DuplicateReferencesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DuplicateReferencesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> mainId = const Value.absent(),
+          }) => DuplicateReferencesCompanion(id: id, mainId: mainId),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required String mainId,
+          }) => DuplicateReferencesCompanion.insert(id: id, mainId: mainId),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$DuplicateReferencesTable, DuplicateReferenceRow>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$KlaraDatabase,
+                    $DuplicateReferencesTable,
+                    DuplicateReferenceRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DuplicateReferencesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$KlaraDatabase,
+      $DuplicateReferencesTable,
+      DuplicateReferenceRow,
+      $$DuplicateReferencesTableFilterComposer,
+      $$DuplicateReferencesTableOrderingComposer,
+      $$DuplicateReferencesTableAnnotationComposer,
+      $$DuplicateReferencesTableCreateCompanionBuilder,
+      $$DuplicateReferencesTableUpdateCompanionBuilder,
+      (
+        DuplicateReferenceRow,
+        BaseReferences<
+          _$KlaraDatabase,
+          $DuplicateReferencesTable,
+          DuplicateReferenceRow
+        >,
+      ),
+      DuplicateReferenceRow,
+      PrefetchHooks Function()
+    >;
+typedef $$DuplicateReferenceMembersTableCreateCompanionBuilder =
+    DuplicateReferenceMembersCompanion Function({
+      required int referenceRowId,
+      required String assetId,
+      required int memberIndex,
+      Value<int> rowid,
+    });
+typedef $$DuplicateReferenceMembersTableUpdateCompanionBuilder =
+    DuplicateReferenceMembersCompanion Function({
+      Value<int> referenceRowId,
+      Value<String> assetId,
+      Value<int> memberIndex,
+      Value<int> rowid,
+    });
+
+class $$DuplicateReferenceMembersTableFilterComposer
+    extends Composer<_$KlaraDatabase, $DuplicateReferenceMembersTable> {
+  $$DuplicateReferenceMembersTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get referenceRowId => $composableBuilder(
+    column: $table.referenceRowId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get assetId => $composableBuilder(
+    column: $table.assetId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get memberIndex => $composableBuilder(
+    column: $table.memberIndex,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$DuplicateReferenceMembersTableOrderingComposer
+    extends Composer<_$KlaraDatabase, $DuplicateReferenceMembersTable> {
+  $$DuplicateReferenceMembersTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get referenceRowId => $composableBuilder(
+    column: $table.referenceRowId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get assetId => $composableBuilder(
+    column: $table.assetId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get memberIndex => $composableBuilder(
+    column: $table.memberIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$DuplicateReferenceMembersTableAnnotationComposer
+    extends Composer<_$KlaraDatabase, $DuplicateReferenceMembersTable> {
+  $$DuplicateReferenceMembersTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get referenceRowId => $composableBuilder(
+    column: $table.referenceRowId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get assetId =>
+      $composableBuilder(column: $table.assetId, builder: (column) => column);
+
+  GeneratedColumn<int> get memberIndex => $composableBuilder(
+    column: $table.memberIndex,
+    builder: (column) => column,
+  );
+}
+
+class $$DuplicateReferenceMembersTableTableManager
+    extends
+        RootTableManager<
+          _$KlaraDatabase,
+          $DuplicateReferenceMembersTable,
+          DuplicateReferenceMemberRow,
+          $$DuplicateReferenceMembersTableFilterComposer,
+          $$DuplicateReferenceMembersTableOrderingComposer,
+          $$DuplicateReferenceMembersTableAnnotationComposer,
+          $$DuplicateReferenceMembersTableCreateCompanionBuilder,
+          $$DuplicateReferenceMembersTableUpdateCompanionBuilder,
+          (
+            DuplicateReferenceMemberRow,
+            BaseReferences<
+              _$KlaraDatabase,
+              $DuplicateReferenceMembersTable,
+              DuplicateReferenceMemberRow
+            >,
+          ),
+          DuplicateReferenceMemberRow,
+          PrefetchHooks Function()
+        > {
+  $$DuplicateReferenceMembersTableTableManager(
+    _$KlaraDatabase db,
+    $DuplicateReferenceMembersTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DuplicateReferenceMembersTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$DuplicateReferenceMembersTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$DuplicateReferenceMembersTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> referenceRowId = const Value.absent(),
+                Value<String> assetId = const Value.absent(),
+                Value<int> memberIndex = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => DuplicateReferenceMembersCompanion(
+                referenceRowId: referenceRowId,
+                assetId: assetId,
+                memberIndex: memberIndex,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required int referenceRowId,
+                required String assetId,
+                required int memberIndex,
+                Value<int> rowid = const Value.absent(),
+              }) => DuplicateReferenceMembersCompanion.insert(
+                referenceRowId: referenceRowId,
+                assetId: assetId,
+                memberIndex: memberIndex,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<
+                    $DuplicateReferenceMembersTable,
+                    DuplicateReferenceMemberRow
+                  >(table),
+                  BaseReferences<
+                    _$KlaraDatabase,
+                    $DuplicateReferenceMembersTable,
+                    DuplicateReferenceMemberRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$DuplicateReferenceMembersTableProcessedTableManager =
+    ProcessedTableManager<
+      _$KlaraDatabase,
+      $DuplicateReferenceMembersTable,
+      DuplicateReferenceMemberRow,
+      $$DuplicateReferenceMembersTableFilterComposer,
+      $$DuplicateReferenceMembersTableOrderingComposer,
+      $$DuplicateReferenceMembersTableAnnotationComposer,
+      $$DuplicateReferenceMembersTableCreateCompanionBuilder,
+      $$DuplicateReferenceMembersTableUpdateCompanionBuilder,
+      (
+        DuplicateReferenceMemberRow,
+        BaseReferences<
+          _$KlaraDatabase,
+          $DuplicateReferenceMembersTable,
+          DuplicateReferenceMemberRow
+        >,
+      ),
+      DuplicateReferenceMemberRow,
       PrefetchHooks Function()
     >;
 typedef $$SessionsTableCreateCompanionBuilder = SessionsCompanion Function({
   required String filterKey,
   required int currentIndex,
-  required String marksJson,
-  required String favouritesJson,
   Value<int> rowid,
 });
 typedef $$SessionsTableUpdateCompanionBuilder = SessionsCompanion Function({
   Value<String> filterKey,
   Value<int> currentIndex,
-  Value<String> marksJson,
-  Value<String> favouritesJson,
   Value<int> rowid,
 });
 
@@ -2566,16 +4682,6 @@ class $$SessionsTableFilterComposer
 
   ColumnFilters<int> get currentIndex => $composableBuilder(
     column: $table.currentIndex,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get marksJson => $composableBuilder(
-    column: $table.marksJson,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<String> get favouritesJson => $composableBuilder(
-    column: $table.favouritesJson,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -2598,16 +4704,6 @@ class $$SessionsTableOrderingComposer
     column: $table.currentIndex,
     builder: (column) => ColumnOrderings(column),
   );
-
-  ColumnOrderings<String> get marksJson => $composableBuilder(
-    column: $table.marksJson,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get favouritesJson => $composableBuilder(
-    column: $table.favouritesJson,
-    builder: (column) => ColumnOrderings(column),
-  );
 }
 
 class $$SessionsTableAnnotationComposer
@@ -2624,14 +4720,6 @@ class $$SessionsTableAnnotationComposer
 
   GeneratedColumn<int> get currentIndex => $composableBuilder(
     column: $table.currentIndex,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<String> get marksJson =>
-      $composableBuilder(column: $table.marksJson, builder: (column) => column);
-
-  GeneratedColumn<String> get favouritesJson => $composableBuilder(
-    column: $table.favouritesJson,
     builder: (column) => column,
   );
 }
@@ -2666,28 +4754,20 @@ class $$SessionsTableTableManager
               ({
                 Value<String> filterKey = const Value.absent(),
                 Value<int> currentIndex = const Value.absent(),
-                Value<String> marksJson = const Value.absent(),
-                Value<String> favouritesJson = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => SessionsCompanion(
                 filterKey: filterKey,
                 currentIndex: currentIndex,
-                marksJson: marksJson,
-                favouritesJson: favouritesJson,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
                 required String filterKey,
                 required int currentIndex,
-                required String marksJson,
-                required String favouritesJson,
                 Value<int> rowid = const Value.absent(),
               }) => SessionsCompanion.insert(
                 filterKey: filterKey,
                 currentIndex: currentIndex,
-                marksJson: marksJson,
-                favouritesJson: favouritesJson,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -2719,6 +4799,334 @@ typedef $$SessionsTableProcessedTableManager =
       $$SessionsTableUpdateCompanionBuilder,
       (Session, BaseReferences<_$KlaraDatabase, $SessionsTable, Session>),
       Session,
+      PrefetchHooks Function()
+    >;
+typedef $$MarksTableCreateCompanionBuilder = MarksCompanion Function({
+  required String filterKey,
+  required String assetId,
+  required String mark,
+  Value<int> rowid,
+});
+typedef $$MarksTableUpdateCompanionBuilder = MarksCompanion Function({
+  Value<String> filterKey,
+  Value<String> assetId,
+  Value<String> mark,
+  Value<int> rowid,
+});
+
+class $$MarksTableFilterComposer
+    extends Composer<_$KlaraDatabase, $MarksTable> {
+  $$MarksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get filterKey => $composableBuilder(
+    column: $table.filterKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get assetId => $composableBuilder(
+    column: $table.assetId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mark => $composableBuilder(
+    column: $table.mark,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$MarksTableOrderingComposer
+    extends Composer<_$KlaraDatabase, $MarksTable> {
+  $$MarksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get filterKey => $composableBuilder(
+    column: $table.filterKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get assetId => $composableBuilder(
+    column: $table.assetId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mark => $composableBuilder(
+    column: $table.mark,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$MarksTableAnnotationComposer
+    extends Composer<_$KlaraDatabase, $MarksTable> {
+  $$MarksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get filterKey =>
+      $composableBuilder(column: $table.filterKey, builder: (column) => column);
+
+  GeneratedColumn<String> get assetId =>
+      $composableBuilder(column: $table.assetId, builder: (column) => column);
+
+  GeneratedColumn<String> get mark =>
+      $composableBuilder(column: $table.mark, builder: (column) => column);
+}
+
+class $$MarksTableTableManager
+    extends
+        RootTableManager<
+          _$KlaraDatabase,
+          $MarksTable,
+          Mark,
+          $$MarksTableFilterComposer,
+          $$MarksTableOrderingComposer,
+          $$MarksTableAnnotationComposer,
+          $$MarksTableCreateCompanionBuilder,
+          $$MarksTableUpdateCompanionBuilder,
+          (Mark, BaseReferences<_$KlaraDatabase, $MarksTable, Mark>),
+          Mark,
+          PrefetchHooks Function()
+        > {
+  $$MarksTableTableManager(_$KlaraDatabase db, $MarksTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MarksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MarksTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$MarksTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> filterKey = const Value.absent(),
+                Value<String> assetId = const Value.absent(),
+                Value<String> mark = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => MarksCompanion(
+                filterKey: filterKey,
+                assetId: assetId,
+                mark: mark,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String filterKey,
+                required String assetId,
+                required String mark,
+                Value<int> rowid = const Value.absent(),
+              }) => MarksCompanion.insert(
+                filterKey: filterKey,
+                assetId: assetId,
+                mark: mark,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$MarksTable, Mark>(table),
+                  BaseReferences<_$KlaraDatabase, $MarksTable, Mark>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$MarksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$KlaraDatabase,
+      $MarksTable,
+      Mark,
+      $$MarksTableFilterComposer,
+      $$MarksTableOrderingComposer,
+      $$MarksTableAnnotationComposer,
+      $$MarksTableCreateCompanionBuilder,
+      $$MarksTableUpdateCompanionBuilder,
+      (Mark, BaseReferences<_$KlaraDatabase, $MarksTable, Mark>),
+      Mark,
+      PrefetchHooks Function()
+    >;
+typedef $$SessionFavouritesTableCreateCompanionBuilder =
+    SessionFavouritesCompanion Function({
+      required String filterKey,
+      required String assetId,
+      Value<int> rowid,
+    });
+typedef $$SessionFavouritesTableUpdateCompanionBuilder =
+    SessionFavouritesCompanion Function({
+      Value<String> filterKey,
+      Value<String> assetId,
+      Value<int> rowid,
+    });
+
+class $$SessionFavouritesTableFilterComposer
+    extends Composer<_$KlaraDatabase, $SessionFavouritesTable> {
+  $$SessionFavouritesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get filterKey => $composableBuilder(
+    column: $table.filterKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get assetId => $composableBuilder(
+    column: $table.assetId,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SessionFavouritesTableOrderingComposer
+    extends Composer<_$KlaraDatabase, $SessionFavouritesTable> {
+  $$SessionFavouritesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get filterKey => $composableBuilder(
+    column: $table.filterKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get assetId => $composableBuilder(
+    column: $table.assetId,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SessionFavouritesTableAnnotationComposer
+    extends Composer<_$KlaraDatabase, $SessionFavouritesTable> {
+  $$SessionFavouritesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get filterKey =>
+      $composableBuilder(column: $table.filterKey, builder: (column) => column);
+
+  GeneratedColumn<String> get assetId =>
+      $composableBuilder(column: $table.assetId, builder: (column) => column);
+}
+
+class $$SessionFavouritesTableTableManager
+    extends
+        RootTableManager<
+          _$KlaraDatabase,
+          $SessionFavouritesTable,
+          SessionFavourite,
+          $$SessionFavouritesTableFilterComposer,
+          $$SessionFavouritesTableOrderingComposer,
+          $$SessionFavouritesTableAnnotationComposer,
+          $$SessionFavouritesTableCreateCompanionBuilder,
+          $$SessionFavouritesTableUpdateCompanionBuilder,
+          (
+            SessionFavourite,
+            BaseReferences<
+              _$KlaraDatabase,
+              $SessionFavouritesTable,
+              SessionFavourite
+            >,
+          ),
+          SessionFavourite,
+          PrefetchHooks Function()
+        > {
+  $$SessionFavouritesTableTableManager(
+    _$KlaraDatabase db,
+    $SessionFavouritesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SessionFavouritesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SessionFavouritesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SessionFavouritesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> filterKey = const Value.absent(),
+                Value<String> assetId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SessionFavouritesCompanion(
+                filterKey: filterKey,
+                assetId: assetId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String filterKey,
+                required String assetId,
+                Value<int> rowid = const Value.absent(),
+              }) => SessionFavouritesCompanion.insert(
+                filterKey: filterKey,
+                assetId: assetId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SessionFavouritesTable, SessionFavourite>(table),
+                  BaseReferences<
+                    _$KlaraDatabase,
+                    $SessionFavouritesTable,
+                    SessionFavourite
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SessionFavouritesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$KlaraDatabase,
+      $SessionFavouritesTable,
+      SessionFavourite,
+      $$SessionFavouritesTableFilterComposer,
+      $$SessionFavouritesTableOrderingComposer,
+      $$SessionFavouritesTableAnnotationComposer,
+      $$SessionFavouritesTableCreateCompanionBuilder,
+      $$SessionFavouritesTableUpdateCompanionBuilder,
+      (
+        SessionFavourite,
+        BaseReferences<
+          _$KlaraDatabase,
+          $SessionFavouritesTable,
+          SessionFavourite
+        >,
+      ),
+      SessionFavourite,
       PrefetchHooks Function()
     >;
 typedef $$TrashEntriesTableCreateCompanionBuilder =
@@ -3572,10 +5980,25 @@ typedef $$MetaEntriesTableProcessedTableManager =
 class $KlaraDatabaseManager {
   final _$KlaraDatabase _db;
   $KlaraDatabaseManager(this._db);
-  $$AnalysesTableTableManager get analyses =>
-      $$AnalysesTableTableManager(_db, _db.analyses);
+  $$AssetInfosTableTableManager get assetInfos =>
+      $$AssetInfosTableTableManager(_db, _db.assetInfos);
+  $$ScanGroupsTableTableManager get scanGroups =>
+      $$ScanGroupsTableTableManager(_db, _db.scanGroups);
+  $$ScanGroupMembersTableTableManager get scanGroupMembers =>
+      $$ScanGroupMembersTableTableManager(_db, _db.scanGroupMembers);
+  $$DuplicateReferencesTableTableManager get duplicateReferences =>
+      $$DuplicateReferencesTableTableManager(_db, _db.duplicateReferences);
+  $$DuplicateReferenceMembersTableTableManager get duplicateReferenceMembers =>
+      $$DuplicateReferenceMembersTableTableManager(
+        _db,
+        _db.duplicateReferenceMembers,
+      );
   $$SessionsTableTableManager get sessions =>
       $$SessionsTableTableManager(_db, _db.sessions);
+  $$MarksTableTableManager get marks =>
+      $$MarksTableTableManager(_db, _db.marks);
+  $$SessionFavouritesTableTableManager get sessionFavourites =>
+      $$SessionFavouritesTableTableManager(_db, _db.sessionFavourites);
   $$TrashEntriesTableTableManager get trashEntries =>
       $$TrashEntriesTableTableManager(_db, _db.trashEntries);
   $$HistoryRecordsTableTableManager get historyRecords =>

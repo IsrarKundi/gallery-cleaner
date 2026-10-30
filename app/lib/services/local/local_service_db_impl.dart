@@ -34,23 +34,27 @@ import 'package:path_provider/path_provider.dart';
 import 'package:klara/core/strings/app_strings.dart';
 import 'package:klara/core/utils/result.dart';
 import 'package:klara/services/detection/photo_analysis.dart';
+import 'package:klara/services/detection/scan_memberships.dart';
 import 'package:klara/services/local/klara_database.dart';
 import 'package:klara/services/local/local_service.dart';
 import 'package:klara/services/local/local_service_impl.dart';
 import 'package:klara/services/trash/trash_entry.dart';
 
-import 'analysis_store.dart';
 import 'completion_store.dart';
 import 'history_store.dart';
 import 'json_migration.dart';
 import 'json_file_store.dart';
 import 'meta_store.dart';
+import 'scan_membership_store.dart';
 import 'session_store.dart';
 import 'snooze_store.dart';
 import 'trash_store.dart';
 
 /// Schema version this build writes (see [MetaStore]).
-const int kDbSchemaVersion = 1;
+/// v2 = fix plan Stage 3: marks/favourites split into their
+/// own tables (ADR-018). v3 = fix plan Stage 4: scan
+/// memberships replace the analyses table (ADR-019).
+const int kDbSchemaVersion = 3;
 
 /// Meta key carrying the schema version stamp.
 const String kDbSchemaVersionKey = 'schema_version';
@@ -78,6 +82,17 @@ class LocalServiceDbImpl implements LocalService {
 
   /// JSON source: settings store + 6.2 migration reader.
   final LocalServiceImpl _json;
+
+  /// The one session store for this service's database
+  /// (Stage 3): its save-diff mirror must span calls, so it
+  /// cannot be rebuilt per method like the stateless stores.
+  /// The database future is memoised, so the store is built
+  /// once, from the first resolved database.
+  SessionStore? _sessionStore;
+
+  SessionStore _sessions(KlaraDatabase db) {
+    return _sessionStore ??= SessionStore(db);
+  }
 
   Future<Directory>? _dirFuture;
   Future<KlaraDatabase>? _dbFuture;
@@ -198,7 +213,7 @@ class LocalServiceDbImpl implements LocalService {
   @override
   Future<Result<void>> saveSession(DeckSession session) async {
     return _guarded(
-      (KlaraDatabase db) => SessionStore(db).save(session),
+      (KlaraDatabase db) => _sessions(db).save(session),
       () => _json.saveSession(session),
     );
   }
@@ -206,7 +221,7 @@ class LocalServiceDbImpl implements LocalService {
   @override
   Future<Result<DeckSession?>> loadSession(String filterKey) async {
     return _guarded(
-      (KlaraDatabase db) => SessionStore(db).load(filterKey),
+      (KlaraDatabase db) => _sessions(db).load(filterKey),
       () => _json.loadSession(filterKey),
     );
   }
@@ -214,7 +229,7 @@ class LocalServiceDbImpl implements LocalService {
   @override
   Future<Result<List<DeckSession>>> listSessions() async {
     return _guarded(
-      (KlaraDatabase db) => SessionStore(db).listAll(),
+      (KlaraDatabase db) => _sessions(db).listAll(),
       () => _json.listSessions(),
     );
   }
@@ -335,10 +350,18 @@ class LocalServiceDbImpl implements LocalService {
   Future<Result<void>> saveSettings(AppSettings settings) =>
       _json.saveSettings(settings);
 
+  // The analyses trio is LEGACY since fix plan Stage 4
+  // (ADR-019): the database no longer has an analyses table —
+  // the persisted hash is gone. The trio still runs through
+  // _guarded (init, migration and the downgrade guard keep
+  // their exact semantics); its database branch is empty by
+  // design, and its JSON branch remains the migration source
+  // for pre-Stage-4 caches. Nothing writes new analyses.
+
   @override
   Future<Result<void>> saveAnalyses(List<PhotoAnalysis> analyses) async {
     return _guarded(
-      (KlaraDatabase db) => AnalysisStore(db).saveAll(analyses),
+      (KlaraDatabase db) async {},
       () => _json.saveAnalyses(analyses),
     );
   }
@@ -346,7 +369,7 @@ class LocalServiceDbImpl implements LocalService {
   @override
   Future<Result<Map<String, PhotoAnalysis>>> loadAnalyses() async {
     return _guarded(
-      (KlaraDatabase db) => AnalysisStore(db).loadAll(),
+      (KlaraDatabase db) async => <String, PhotoAnalysis>{},
       () => _json.loadAnalyses(),
     );
   }
@@ -354,9 +377,33 @@ class LocalServiceDbImpl implements LocalService {
   @override
   Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
     return _guarded(
-      (KlaraDatabase db) => AnalysisStore(db).prune(liveIds),
+      (KlaraDatabase db) async => 0,
       () => _json.pruneAnalyses(liveIds),
     );
+  }
+
+  @override
+  Future<Result<ScanMemberships>> loadScanMemberships() async {
+    return _guarded<ScanMemberships>((KlaraDatabase db) async {
+      final Result<ScanMemberships> result = await ScanMembershipStore(db)
+          .load();
+      return result.fold(
+        onSuccess: (ScanMemberships value) => value,
+        onFailure: (_) => throw StateError('membership load failed'),
+      );
+    }, () => _json.loadScanMemberships());
+  }
+
+  @override
+  Future<Result<void>> saveScanMemberships(ScanMemberships memberships) async {
+    return _guarded<void>((KlaraDatabase db) async {
+      final Result<void> result = await ScanMembershipStore(db)
+          .save(memberships);
+      result.fold(
+        onSuccess: (_) {},
+        onFailure: (_) => throw StateError('membership save failed'),
+      );
+    }, () => _json.saveScanMemberships(memberships));
   }
 
   /// Closes the database (if opened) and the JSON settings store.

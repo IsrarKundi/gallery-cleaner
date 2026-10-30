@@ -1,14 +1,20 @@
 // Smart-deck predicates (requirements §7, Phase 2).
 //
-// Pure functions: given an asset (and, for blurry/dark, its cached
-// analysis) they answer which decks it belongs to. Detection decks
-// (blurry, dark) are the surface for the detection results — the
-// spec lists detection separately from the deck list, and these two
-// decks are where those results become actionable.
+// Pure functions: given an asset they answer which decks it
+// belongs to by its own metadata. The detection decks (blurry,
+// dark) and duplicates are NOT predicates here — since fix plan
+// Stage 4 they are scan memberships (scan_memberships.dart),
+// applied by the hub from the completed scan's persisted
+// product; a per-asset predicate cannot know them anymore
+// because fingerprints and blur scores are no longer cached.
 //
-// Exact rules (frozen for Phase 2A):
-// - screenshots: album/folder name contains "screenshot"
-//   (case-insensitive). Missing/empty names never match.
+// Exact rules:
+// - screenshots: Stage 2's file-name marking
+//   (MediaAsset.isScreenshot — the Cleanup name rules), NOT the
+//   old album/folder-name guess. Stage 4 item 8: membership now
+//   follows the pass marking, so a screenshot-named file in any
+//   folder joins, and a folder named "Screenshots" no longer
+//   pulls in files whose names do not match.
 // - whatsapp: album/folder name contains "whatsapp".
 // - downloads: album/folder name contains "download".
 // - videos: asset type is video.
@@ -17,16 +23,11 @@
 // - bursts: computed over a date-sorted list, not per asset — see
 //   [burstAssetIds]. A burst is a run of 3+ photos where every
 //   consecutive gap is at most 5 seconds.
-// - blurry: image with a cached analysis whose blur score is at or
-//   under the blur threshold (see photo_analysis.dart). Videos are
-//   never blurry-flagged: a video thumbnail frame is not the video.
-// - dark: image with a cached analysis whose mean luminance is
-//   under the dark threshold. Videos excluded for the same reason.
-// - duplicates: not a predicate — it is the grouping result (see
-//   grouping.dart) and lives on its own screen, linked from the hub.
+// - duplicates / blurry / dark: scan memberships — see above.
+
+import 'dart:isolate';
 
 import '../media/media_asset.dart';
-import 'photo_analysis.dart';
 
 /// Smart decks shown on the hub, in display order.
 enum SmartDeckId {
@@ -56,18 +57,15 @@ const Duration burstMaxGap = Duration(seconds: 5);
 /// Min photos in a burst run.
 const int burstMinCount = 3;
 
-/// Decks a single asset belongs to by its own metadata/analysis.
-/// Bursts and duplicates are list-level and are NOT included here.
-Set<SmartDeckId> decksForAsset(
-  MediaAsset asset,
-  Map<String, PhotoAnalysis> analyses,
-  DateTime now,
-) {
+/// Decks a single asset belongs to by its own metadata. Bursts,
+/// duplicates, blurry and dark are list-level (scan results) and
+/// are NOT included here.
+Set<SmartDeckId> decksForAsset(MediaAsset asset, DateTime now) {
   final Set<SmartDeckId> decks = <SmartDeckId>{};
   final String album = asset.albumName.toLowerCase();
   final String title = asset.title.toLowerCase();
 
-  if (album.contains('screenshot') || title.contains('screenshot')) {
+  if (asset.isScreenshot) {
     decks.add(SmartDeckId.screenshots);
   }
   if (album.contains('whatsapp') ||
@@ -93,17 +91,6 @@ Set<SmartDeckId> decksForAsset(
   }
   if (now.difference(asset.createDate) > oldPhotoAge) {
     decks.add(SmartDeckId.old);
-  }
-  if (asset.type == MediaAssetType.image) {
-    final PhotoAnalysis? analysis = analyses[asset.id];
-    if (analysis != null) {
-      if (analysis.isBlurry) {
-        decks.add(SmartDeckId.blurry);
-      }
-      if (analysis.isDark) {
-        decks.add(SmartDeckId.dark);
-      }
-    }
   }
   // On This Day / Memories (Phase 2B): same month as today from past
   // years, or photos taken today.
@@ -152,4 +139,15 @@ Set<String> burstAssetIds(List<MediaAsset> assets) {
   }
   flush();
   return burstIds;
+}
+
+/// A burst runner of this shape, so the hub can inject a gated
+/// runner in tests to prove stale-result drops.
+typedef BurstRunner = Future<Set<String>> Function(List<MediaAsset> assets);
+
+/// The production burst runner: [burstAssetIds] on a worker
+/// isolate (it sorts the whole library; the hub must not pay
+/// that on the UI thread).
+Future<Set<String>> burstAssetIdsOnIsolate(List<MediaAsset> assets) {
+  return Isolate.run(() => burstAssetIds(assets));
 }

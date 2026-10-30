@@ -19,6 +19,7 @@ import 'package:klara/features/decks/view/decks_view.dart';
 import 'package:klara/services/detection/photo_analysis.dart';
 import 'package:klara/services/detection/smart_decks.dart';
 import 'package:klara/services/local/local_service.dart';
+import 'package:klara/services/detection/scan_memberships.dart';
 import 'package:klara/services/media/media_asset.dart';
 import 'package:klara/services/media/media_service.dart';
 import 'package:klara/services/trash/trash_entry.dart';
@@ -28,6 +29,7 @@ MediaAsset _asset(
   String album = 'Camera',
   int size = 1000,
   DateTime? date,
+  bool screenshot = false,
 }) {
   return MediaAsset(
     id: id,
@@ -38,22 +40,9 @@ MediaAsset _asset(
     createDate: date ?? DateTime.now(),
     title: '$id.jpg',
     albumName: album,
-  );
-}
-
-PhotoAnalysis _analysis(String id, int hash) {
-  return PhotoAnalysis(
-    assetId: id,
-    hash: hash,
-    width: 10,
-    height: 10,
-    blurScore: 1000,
-    meanLuminance: 100,
-    // Phase 5.3: seeded cache entries must carry the fingerprint
-    // of the asset they describe (default size 1000, no modified
-    // date, matching _asset above) or the scanner rightly treats
-    // them as stale pre-5.3 entries and re-analyses.
-    sizeBytes: 1000,
+    // Stage 4: the screenshots deck follows the enumeration's
+    // name marking, not the album name.
+    isScreenshot: screenshot,
   );
 }
 
@@ -116,18 +105,23 @@ class _Media implements MediaService {
 }
 
 class _Local implements LocalService {
+  // Stage 4: memberships default to "none stored" in this fake.
+  @override
+  Future<Result<ScanMemberships>> loadScanMemberships() async =>
+      const Success<ScanMemberships>(ScanMemberships.empty);
+
+  @override
+  Future<Result<void>> saveScanMemberships(ScanMemberships memberships) async =>
+      const Success<void>(null);
+
   @override
   Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
     return const Success<int>(0);
   }
 
-  _Local({
-    this.sessions = const <DeckSession>[],
-    this.analyses = const <String, PhotoAnalysis>{},
-  });
+  _Local({this.sessions = const <DeckSession>[]});
 
   final List<DeckSession> sessions;
-  final Map<String, PhotoAnalysis> analyses;
 
   @override
   Future<Result<void>> saveSession(DeckSession session) async {
@@ -227,7 +221,7 @@ class _Local implements LocalService {
 
   @override
   Future<Result<Map<String, PhotoAnalysis>>> loadAnalyses() async {
-    return Success<Map<String, PhotoAnalysis>>(analyses);
+    return const Success<Map<String, PhotoAnalysis>>(<String, PhotoAnalysis>{});
   }
 
   @override
@@ -252,21 +246,21 @@ void main() {
   test('5k hub scan: incremental totals are correct and in bounds', () async {
     final DateTime now = DateTime.now();
     final List<MediaAsset> assets = <MediaAsset>[];
-    final Map<String, PhotoAnalysis> analyses = <String, PhotoAnalysis>{};
     for (int i = 0; i < 5000; i++) {
       final String album = i < 100
           ? 'Screenshots'
           : i < 200
           ? 'WhatsApp Images'
           : 'Camera';
-      // Days apart, so no burst runs form.
+      // Days apart, so no burst runs form. The first 100 carry
+      // the enumeration's screenshot marking (Stage 4).
       final MediaAsset asset = _asset(
         'a$i',
         album: album,
         date: now.subtract(Duration(days: i + 1)),
+        screenshot: i < 100,
       );
       assets.add(asset);
-      analyses['a$i'] = _analysis('a$i', i * 104729);
     }
     final Map<String, DeckMark> marks = <String, DeckMark>{
       for (int i = 0; i < 10; i++) 'a$i': DeckMark.delete,
@@ -283,7 +277,6 @@ void main() {
             favouriteIds: <String>{},
           ),
         ],
-        analyses: analyses,
       ),
     );
     final Stopwatch watch = Stopwatch()..start();
@@ -291,7 +284,7 @@ void main() {
     watch.stop();
     // ignore: avoid_print
     print(
-      'hub scan 5k assets (cached analyses): '
+      'hub scan 5k assets (stage 4 scan, thumbnails unreadable): '
       '${watch.elapsedMilliseconds}ms',
     );
     expect(controller.status.value, DecksStatus.ready);
@@ -308,7 +301,12 @@ void main() {
     WidgetTester tester,
   ) async {
     final DateTime now = DateTime.now();
-    final MediaAsset shot = _asset('shot', album: 'Screenshots', date: now);
+    final MediaAsset shot = _asset(
+      'shot',
+      album: 'Screenshots',
+      date: now,
+      screenshot: true,
+    );
     final MediaAsset cam = _asset('cam', album: 'Camera', date: now);
     final DecksController controller = DecksController(
       media: _Media(assets: <MediaAsset>[shot, cam]),
@@ -321,10 +319,6 @@ void main() {
             favouriteIds: <String>{},
           ),
         ],
-        analyses: <String, PhotoAnalysis>{
-          'shot': _analysis('shot', 111),
-          'cam': _analysis('cam', 222),
-        },
       ),
     );
     Get.put<DecksController>(controller);
@@ -333,6 +327,17 @@ void main() {
     await tester.pumpWidget(
       GetMaterialApp(theme: AppTheme.light, home: const DecksView()),
     );
+    // Stage 4: the scan finishes on worker isolates; replies
+    // starve under fake-async pumps alone, so wait interleaved
+    // (bounded) like decks_view_test's _waitForScan.
+    int rounds = 0;
+    while (controller.status.value != DecksStatus.ready && rounds < 100) {
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      rounds++;
+    }
     await tester.pumpAndSettle();
     expect(find.text('Screenshots'), findsWidgets);
     final Finder metricPill = find.byKey(const Key('decks_metric_pill'));

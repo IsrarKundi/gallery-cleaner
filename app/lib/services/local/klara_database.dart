@@ -10,41 +10,139 @@
 // verify against klara_database.g.dart after codegen, do not
 // guess them. Dates are INTEGER milliseconds since epoch, never
 // drift DateTime columns, so every value round-trips exactly.
+//
+// Schema v2 (fix plan Stage 3, ADR-018): swipe marks and
+// session favourites leave the per-session JSON blobs for
+// their own per-row tables ([Marks], [SessionFavourites]), so
+// one swipe writes one small mark row instead of re-encoding
+// the session's whole marks map into its row. [Sessions] keeps
+// only the resume position. The 1 -> 2 upgrade copies every
+// blob entry into the row tables BEFORE the blob columns are
+// dropped, inside the migration transaction: a crash mid-way
+// rolls the whole upgrade back and the next launch retries it.
+//
+// Schema v3 (fix plan Stage 4, ADR-019): the persisted aHash
+// leaves the database. The scan's persisted product is now
+// memberships — [AssetInfos] (facts), [ScanGroups] +
+// [ScanGroupMembers] (group memberships) and
+// [DuplicateReferences] + [DuplicateReferenceMembers] (the
+// duplicate reference) — with no hash or score column anywhere.
+// The 2 -> 3 upgrade converts each legacy analyses row's FACTS
+// into [AssetInfos] (type 'image', edited false, screenshot
+// marking unknown/false), stamps the membership version 0 (so
+// the converted facts are never mistaken for fresh memberships)
+// and drops the analyses table: the old engine's groups are
+// discarded and the next scan recomputes them.
+
+import 'dart:convert';
 
 import 'package:drift/drift.dart';
 
 part 'klara_database.g.dart';
 
-/// One cached photo analysis, keyed by MediaStore asset id.
-/// Columns mirror [PhotoAnalysis] field for field, including the
-/// Phase 5.3 fingerprint (sizeBytes, modifiedDateMs,
-/// algorithmVersion) so freshness checks work identically.
-class Analyses extends Table {
+/// Asset-info facts (schema v3, fix plan Stage 4): the plain
+/// per-asset facts the duplicate key and the membership
+/// freshness rule need, one row per asset. No hash, no scores —
+/// those are recomputed per scan, never persisted (ADR-019).
+/// Replaces the v1-v2 analyses table (dropped by the upgrade).
+@DataClassName('AssetInfoRow')
+class AssetInfos extends Table {
   TextColumn get assetId => text()();
-  IntColumn get hash => integer()();
+
+  /// MediaAssetType.name ('image' / 'video').
+  TextColumn get type => text()();
   IntColumn get width => integer()();
   IntColumn get height => integer()();
-  RealColumn get blurScore => real()();
-  RealColumn get meanLuminance => real()();
   IntColumn get sizeBytes => integer().nullable()();
   IntColumn get modifiedDateMs => integer().nullable()();
-  IntColumn get algorithmVersion => integer()();
+  BoolColumn get isEdited => boolean()();
+  BoolColumn get isScreenshot => boolean()();
 
   @override
   Set<Column> get primaryKey => {assetId};
 }
 
-/// One deck session, keyed by filter key. Marks and favourites
-/// are stored as the same JSON the file store used, so
-/// [DeckSession.fromJson] parses them identically.
+/// One scan group (schema v3): its kind plus the group's seed
+/// (similar groups) and suggested keeper where it has them.
+/// Members live in [ScanGroupMembers], ordered.
+@DataClassName('ScanGroupRow')
+class ScanGroups extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  /// ScanGroupKind.name: 'similar' / 'duplicate' / 'blurry' /
+  /// 'dark'.
+  TextColumn get kind => text()();
+  TextColumn get seedId => text().nullable()();
+  TextColumn get keeperId => text().nullable()();
+}
+
+/// One asset's membership in one [ScanGroups] row, with its
+/// position so group order (seed first) round-trips exactly.
+@DataClassName('ScanGroupMemberRow')
+class ScanGroupMembers extends Table {
+  IntColumn get groupRowId => integer()();
+  TextColumn get assetId => text()();
+  IntColumn get memberIndex => integer()();
+
+  @override
+  Set<Column> get primaryKey => {groupRowId, assetId};
+}
+
+/// One duplicate set's reference (schema v3): the main photo.
+/// Its duplicates live in [DuplicateReferenceMembers], ordered.
+@DataClassName('DuplicateReferenceRow')
+class DuplicateReferences extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get mainId => text()();
+}
+
+/// One duplicate's membership in one [DuplicateReferences] row,
+/// with its position.
+@DataClassName('DuplicateReferenceMemberRow')
+class DuplicateReferenceMembers extends Table {
+  IntColumn get referenceRowId => integer()();
+  TextColumn get assetId => text()();
+  IntColumn get memberIndex => integer()();
+
+  @override
+  Set<Column> get primaryKey => {referenceRowId, assetId};
+}
+
+/// One deck session's resume position, keyed by filter key.
+/// The session's marks and favourites live in [Marks] and
+/// [SessionFavourites] (schema v2) — this row is only the
+/// per-deck progress record.
 class Sessions extends Table {
   TextColumn get filterKey => text()();
   IntColumn get currentIndex => integer()();
-  TextColumn get marksJson => text()();
-  TextColumn get favouritesJson => text()();
 
   @override
   Set<Column> get primaryKey => {filterKey};
+}
+
+/// One swipe mark (schema v2, fix plan Stage 3): the marks
+/// store. A swipe inserts or replaces exactly one of these
+/// rows (an unmark deletes it) — never a rewrite of the
+/// session it belongs to. [mark] is the [DeckMark] name, the
+/// same string the v1 session blob stored, copied verbatim by
+/// the upgrade so no mark can change meaning in transit.
+class Marks extends Table {
+  TextColumn get filterKey => text()();
+  TextColumn get assetId => text()();
+  TextColumn get mark => text()();
+
+  @override
+  Set<Column> get primaryKey => {filterKey, assetId};
+}
+
+/// One favourited (protected) asset within a deck session
+/// (schema v2). Same per-row reasoning as [Marks].
+class SessionFavourites extends Table {
+  TextColumn get filterKey => text()();
+  TextColumn get assetId => text()();
+
+  @override
+  Set<Column> get primaryKey => {filterKey, assetId};
 }
 
 /// One recorded Trash entry, keyed by asset id. A re-trash of
@@ -105,8 +203,14 @@ class MetaEntries extends Table {
 
 @DriftDatabase(
   tables: [
-    Analyses,
+    AssetInfos,
+    ScanGroups,
+    ScanGroupMembers,
+    DuplicateReferences,
+    DuplicateReferenceMembers,
     Sessions,
+    Marks,
+    SessionFavourites,
     TrashEntries,
     HistoryRecords,
     Snoozes,
@@ -118,12 +222,20 @@ class KlaraDatabase extends _$KlaraDatabase {
   KlaraDatabase(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (Migrator m) async {
       await m.createAll();
+    },
+    onUpgrade: (Migrator m, int from, int to) async {
+      if (from < 2) {
+        await _upgrade1To2(m);
+      }
+      if (from < 3) {
+        await _upgrade2To3(m);
+      }
     },
     beforeOpen: (OpeningDetails details) async {
       // WAL mode (solutions 6.1): readers never block writers
@@ -141,4 +253,133 @@ class KlaraDatabase extends _$KlaraDatabase {
       );
     },
   );
+
+  /// Schema 1 -> 2 (fix plan Stage 3, ADR-018): split every
+  /// session's marks/favourites blobs into [Marks] /
+  /// [SessionFavourites] rows, then rebuild [Sessions] without
+  /// the blob columns. Runs inside drift's migration
+  /// transaction — a crash anywhere rolls the whole upgrade
+  /// back, the database stays at v1, and the next launch
+  /// retries; a committed upgrade never re-runs.
+  ///
+  /// Blob strings are copied VERBATIM (mark names are not
+  /// parsed here), so a mark cannot change meaning in transit;
+  /// name parsing keeps the one rule it always had
+  /// ([DeckSession.fromJson]: unknown names read as keep) at
+  /// read time in the session store. A blob that fails to
+  /// decode at all is never dropped: its raw text is preserved
+  /// in [MetaEntries] under `quarantine:session:<filterKey>`
+  /// for a future repair, and the session's progress row still
+  /// migrates (the app-level downgrade guard cannot apply —
+  /// the database DID open; quarantining is the no-silent-loss
+  /// option).
+  Future<void> _upgrade1To2(Migrator m) async {
+    await m.createTable(marks);
+    await m.createTable(sessionFavourites);
+    final List<QueryRow> rows = await customSelect(
+      'SELECT filter_key, marks_json, favourites_json FROM sessions',
+    ).get();
+    await batch((Batch b) {
+      for (final QueryRow row in rows) {
+        final String filterKey = row.read<String>('filter_key');
+        final String marksJson = row.read<String>('marks_json');
+        final String favouritesJson = row.read<String>('favourites_json');
+        try {
+          final Map<String, dynamic> marksMap =
+              jsonDecode(marksJson) as Map<String, dynamic>;
+          for (final MapEntry<String, dynamic> entry in marksMap.entries) {
+            b.insert(
+              marks,
+              MarksCompanion.insert(
+                filterKey: filterKey,
+                assetId: entry.key,
+                mark: entry.value as String,
+              ),
+              mode: InsertMode.insertOrReplace,
+            );
+          }
+          final List<dynamic> favouriteIds =
+              jsonDecode(favouritesJson) as List<dynamic>;
+          for (final Object? id in favouriteIds) {
+            b.insert(
+              sessionFavourites,
+              SessionFavouritesCompanion.insert(
+                filterKey: filterKey,
+                assetId: id as String,
+              ),
+              mode: InsertMode.insertOrReplace,
+            );
+          }
+        } catch (_) {
+          b.insert(
+            metaEntries,
+            MetaEntriesCompanion.insert(
+              key: 'quarantine:session:$filterKey',
+              value: jsonEncode(<String, String>{
+                'marksJson': marksJson,
+                'favouritesJson': favouritesJson,
+              }),
+            ),
+            mode: InsertMode.insertOrReplace,
+          );
+        }
+      }
+    });
+    await m.alterTable(TableMigration(sessions));
+  }
+
+  /// Schema 2 -> 3 (fix plan Stage 4, ADR-019): create the
+  /// membership tables, convert every legacy analyses row's
+  /// FACTS into [AssetInfos], stamp the membership version 0,
+  /// and drop the analyses table (with it, the persisted hash).
+  ///
+  /// The old rows' groups are NOT converted: they were computed
+  /// by the retired aHash/slider engine and cannot be expressed
+  /// in the new rules — carrying them over would mint phantom
+  /// groups. Version 0 memberships are never "fresh", so the
+  /// first Stage 4 scan recomputes everything from the live
+  /// library and restamps. The converted facts keep the
+  /// asset-info third of the split populated for inspection and
+  /// cost nothing: freshness compares them exactly, and any
+  /// difference (including the screenshot marking, unknown in
+  /// the old cache and converted as false) triggers the rescan
+  /// anyway. Runs inside drift's migration transaction like
+  /// every upgrade here.
+  Future<void> _upgrade2To3(Migrator m) async {
+    await m.createTable(assetInfos);
+    await m.createTable(scanGroups);
+    await m.createTable(scanGroupMembers);
+    await m.createTable(duplicateReferences);
+    await m.createTable(duplicateReferenceMembers);
+    final List<QueryRow> rows = await customSelect(
+      'SELECT asset_id, width, height, size_bytes, modified_date_ms '
+      'FROM analyses',
+    ).get();
+    await batch((Batch b) {
+      for (final QueryRow row in rows) {
+        b.insert(
+          assetInfos,
+          AssetInfosCompanion.insert(
+            assetId: row.read<String>('asset_id'),
+            type: 'image',
+            width: row.read<int>('width'),
+            height: row.read<int>('height'),
+            sizeBytes: Value<int?>(row.readNullable<int>('size_bytes')),
+            modifiedDateMs: Value<int?>(
+              row.readNullable<int>('modified_date_ms'),
+            ),
+            isEdited: false,
+            isScreenshot: false,
+          ),
+          mode: InsertMode.insertOrReplace,
+        );
+      }
+      b.insert(
+        metaEntries,
+        MetaEntriesCompanion.insert(key: 'scan_membership_version', value: '0'),
+        mode: InsertMode.insertOrReplace,
+      );
+    });
+    await customStatement('DROP TABLE IF EXISTS analyses');
+  }
 }

@@ -1,19 +1,22 @@
 // Duplicates screen state (requirements §7, Phase 2).
 //
-// Loads the library through the shared scanner (metadata re-scan,
-// but hashes/scores come from the LocalService cache — no thumbnail
-// re-download for already-analysed assets), groups from the cache,
-// and regroups LIVE as the similarity slider moves: regrouping is a
-// pure recompute over cached hashes, never a thumbnail reload.
-// Thumbnails for newly grouped members load after each regroup.
+// Shows the EXACT-duplicate groups the library scan computed
+// (fix plan Stage 4): grouping now happens inside the scan, and
+// this screen reads the groups from the scan's persisted
+// memberships — it never groups anything itself. The similarity
+// slider that used to regroup live from cached hashes is GONE
+// (owner-approved removal, ADR-019): the engine it drove no
+// longer exists, and Cleanup's rule is a fixed compare table,
+// not a user threshold.
 //
-// Keeper changes are local until "Mark others for deletion": that
-// action writes delete marks for the group's non-keepers (and keep
-// marks for the keeper, so it never reappears undecided) into the
-// `duplicates` session and navigates to /review with the non-keeper
-// list — the same arguments + filterKey contract the deck uses.
-// Nothing is deleted here; review + native confirmation still own
-// removal (requirements §4).
+// Keeper changes are local until "Mark others for deletion":
+// that action writes delete marks for the group's non-keepers
+// (and keep marks for the keeper, so it never reappears
+// undecided) into the `duplicates` session and navigates to
+// /review with the non-keeper list — the same arguments +
+// filterKey contract the deck uses. Nothing is deleted here;
+// review + native confirmation still own removal
+// (requirements §4).
 
 import 'dart:async';
 import 'dart:typed_data';
@@ -22,12 +25,11 @@ import 'package:get/get.dart';
 
 import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
-import '../../../core/utils/async_guard.dart';
 import '../../../core/utils/result.dart';
 import '../../../services/lifecycle/app_lifecycle.dart';
 import '../../../services/detection/grouping.dart';
 import '../../../services/detection/library_scanner.dart';
-import '../../../services/detection/photo_analysis.dart';
+import '../../../services/detection/scan_memberships.dart';
 import '../../../services/detection/scan_repository.dart';
 import '../../../services/detection/scan_repository_impl.dart';
 import '../../../services/local/local_service.dart';
@@ -44,12 +46,10 @@ class DuplicatesController extends GetxController {
     required this.local,
     ThumbnailService? thumbnailService,
     ScanRepository? scanRepository,
-    GroupingRunner? groupingRunner,
     this.lifecycle,
   }) : _thumbnails = thumbnailService ?? ThumbnailServiceImpl(media: media),
        _scans =
-           scanRepository ?? ScanRepositoryImpl(media: media, local: local),
-       _groupingRunner = groupingRunner ?? groupAssetsOnIsolate;
+           scanRepository ?? ScanRepositoryImpl(media: media, local: local);
 
   final MediaService media;
   final LocalService local;
@@ -68,28 +68,6 @@ class DuplicatesController extends GetxController {
   /// Phase 2.3: bytes live in the shared thumbnail service.
   final ThumbnailService _thumbnails;
 
-  /// Phase 5.2: grouping runs off the UI isolate; injectable so
-  /// tests can gate the runner and prove stale-result drops.
-  final GroupingRunner _groupingRunner;
-
-  /// Guards regroup results: only the latest request lands.
-  final AsyncGuard _regroupGuard = AsyncGuard();
-
-  /// Threshold of the regroup currently in flight, if any. Needed
-  /// for the return-to-applied-value case: dragging back to the
-  /// already-applied threshold and releasing must supersede a
-  /// still-running regroup for another value, not let it land
-  /// under the wrong slider position.
-  int? _pendingThreshold;
-
-  /// Similarity slider: Hamming distance range 0-10, default 5.
-  /// Default 5 is the middle of the range: tight enough that groups
-  /// look genuinely alike, loose enough to catch re-saves and
-  /// crops that shift a few hash bits.
-  static const int sliderMin = 0;
-  static const int sliderMax = 10;
-  static const int defaultThreshold = 5;
-
   /// Session key for marks written by "mark non-keepers".
   static const String sessionKey = 'duplicates';
 
@@ -98,7 +76,6 @@ class DuplicatesController extends GetxController {
 
   final Rx<DecksStatus> status = DecksStatus.loading.obs;
   final RxString errorKey = ''.obs;
-  final RxInt threshold = defaultThreshold.obs;
   final RxList<DuplicateGroup> groups = <DuplicateGroup>[].obs;
 
   /// Phase 2.3: service-owned bytes / failures for the grid size.
@@ -110,16 +87,6 @@ class DuplicatesController extends GetxController {
   /// Phase 3A: favourited non-keepers kept out of a delete-marking
   /// run (count shown as a banner in the view, never silent).
   final RxInt protectedExcludedCount = 0.obs;
-
-  List<MediaAsset> _assets = <MediaAsset>[];
-  Map<String, PhotoAnalysis> _analyses = <String, PhotoAnalysis>{};
-
-  /// Threshold the current groups were computed at. The slider's live
-  /// drag only previews ([previewThreshold]); [commitThreshold]
-  /// regroups once per release, and only when the previewed value
-  /// differs from this one — a drag that returns to its start value
-  /// costs no regroup at all.
-  int _groupedThreshold = defaultThreshold;
 
   @override
   void onInit() {
@@ -148,10 +115,6 @@ class DuplicatesController extends GetxController {
     // See DecksController.onClose: never leave the shared scan
     // paused after disposal.
     _scans.resume();
-    // Drop any regroup still in flight: its groups must not land
-    // on a disposed controller.
-    _regroupGuard.invalidate();
-    _pendingThreshold = null;
     super.onClose();
   }
 
@@ -249,9 +212,21 @@ class DuplicatesController extends GetxController {
       errorKey.value = AppStrings.errorMediaLoad;
       return;
     }
-    _assets = scan.assets;
-    _analyses = scan.analyses;
-    await _regroupAsync();
+    // Stage 4: the groups are the scan's exact-duplicate
+    // memberships, resolved against this scan's assets. The
+    // keeper each group shows is the duplicate reference's main
+    // (the scan's suggested keeper) until the user changes it.
+    final Map<String, MediaAsset> byId = <String, MediaAsset>{
+      for (final MediaAsset asset in scan.assets) asset.id: asset,
+    };
+    groups.assignAll(
+      groupsFromMemberships(byId, scan.memberships, ScanGroupKind.duplicate),
+    );
+    // One prefetch for all member tiles (deduped by the service).
+    _thumbnails.prefetch(<String>[
+      for (final DuplicateGroup group in groups)
+        for (final MediaAsset asset in group.assets) asset.id,
+    ], thumbnailSize);
     status.value = DecksStatus.ready;
   }
 
@@ -262,36 +237,6 @@ class DuplicatesController extends GetxController {
   /// state needs a second action).
   Future<void> openPermissionSettings() async {
     await media.openAppSettings();
-  }
-
-  /// Slider handler: regroup from cached hashes only. No thumbnail
-  /// download, no re-scan — only tile thumbnails for members that
-  /// newly appear in a group are fetched.
-  void setThreshold(int value) {
-    final int clamped = value.clamp(sliderMin, sliderMax);
-    if (clamped == threshold.value) {
-      return;
-    }
-    threshold.value = clamped;
-    unawaited(_regroupAsync());
-  }
-
-  /// Phase 1.1: live slider drag — updates the displayed value only,
-  /// never regroups. The view calls this from `onChanged` so the
-  /// thumb and label follow the finger; the expensive regroup waits
-  /// for [commitThreshold] on release.
-  void previewThreshold(int value) {
-    threshold.value = value.clamp(sliderMin, sliderMax);
-  }
-
-  /// Phase 1.1: slider release — exactly one regroup per release,
-  /// and none when the drag ended where it started. The view calls
-  /// this from `onChangeEnd`.
-  void commitThreshold() {
-    if (threshold.value != _groupedThreshold ||
-        (_pendingThreshold != null && _pendingThreshold != threshold.value)) {
-      unawaited(_regroupAsync());
-    }
   }
 
   /// User picks another keeper in [groupIndex]. Only member ids are
@@ -381,35 +326,5 @@ class DuplicatesController extends GetxController {
       arguments: toReview,
       parameters: <String, String>{'filterKey': sessionKey},
     );
-  }
-
-  /// Regroups off the UI isolate (solutions 5.2). The request's
-  /// threshold is captured at call time and recorded as
-  /// [_groupedThreshold] only when its result actually lands, so
-  /// a slow earlier regroup can never overwrite a newer one, and
-  /// old groups stay visible until the new ones arrive (no
-  /// flicker to an empty list mid-drag).
-  Future<void> _regroupAsync() async {
-    final int generation = _regroupGuard.next();
-    final int requested = threshold.value;
-    _pendingThreshold = requested;
-    final List<DuplicateGroup> grouped = await _groupingRunner(
-      List<MediaAsset>.of(_assets),
-      Map<String, PhotoAnalysis>.of(_analyses),
-      requested,
-    );
-    if (!_regroupGuard.isCurrent(generation) || isClosed) {
-      return;
-    }
-    _pendingThreshold = null;
-    _groupedThreshold = requested;
-    groups.assignAll(grouped);
-    // One prefetch for all member tiles: deduped, and failed tiles
-    // retry only when the member list changes (slider regroup).
-    final List<String> ids = <String>[
-      for (final DuplicateGroup group in groups)
-        for (final MediaAsset asset in group.assets) asset.id,
-    ];
-    _thumbnails.prefetch(ids, thumbnailSize);
   }
 }

@@ -8,6 +8,7 @@
 
 import '../../core/utils/result.dart';
 import '../detection/photo_analysis.dart';
+import '../detection/scan_memberships.dart';
 import '../trash/trash_entry.dart';
 
 /// One swipe mark. Matches the locked gesture mapping
@@ -366,4 +367,26 @@ abstract class LocalService {
   /// returns [Failure] and the caller keeps the old cache: the
   /// next full scan retries.
   Future<Result<int>> pruneAnalyses(Set<String> liveIds);
+
+  // -- Scan memberships (fix plan Stage 4, ADR-019) ---------------
+  //
+  // The persisted product of the library scan: asset-info facts,
+  // group memberships and the duplicate reference. These carry a
+  // DEFAULT body (the settings precedent, ADR-012): historical
+  // test doubles written against the older surface keep
+  // compiling and behave as "no memberships stored". Both
+  // production implementations override them.
+
+  /// Loads the persisted scan memberships. An implementation
+  /// with nothing stored returns [ScanMemberships.empty].
+  Future<Result<ScanMemberships>> loadScanMemberships() async {
+    return const Success<ScanMemberships>(ScanMemberships.empty);
+  }
+
+  /// Replaces the persisted scan memberships wholesale (the
+  /// scanner only calls this after a complete recompute, so a
+  /// replacement is also the prune).
+  Future<Result<void>> saveScanMemberships(ScanMemberships memberships) async {
+    return const Success<void>(null);
+  }
 }

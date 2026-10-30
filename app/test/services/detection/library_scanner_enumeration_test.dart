@@ -13,7 +13,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:klara/core/utils/result.dart';
 import 'package:klara/services/detection/analysis_worker.dart';
 import 'package:klara/services/detection/library_scanner.dart';
-import 'package:klara/services/detection/photo_analysis.dart';
+import 'package:klara/services/detection/blur_detection.dart';
+import 'package:klara/services/detection/photo_assessment.dart';
+import 'package:klara/services/detection/thumbnail_analysis.dart';
 import 'package:klara/services/detection/scan_repository_impl.dart';
 import 'package:klara/services/local/local_service_impl.dart';
 import 'package:klara/services/media/enumerated_asset.dart';
@@ -164,10 +166,14 @@ EnumeratedAsset _image(
   );
 }
 
-Future<List<PhotoAnalysis?>> _noAnalysis(
+Future<List<FingerprintComputation?>> _noFingerprints(
   List<AnalysisBatchInput> inputs,
 ) async {
-  return List<PhotoAnalysis?>.filled(inputs.length, null);
+  return List<FingerprintComputation?>.filled(inputs.length, null);
+}
+
+Future<List<BlurAssessment?>> _noBlur(List<AnalysisBatchInput> inputs) async {
+  return List<BlurAssessment?>.filled(inputs.length, null);
 }
 
 void main() {
@@ -197,7 +203,8 @@ void main() {
       media: media,
       local: local,
       enumeration: enumeration,
-      analyzeBatch: _noAnalysis,
+      fingerprintBatch: _noFingerprints,
+      blurBatch: _noBlur,
     );
   }
 
@@ -210,7 +217,7 @@ void main() {
       final List<int> pageSizes = <int>[];
       final List<int?> totals = <int?>[];
       final LibraryScan scan = await scanner().scan(
-        onPage: (List<MediaAsset> page, Map<String, PhotoAnalysis> fresh) {
+        onPage: (List<MediaAsset> page, Map<String, PhotoAssessment> fresh) {
           pageSizes.add(page.length);
         },
         onProgress: (int scanned, int? total) {
@@ -270,7 +277,7 @@ void main() {
   test('an empty library scans clean with one empty page', () async {
     final List<int> pageSizes = <int>[];
     final LibraryScan scan = await scanner().scan(
-      onPage: (List<MediaAsset> page, Map<String, PhotoAnalysis> fresh) {
+      onPage: (List<MediaAsset> page, Map<String, PhotoAssessment> fresh) {
         pageSizes.add(page.length);
       },
     );
@@ -284,7 +291,7 @@ void main() {
     gateway.fail = true;
     int pages = 0;
     final LibraryScan scan = await scanner().scan(
-      onPage: (List<MediaAsset> page, Map<String, PhotoAnalysis> fresh) {
+      onPage: (List<MediaAsset> page, Map<String, PhotoAssessment> fresh) {
         pages++;
       },
     );

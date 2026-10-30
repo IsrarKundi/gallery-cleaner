@@ -1,9 +1,12 @@
-// Phase 5.3 cache fingerprint + prune tests (requirements §7):
-// a cached analysis is reused only when it still describes the
-// exact file (version + dimensions + size + modified date); an
-// edited photo is re-analysed, old-version entries are
-// re-analysed, and orphan entries are pruned only after a fully
-// completed scan — never after a cancelled or page-failed one.
+// Stage 4 membership freshness + migration tests (requirements
+// §7): the persisted memberships are reused only when every
+// asset-info fact still matches the live library (the freshness
+// rule in scan_memberships_test.dart, exercised end-to-end
+// here); an edited photo forces a recompute; a cancelled or
+// page-failed scan never overwrites the saved memberships; and
+// a legacy pre-Stage 4 analysis cache converts to facts only —
+// its groups are discarded, never served as phantom groups,
+// and the first Stage 4 scan recomputes.
 
 import 'dart:io';
 import 'dart:typed_data';
@@ -13,6 +16,7 @@ import 'package:image/image.dart' as img;
 import 'package:klara/core/utils/result.dart';
 import 'package:klara/services/detection/library_scanner.dart';
 import 'package:klara/services/detection/photo_analysis.dart';
+import 'package:klara/services/detection/scan_memberships.dart';
 import 'package:klara/services/local/local_service_impl.dart';
 import 'package:klara/services/media/media_asset.dart';
 import 'package:klara/services/media/media_service.dart';
@@ -34,35 +38,14 @@ MediaAsset _asset(String id, {int size = 1000, DateTime? modified}) {
   );
 }
 
-PhotoAnalysis _analysis(
-  String id, {
-  int version = analysisAlgorithmVersion,
-  int size = 1000,
-  DateTime? modified,
-  int width = 10,
-  int height = 10,
-}) {
-  return PhotoAnalysis(
-    assetId: id,
-    hash: 7,
-    width: width,
-    height: height,
-    blurScore: 500,
-    meanLuminance: 128,
-    sizeBytes: size,
-    modifiedDateMs: modified?.millisecondsSinceEpoch,
-    algorithmVersion: version,
-  );
-}
-
-/// Solid dark 16x16 PNG (uniform → one hash).
+/// Solid dark 16x16 PNG (uniform: valid fingerprint, dark).
 Uint8List _darkPng() {
   final img.Image image = img.Image(width: 16, height: 16);
   img.fill(image, color: img.ColorRgb8(5, 5, 5));
   return Uint8List.fromList(img.encodePng(image));
 }
 
-/// Half-white / half-black 16x16 PNG (a different hash).
+/// Half-white / half-black 16x16 PNG (a different fingerprint).
 Uint8List _splitPng() {
   final img.Image image = img.Image(width: 16, height: 16);
   for (int y = 0; y < 16; y++) {
@@ -144,106 +127,7 @@ class _RealLocal extends LocalServiceImpl {
 }
 
 void main() {
-  group('isAnalysisFresh', () {
-    test('same fingerprint is fresh', () {
-      expect(
-        isAnalysisFresh(
-          _analysis('a', modified: _t1),
-          _asset('a', modified: _t1),
-        ),
-        isTrue,
-      );
-    });
-
-    test('changed modified date is stale', () {
-      expect(
-        isAnalysisFresh(
-          _analysis('a', modified: _t1),
-          _asset('a', modified: _t2),
-        ),
-        isFalse,
-      );
-    });
-
-    test('changed size is stale', () {
-      expect(
-        isAnalysisFresh(_analysis('a', size: 1000), _asset('a', size: 2000)),
-        isFalse,
-      );
-    });
-
-    test('changed dimensions are stale', () {
-      expect(
-        isAnalysisFresh(_analysis('a', width: 10, height: 10), _asset('a')),
-        isTrue,
-      );
-      final MediaAsset wider = MediaAsset(
-        id: 'a',
-        type: MediaAssetType.image,
-        width: 20,
-        height: 10,
-        sizeBytes: 1000,
-        createDate: DateTime(2026, 10, 20),
-        title: 'a.jpg',
-        albumName: 'Camera',
-      );
-      expect(isAnalysisFresh(_analysis('a'), wider), isFalse);
-    });
-
-    test('old algorithm version is stale', () {
-      expect(
-        isAnalysisFresh(
-          _analysis('a', version: 0, modified: _t1),
-          _asset('a', modified: _t1),
-        ),
-        isFalse,
-      );
-    });
-
-    test('null modified on both sides is fresh', () {
-      expect(isAnalysisFresh(_analysis('a'), _asset('a')), isTrue);
-    });
-
-    test('one-sided null modified is stale', () {
-      expect(
-        isAnalysisFresh(_analysis('a', modified: _t1), _asset('a')),
-        isFalse,
-      );
-      expect(
-        isAnalysisFresh(_analysis('a'), _asset('a', modified: _t1)),
-        isFalse,
-      );
-    });
-  });
-
-  group('PhotoAnalysis JSON back-compat', () {
-    test('old entries without new fields load as version 0', () {
-      final PhotoAnalysis parsed = PhotoAnalysis.fromJson(<String, dynamic>{
-        'assetId': 'a',
-        'hash': 7,
-        'width': 10,
-        'height': 10,
-        'blurScore': 500.0,
-        'meanLuminance': 128.0,
-      });
-      expect(parsed.algorithmVersion, 0);
-      expect(parsed.sizeBytes, isNull);
-      expect(parsed.modifiedDateMs, isNull);
-      // …and are therefore stale against any current asset.
-      expect(isAnalysisFresh(parsed, _asset('a')), isFalse);
-    });
-
-    test('round-trip preserves the fingerprint', () {
-      final PhotoAnalysis original = _analysis('a', modified: _t1);
-      final PhotoAnalysis parsed = PhotoAnalysis.fromJson(original.toJson());
-      expect(parsed.algorithmVersion, analysisAlgorithmVersion);
-      expect(parsed.sizeBytes, 1000);
-      expect(parsed.modifiedDateMs, _t1.millisecondsSinceEpoch);
-      expect(isAnalysisFresh(parsed, _asset('a', modified: _t1)), isTrue);
-    });
-  });
-
-  group('scanner fingerprint + prune (real LocalServiceImpl)', () {
+  group('scanner membership freshness (real LocalServiceImpl)', () {
     late Directory temp;
     late _RealLocal local;
     late _Media media;
@@ -261,16 +145,15 @@ void main() {
       }
     });
 
-    Future<Map<String, PhotoAnalysis>> loadCache() async {
-      final Result<Map<String, PhotoAnalysis>> result = await local
-          .loadAnalyses();
+    Future<ScanMemberships> loadMemberships() async {
+      final Result<ScanMemberships> result = await local.loadScanMemberships();
       return result.fold(
-        onSuccess: (Map<String, PhotoAnalysis> value) => value,
-        onFailure: (_) => <String, PhotoAnalysis>{},
+        onSuccess: (ScanMemberships value) => value,
+        onFailure: (_) => ScanMemberships.empty,
       );
     }
 
-    test('edited photo is re-analysed with a new hash', () async {
+    test('an unchanged library pays NO thumbnail fetch on rescan', () async {
       media.page0 = <MediaAsset>[_asset('a', size: 1000, modified: _t1)];
       media.thumbnailFor = (_) => _darkPng();
       final LibraryScan first = await LibraryScanner(
@@ -278,87 +161,180 @@ void main() {
         local: local,
       ).scan();
       expect(first.cancelled, isFalse);
-      expect(media.thumbnailCalls, 1);
-      final int firstHash = first.analyses['a']!.hash;
+      // Two passes (fingerprint + blur) over one image.
+      expect(media.thumbnailCalls, 2);
+      expect(
+        first.memberships.algorithmVersion,
+        scanMembershipAlgorithmVersion,
+      );
+      // The dark uniform frame lands in the dark membership set.
+      expect(first.memberships.memberSetOf(ScanGroupKind.dark), <String>{'a'});
 
-      // Same id, new size + modified date + new bytes: an edit.
-      media.page0 = <MediaAsset>[_asset('a', size: 2000, modified: _t2)];
-      media.thumbnailFor = (_) => _splitPng();
       final LibraryScan second = await LibraryScanner(
         media: media,
         local: local,
       ).scan();
-      expect(second.cancelled, isFalse);
-      // The stale entry did NOT satisfy the scan: the thumbnail
-      // was fetched again and the hash changed.
+      // Facts unchanged: the saved memberships are reused and
+      // no photo is read again at all.
       expect(media.thumbnailCalls, 2);
-      expect(second.analyses['a']!.hash, isNot(firstHash));
-      expect(second.analyses['a']!.sizeBytes, 2000);
-      expect(second.analyses['a']!.modifiedDateMs, _t2.millisecondsSinceEpoch);
-      expect(second.analyses['a']!.algorithmVersion, 1);
+      expect(second.assessments, isEmpty);
+      expect(second.memberships.memberSetOf(ScanGroupKind.dark), <String>{'a'});
     });
 
-    test('unchanged photo pays no thumbnail fetch on rescan', () async {
-      media.page0 = <MediaAsset>[_asset('a', size: 1000, modified: _t1)];
-      media.thumbnailFor = (_) => _darkPng();
-      await LibraryScanner(media: media, local: local).scan();
-      expect(media.thumbnailCalls, 1);
-      await LibraryScanner(media: media, local: local).scan();
-      expect(media.thumbnailCalls, 1);
-    });
+    test(
+      'an edited photo (size + modified + bytes) forces recompute',
+      () async {
+        media.page0 = <MediaAsset>[_asset('a', size: 1000, modified: _t1)];
+        media.thumbnailFor = (_) => _darkPng();
+        final LibraryScan first = await LibraryScanner(
+          media: media,
+          local: local,
+        ).scan();
+        final int firstHash = first.assessments['a']!.fingerprint!.dHash;
+        expect(first.memberships.memberSetOf(ScanGroupKind.dark), <String>{
+          'a',
+        });
 
-    test('old-version entry is re-analysed, never mixed', () async {
-      await local.saveAnalyses(<PhotoAnalysis>[
-        _analysis('a', version: 0, modified: _t1),
-      ]);
-      media.page0 = <MediaAsset>[_asset('a', size: 1000, modified: _t1)];
-      media.thumbnailFor = (_) => _darkPng();
-      final LibraryScan scan = await LibraryScanner(
-        media: media,
-        local: local,
-      ).scan();
-      expect(media.thumbnailCalls, 1);
-      expect(scan.analyses['a']!.algorithmVersion, 1);
-    });
+        media.page0 = <MediaAsset>[_asset('a', size: 2000, modified: _t2)];
+        media.thumbnailFor = (_) => _splitPng();
+        final LibraryScan second = await LibraryScanner(
+          media: media,
+          local: local,
+        ).scan();
+        expect(media.thumbnailCalls, 4);
+        expect(second.assessments['a']!.fingerprint!.dHash, isNot(firstHash));
+        // The split frame is bright on average: no longer dark.
+        expect(second.memberships.memberSetOf(ScanGroupKind.dark), isEmpty);
+        expect(second.memberships.assetInfos['a']!.sizeBytes, 2000);
+        expect(
+          second.memberships.assetInfos['a']!.modifiedDateMs,
+          _t2.millisecondsSinceEpoch,
+        );
+      },
+    );
 
-    test('deleted assets leave no orphan analyses after a full scan', () async {
-      media.page0 = <MediaAsset>[_asset('a'), _asset('b')];
-      media.thumbnailFor = (_) => _darkPng();
-      await LibraryScanner(media: media, local: local).scan();
-      expect((await loadCache()).keys.toSet(), <String>{'a', 'b'});
+    test(
+      'deleted assets leave no orphan memberships after a full scan',
+      () async {
+        media.page0 = <MediaAsset>[_asset('a'), _asset('b')];
+        media.thumbnailFor = (_) => _darkPng();
+        await LibraryScanner(media: media, local: local).scan();
+        expect((await loadMemberships()).assetInfos.keys.toSet(), <String>{
+          'a',
+          'b',
+        });
+        media.page0 = <MediaAsset>[_asset('a')];
+        await LibraryScanner(media: media, local: local).scan();
+        expect((await loadMemberships()).assetInfos.keys.toSet(), <String>{
+          'a',
+        });
+      },
+    );
+
+    test('memberships survive a cancelled scan untouched', () async {
       media.page0 = <MediaAsset>[_asset('a')];
       await LibraryScanner(media: media, local: local).scan();
-      expect((await loadCache()).keys.toSet(), <String>{'a'});
-    });
-
-    test('orphans survive a cancelled scan', () async {
-      await local.saveAnalyses(<PhotoAnalysis>[
-        _analysis('a'),
-        _analysis('b'),
-        _analysis('orphan'),
-      ]);
-      media.page0 = <MediaAsset>[_asset('a')];
+      final ScanMemberships before = await loadMemberships();
+      expect(before.algorithmVersion, scanMembershipAlgorithmVersion);
+      media.thumbnailFor = (_) => _splitPng();
       final LibraryScan scan = await LibraryScanner(
         media: media,
         local: local,
       ).scan(isCancelled: () => true);
       expect(scan.cancelled, isTrue);
-      expect((await loadCache()).keys.toSet(), <String>{'a', 'b', 'orphan'});
+      final ScanMemberships after = await loadMemberships();
+      expect(after.algorithmVersion, before.algorithmVersion);
+      expect(after.assetInfos.keys.toSet(), before.assetInfos.keys.toSet());
+      expect(after.memberSetOf(ScanGroupKind.dark), <String>{'a'});
     });
 
-    test('orphans survive a page-failed scan', () async {
-      await local.saveAnalyses(<PhotoAnalysis>[
-        _analysis('a'),
-        _analysis('b'),
-        _analysis('orphan'),
-      ]);
+    test('memberships survive a page-failed scan untouched', () async {
+      media.page0 = <MediaAsset>[_asset('a')];
+      await LibraryScanner(media: media, local: local).scan();
       media.failAssets = true;
       final LibraryScan scan = await LibraryScanner(
         media: media,
         local: local,
       ).scan();
       expect(scan.pageFailed, isTrue);
-      expect((await loadCache()).keys.toSet(), <String>{'a', 'b', 'orphan'});
+      final ScanMemberships after = await loadMemberships();
+      expect(after.algorithmVersion, scanMembershipAlgorithmVersion);
+      expect(after.assetInfos.keys.toSet(), <String>{'a'});
+    });
+  });
+
+  group('legacy analysis cache migration (existing installs)', () {
+    late Directory temp;
+    late _RealLocal local;
+    late _Media media;
+
+    setUp(() async {
+      temp = await Directory.systemTemp.createTemp('klara_legacy_test_');
+      local = _RealLocal(directory: temp);
+      media = _Media();
+    });
+
+    tearDown(() async {
+      await local.dispose();
+      if (await temp.exists()) {
+        await temp.delete(recursive: true);
+      }
+    });
+
+    test('legacy rows convert to facts only: no phantom groups, '
+        'first scan recomputes and restamps', () async {
+      // A pre-Stage 4 install: analyses cached by the old
+      // engine (hash 7 would have grouped 'a' with anything
+      // sharing it under the old rules).
+      await local.saveAnalyses(<PhotoAnalysis>[
+        PhotoAnalysis(
+          assetId: 'a',
+          hash: 7,
+          width: 10,
+          height: 10,
+          blurScore: 500,
+          meanLuminance: 128,
+          sizeBytes: 1000,
+          modifiedDateMs: _t1.millisecondsSinceEpoch,
+        ),
+        PhotoAnalysis(
+          assetId: 'ghost',
+          hash: 7,
+          width: 10,
+          height: 10,
+          blurScore: 500,
+          meanLuminance: 128,
+          sizeBytes: 1000,
+          modifiedDateMs: _t1.millisecondsSinceEpoch,
+        ),
+      ]);
+      // The membership load converts FACTS only, at version 0,
+      // with NO groups — the old engine's groups are discarded.
+      final Result<ScanMemberships> converted = await local
+          .loadScanMemberships();
+      final ScanMemberships snapshot = converted.fold(
+        onSuccess: (ScanMemberships v) => v,
+        onFailure: (_) => throw StateError('conversion failed'),
+      );
+      expect(snapshot.algorithmVersion, 0);
+      expect(snapshot.assetInfos.keys.toSet(), <String>{'a', 'ghost'});
+      expect(snapshot.assetInfos['a']!.width, 10);
+      expect(snapshot.groups, isEmpty);
+      expect(snapshot.duplicateReferences, isEmpty);
+
+      // The first Stage 4 scan does not trust the conversion:
+      // it recomputes (thumbnails fetched) and restamps, and
+      // the ghost (not in the live library) leaves no trace.
+      media.page0 = <MediaAsset>[_asset('a', size: 1000, modified: _t1)];
+      media.thumbnailFor = (_) => _darkPng();
+      final LibraryScan scan = await LibraryScanner(
+        media: media,
+        local: local,
+      ).scan();
+      expect(media.thumbnailCalls, 2);
+      expect(scan.memberships.algorithmVersion, scanMembershipAlgorithmVersion);
+      expect(scan.memberships.assetInfos.keys.toSet(), <String>{'a'});
+      expect(scan.memberships.groupsOfKind(ScanGroupKind.similar), isEmpty);
     });
   });
 }

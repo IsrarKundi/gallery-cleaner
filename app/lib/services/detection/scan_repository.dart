@@ -25,7 +25,7 @@
 
 import '../media/media_asset.dart';
 import 'library_scanner.dart';
-import 'photo_analysis.dart';
+import 'photo_assessment.dart';
 
 /// A controller's attachment to the shared scan. Cancel detaches
 /// the callbacks; it never cancels the shared run itself.
@@ -52,7 +52,7 @@ abstract class ScanRepository {
   /// back to the UI thread (solutions 5.1); it never fires for
   /// memoised replays, which re-analyse nothing.
   ScanSubscription subscribe({
-    void Function(List<MediaAsset> page, Map<String, PhotoAnalysis> fresh)?
+    void Function(List<MediaAsset> page, Map<String, PhotoAssessment> fresh)?
     onPage,
     void Function(int scanned, int? estimatedTotal)? onProgress,
     void Function()? onDegraded,

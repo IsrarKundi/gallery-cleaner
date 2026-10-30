@@ -12,6 +12,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klara/core/utils/result.dart';
 import 'package:klara/services/detection/photo_analysis.dart';
+import 'package:klara/services/detection/scan_memberships.dart';
 import 'package:klara/services/local/local_service.dart';
 import 'package:klara/services/local/reminder_state_store.dart';
 import 'package:klara/services/media/media_asset.dart';
@@ -22,6 +23,14 @@ import 'package:klara/services/notifications/reminder_service_impl.dart';
 import 'package:klara/services/trash/trash_entry.dart';
 
 class _FakeLocal implements LocalService {
+  // Stage 4: memberships default to "none stored" in these fakes.
+  @override
+  Future<Result<ScanMemberships>> loadScanMemberships() async =>
+      const Success<ScanMemberships>(ScanMemberships.empty);
+
+  @override
+  Future<Result<void>> saveScanMemberships(ScanMemberships memberships) async =>
+      const Success<void>(null);
   AppSettings settings = const AppSettings(reminders: true);
   List<DeckSession> sessions = <DeckSession>[];
   List<TrashEntry> trashEntries = <TrashEntry>[];

@@ -5,9 +5,10 @@
 // appends each page's assets to their decks immediately, so rows
 // fill in as their counts become known. A determinate progress bar
 // (scanned count + % against the estimated library total) sits at
-// the top while scanning. Bursts and duplicates are list-level
-// results, so their rows stay in "still scanning" until the scan
-// completes; every other deck updates per page.
+// the top while scanning. Bursts, duplicates, blurry and dark are
+// scan-level results (fix plan Stage 4: memberships computed
+// inside the scan), so their rows stay in "still scanning" until
+// the scan completes; every other deck updates per page.
 //
 // Failure handling: a denied permission shows the denied state; a
 // failed page keeps whatever arrived and flips to error only when
@@ -35,7 +36,8 @@ import '../../../core/utils/result.dart';
 import '../../../services/lifecycle/app_lifecycle.dart';
 import '../../../services/detection/grouping.dart';
 import '../../../services/detection/library_scanner.dart';
-import '../../../services/detection/photo_analysis.dart';
+import '../../../services/detection/photo_assessment.dart';
+import '../../../services/detection/scan_memberships.dart';
 import '../../../services/detection/scan_repository.dart';
 import '../../../services/detection/scan_repository_impl.dart';
 import '../../../services/detection/smart_decks.dart';
@@ -60,12 +62,12 @@ class DecksController extends GetxController {
     this.storage,
     ThumbnailService? thumbnailService,
     ScanRepository? scanRepository,
-    ListDecksRunner? listDecksRunner,
+    BurstRunner? burstRunner,
     this.lifecycle,
   }) : _thumbnails = thumbnailService ?? ThumbnailServiceImpl(media: media),
        _scans =
            scanRepository ?? ScanRepositoryImpl(media: media, local: local),
-       _listDecksRunner = listDecksRunner ?? computeListDecksOnIsolate;
+       _burstRunner = burstRunner ?? burstAssetIdsOnIsolate;
 
   final MediaService media;
   final LocalService local;
@@ -81,13 +83,14 @@ class DecksController extends GetxController {
   final ScanRepository _scans;
   ScanSubscription? _scanSubscription;
 
-  /// Phase 5.2: list-level decks (duplicates groups + burst ids)
-  /// compute off the UI isolate; injectable so tests can gate the
-  /// runner and prove ready lands before grouping does.
-  final ListDecksRunner _listDecksRunner;
+  /// Phase 5.2: burst ids compute off the UI isolate; injectable
+  /// so tests can gate the runner and prove ready lands before
+  /// bursts do. (Duplicates/blurry/dark no longer compute here at
+  /// all — Stage 4 moved them into the scan as memberships.)
+  final BurstRunner _burstRunner;
 
-  /// Guards list-deck results: a result from an older scan, or
-  /// from before disposal, is dropped instead of overwriting the
+  /// Guards burst results: a result from an older scan, or from
+  /// before disposal, is dropped instead of overwriting the
   /// current decks.
   final AsyncGuard _listDeckGuard = AsyncGuard();
 
@@ -110,10 +113,6 @@ class DecksController extends GetxController {
   /// shows the labelled library projection instead.
   final StorageService? storage;
 
-  /// Slider default, shared with the Duplicates screen: the hub's
-  /// duplicates row counts groups at this threshold.
-  static const int duplicatesThreshold = 5;
-
   final Rx<DecksStatus> status = DecksStatus.loading.obs;
   final RxString errorKey = ''.obs;
   final RxInt scanned = 0.obs;
@@ -128,7 +127,6 @@ class DecksController extends GetxController {
   final RxBool scanDegraded = false.obs;
   final RxMap<SmartDeckId, List<MediaAsset>> deckAssets =
       <SmartDeckId, List<MediaAsset>>{}.obs;
-  final RxMap<String, PhotoAnalysis> analyses = <String, PhotoAnalysis>{}.obs;
 
   // Phase 4.3 incremental timeline state, built per scan page
   // (see TimelineAccumulator) — never recomputed over the whole
@@ -274,10 +272,14 @@ class DecksController extends GetxController {
     return maybeItemsFor(allSessions, allSnoozes, _assetsById);
   }
 
-  /// List-level decks (bursts, duplicates) are ready only when the
-  /// scan completes; the rest are ready as soon as pages arrive.
+  /// Scan-level decks (bursts, duplicates, blurry, dark — the
+  /// Stage 4 memberships) are ready only when the scan completes;
+  /// the rest are ready as soon as pages arrive.
   bool deckReady(SmartDeckId id) {
-    if (id == SmartDeckId.bursts || id == SmartDeckId.duplicates) {
+    if (id == SmartDeckId.bursts ||
+        id == SmartDeckId.duplicates ||
+        id == SmartDeckId.blurry ||
+        id == SmartDeckId.dark) {
       return scanComplete.value;
     }
     return scanned.value > 0 || scanComplete.value;
@@ -498,7 +500,6 @@ class DecksController extends GetxController {
     _deckBytes.clear();
     _markedBytes = 0;
     deckAssets.clear();
-    analyses.clear();
     scanned.value = 0;
     estimatedTotal.value = null;
     scanComplete.value = false;
@@ -512,18 +513,10 @@ class DecksController extends GetxController {
     // per deck per page, not one list copy per asset per deck).
     final Map<SmartDeckId, List<MediaAsset>> accumulated =
         <SmartDeckId, List<MediaAsset>>{};
-    // Phase 4.2: pages now carry ONLY fresh analyses, so seed the
-    // cumulative map from the cache first (snapshot-served since
-    // 4.1, so this costs no fresh decode). Deck membership below
-    // then resolves cached and fresh assets alike.
-    final Result<Map<String, PhotoAnalysis>> cached = await local
-        .loadAnalyses();
-    cached.fold(onSuccess: analyses.addAll, onFailure: (_) {});
     _scanSubscription?.cancel();
     _scanSubscription = _scans.subscribe(
-      onPage: (List<MediaAsset> page, Map<String, PhotoAnalysis> fresh) {
+      onPage: (List<MediaAsset> page, Map<String, PhotoAssessment> fresh) {
         _allAssets.addAll(page);
-        analyses.addAll(fresh);
         for (final MediaAsset asset in page) {
           _assetsById[asset.id] = asset;
           // Phase 4.3: incremental timeline state, per asset.
@@ -531,7 +524,7 @@ class DecksController extends GetxController {
           if (_deleteMarkedIds.contains(asset.id)) {
             _markedBytes += asset.sizeBytes;
           }
-          for (final SmartDeckId id in decksForAsset(asset, analyses, now)) {
+          for (final SmartDeckId id in decksForAsset(asset, now)) {
             final List<MediaAsset> list = accumulated[id] ??= <MediaAsset>[];
             list.add(asset);
             _deckBytes[id] = (_deckBytes[id] ?? 0) + asset.sizeBytes;
@@ -561,42 +554,67 @@ class DecksController extends GetxController {
       errorKey.value = AppStrings.errorMediaLoad;
       return;
     }
-    // Phase 5.2: ready does NOT wait for grouping. The per-page
-    // decks are already visible; the list-level decks (bursts,
-    // duplicates) resolve over the full list off-isolate and land
-    // when done — the hub shows decks progressively, and the
-    // duplicates tile simply appears when its groups arrive.
+    // Phase 5.2: ready does NOT wait for bursts. The per-page
+    // decks are already visible; the scan-level membership decks
+    // (duplicates, blurry, dark) are applied from the scan's
+    // result right here, and burst ids resolve over the full
+    // list off-isolate and land when done.
     status.value = DecksStatus.ready;
-    unawaited(
-      _computeListDecks(
-        List<MediaAsset>.of(_allAssets),
-        Map<String, PhotoAnalysis>.of(result.analyses),
-      ),
+    _applyMemberships(result.memberships);
+    unawaited(_computeBursts(List<MediaAsset>.of(_allAssets)));
+  }
+
+  /// Applies the scan's membership decks (Stage 4): duplicates =
+  /// the union of exact-duplicate and similar group members (the
+  /// hub row's "Identical & similar"), blurry / dark = their
+  /// membership sets. Members resolve against this scan's asset
+  /// list; anything unresolvable is dropped.
+  void _applyMemberships(ScanMemberships memberships) {
+    final List<DuplicateGroup> dupGroups = groupsFromMemberships(
+      _assetsById,
+      memberships,
+      ScanGroupKind.duplicate,
+    );
+    final List<DuplicateGroup> simGroups = groupsFromMemberships(
+      _assetsById,
+      memberships,
+      ScanGroupKind.similar,
+    );
+    final Set<String> seen = <String>{};
+    _setDeck(SmartDeckId.duplicates, <MediaAsset>[
+      for (final DuplicateGroup group in <DuplicateGroup>[
+        ...dupGroups,
+        ...simGroups,
+      ])
+        for (final MediaAsset asset in group.assets)
+          if (seen.add(asset.id)) asset,
+    ]);
+    final Set<String> blurryIds = memberships.memberSetOf(ScanGroupKind.blurry);
+    _setDeck(
+      SmartDeckId.blurry,
+      _allAssets.where((MediaAsset a) => blurryIds.contains(a.id)).toList(),
+    );
+    final Set<String> darkIds = memberships.memberSetOf(ScanGroupKind.dark);
+    _setDeck(
+      SmartDeckId.dark,
+      _allAssets.where((MediaAsset a) => darkIds.contains(a.id)).toList(),
     );
   }
 
-  /// Computes the list-level decks off the UI isolate and applies
-  /// them only if this scan is still the latest one and the
-  /// controller is still alive. A stale or post-disposal result
-  /// is dropped cleanly — the decks keep their previous (or
-  /// empty) lists, never a mix from two scans.
-  Future<void> _computeListDecks(
-    List<MediaAsset> assets,
-    Map<String, PhotoAnalysis> analyses,
-  ) async {
+  /// Computes burst membership off the UI isolate and applies it
+  /// only if this scan is still the latest one and the controller
+  /// is still alive. A stale or post-disposal result is dropped
+  /// cleanly.
+  Future<void> _computeBursts(List<MediaAsset> assets) async {
     final int generation = _listDeckGuard.next();
-    final ({List<DuplicateGroup> groups, Set<String> burstIds}) computed =
-        await _listDecksRunner(assets, analyses, duplicatesThreshold);
+    final Set<String> burstIds = await _burstRunner(assets);
     if (!_listDeckGuard.isCurrent(generation) || isClosed) {
       return;
     }
     _setDeck(
       SmartDeckId.bursts,
-      assets.where((MediaAsset a) => computed.burstIds.contains(a.id)).toList(),
+      assets.where((MediaAsset a) => burstIds.contains(a.id)).toList(),
     );
-    _setDeck(SmartDeckId.duplicates, <MediaAsset>[
-      for (final DuplicateGroup group in computed.groups) ...group.assets,
-    ]);
   }
 
   /// Assigns a fully computed deck list with its byte total

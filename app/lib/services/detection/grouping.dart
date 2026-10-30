@@ -1,80 +1,44 @@
-// Duplicate / similar grouping (requirements §7, Phase 2).
+// Duplicate / similar grouping (fix plan Stage 4, requirements
+// §7): Cleanup's recovered rules (notes/algorithms.md §1-§2),
+// replacing the aHash + similarity-slider engine.
 //
-// Pure functions over assets + cached analyses. Grouping never
-// deletes anything: it only suggests a keeper per group, and the
-// user may tap any other thumbnail to change it. Deletion still
-// flows through review + native confirmation.
+// - Similar: seed clustering. Assets are sorted by date; the
+//   first remaining asset is the SEED; an asset joins only if
+//   [areSimilar] holds against the SEED itself (never against
+//   another member — no transitivity); the next ungrouped asset
+//   becomes the next seed; groups of 1 are dropped. Photos and
+//   screenshots are grouped separately (their compare tables
+//   differ), and only assets with a valid fingerprint take part.
+// - Exact duplicates: Cleanup's key — same type (photo /
+//   screenshot class), same width x height, same dHash, same
+//   edited flag, same file size. All equal, or not a duplicate.
+//   Buckets of 1 are dropped.
+// - Keeper suggestion: the existing rule, fed by the new blur
+//   measure — sharpest first (LOWEST Cleanup blur score: the new
+//   score grows with blur, the opposite direction of the old
+//   Laplacian variance), tie-broken by largest sizeBytes, then
+//   by group order (earliest first). An asset with no blur score
+//   ranks below every scored asset: unknown sharpness never
+//   beats measured sharpness. Grouping only ever SUGGESTS a
+//   keeper; deletion still flows through review + native
+//   confirmation.
 //
-// Greedy clustering rule: assets are visited in the order given
-// (the scan order, newest first). Each asset joins the FIRST group
-// whose representative's hash is within [threshold] Hamming distance;
-// otherwise it starts a new group as its own representative. The
-// representative never changes after a group is created, so results
-// are deterministic for a given order and threshold, and regrouping
-// from cached hashes is a pure recompute (no thumbnail reload).
-// Groups of one are dropped: a photo with no similar partner is not
-// a "duplicate group". Assets with no cached analysis have no hash
-// and cannot group; they are skipped, never guessed.
-//
-// Phase 3B performance (requirements §7, 50,000+ photos):
-// - BEFORE: the greedy scan compared every asset against every
-//   existing representative — O(n * g) where g is the group count,
-//   degrading to O(n^2) on a library of mostly-distinct photos
-//   (50k distinct photos = ~1.25 billion Hamming comparisons).
-// - AFTER, threshold 0 (exact duplicates): hash-bucket
-//   pre-grouping. One Map pass buckets assets by (hash, width,
-//   height), O(n) total. Phase 5.2 reconciled this with
-//   [PhotoAnalysis.isExactDuplicateOf] (hash AND dimensions):
-//   before, buckets keyed on hash alone, so two photos sharing a
-//   hash but not dimensions grouped as "exact" — they no longer
-//   do at threshold 0. They can still group at threshold > 0 as
-//   similar (similarity is distance alone, by definition), and
-//   the keeper rule below is unchanged. This is the one
-//   intentional behaviour change in 5.2, proven by the
-//   threshold-0 trust-flow test (same hash, different
-//   dimensions, must NOT group at 0).
-// - AFTER, threshold > 0 (similar photos): the greedy scan is
-//   kept, but representative comparisons per asset are capped at
-//   [maxRepresentativeComparisons]. Worst case is O(n * 512)
-//   instead of O(n^2). PRECISION TRADE-OFF, stated plainly: a
-//   similar partner whose representative sits beyond the cap is
-//   missed and the asset starts its own group (a safe split —
-//   grouping only ever SUGGESTS a keeper and deletion still flows
-//   through review + native confirmation, so no keeper safety or
-//   "never auto-delete" rule is traded for speed). Exact-hash
-//   grouping (threshold 0) is unaffected by the cap. Corollary
-//   worth stating: a pair whose representative sits beyond the
-//   cap loses BOTH members as a group (the second member also
-//   cannot see its own representative, so both stay singletons
-//   and are dropped) — the photos simply stay ungrouped in the
-//   library, never wrongly merged and never deleted.
-//
-// Keeper suggestion rule: prefer the sharpest asset (highest blur
-// score), tie-broken by largest sizeBytes, then by asset id (so ties
-// are deterministic). An asset with no analysis scores below every
-// analysed asset — unknown sharpness never beats measured sharpness.
-// When NO asset in a group has a score, largest sizeBytes wins.
-//
-// Phase 5.2: grouping runs off the UI isolate ([groupAssetsOnIsolate]
-// and [computeListDecksOnIsolate]). The functions are pure and
-// their inputs are plain sendable data, so the isolate call is a
-// direct [Isolate.run] of the same function the UI thread used to
-// run — outputs are identical for identical inputs (proven by the
-// determinism fixture test). A result landing after the caller
-// moved on is dropped by the caller's AsyncGuard, never applied.
+// These are pure functions over one scan's transient assessments
+// (photo_assessment.dart); the persisted form of their output is
+// ScanMemberships (scan_memberships.dart).
 
 import 'dart:isolate';
 
 import '../media/media_asset.dart';
-import 'photo_analysis.dart';
-import 'smart_decks.dart';
+import 'photo_assessment.dart';
+import 'scan_memberships.dart';
 
-/// One duplicate / similar group: 2+ assets within threshold of the
-/// representative hash, with a suggested keeper the user may change.
+/// One duplicate / similar group: 2+ assets, with a suggested
+/// keeper the user may change.
 class DuplicateGroup {
   const DuplicateGroup({required this.assets, required this.keeperId});
 
-  /// Group members in scan order.
+  /// Group members in date order (seed first for similar groups).
   final List<MediaAsset> assets;
 
   /// Suggested keeper (see file doc), or the user's chosen keeper
@@ -86,221 +50,276 @@ class DuplicateGroup {
     return assets.where((MediaAsset a) => a.id != keeperId).toList();
   }
 
-  /// Same group with a user-chosen keeper. No validation here: the
-  /// controller only offers member ids, and an unknown id would
-  /// simply make every member a non-keeper, which the view prevents
-  /// by offering only member thumbnails.
+  /// Same group with a user-chosen keeper. No validation here:
+  /// the controller only offers member ids, and an unknown id
+  /// would simply make every member a non-keeper, which the view
+  /// prevents by offering only member thumbnails.
   DuplicateGroup copyWithKeeper(String id) {
     return DuplicateGroup(assets: assets, keeperId: id);
   }
 }
 
-/// Groups [assets] by aHash distance (see file doc). [analyses] maps
-/// asset id to its cached analysis; assets missing from it are
-/// skipped. [threshold] is the slider value, 0-10.
-///
-/// Dispatch: threshold 0 takes the O(n) hash-bucket path
-/// ([groupExactHashes], output identical to the greedy scan);
-/// threshold > 0 takes the capped greedy path ([groupSimilar]).
-List<DuplicateGroup> groupAssets({
-  required List<MediaAsset> assets,
-  required Map<String, PhotoAnalysis> analyses,
-  required int threshold,
-}) {
-  if (threshold <= 0) {
-    return groupExactHashes(assets: assets, analyses: analyses);
-  }
-  return groupSimilar(assets: assets, analyses: analyses, threshold: threshold);
+/// Date order for grouping: createDate ascending, asset id as
+/// the deterministic tie-break.
+int _byDate(MediaAsset a, MediaAsset b) {
+  final int byDate = a.createDate.compareTo(b.createDate);
+  return byDate != 0 ? byDate : a.id.compareTo(b.id);
 }
 
-/// Representative comparisons scanned per asset on the similar
-/// path. 512 keeps a 50k library at ~25.6M worst-case Hamming
-/// comparisons (bounded, and each is a few integer ops) instead of
-/// an unbounded quadratic blowup; see the file doc for the split
-/// trade-off this cap buys.
-const int maxRepresentativeComparisons = 512;
-
-/// Exact-duplicate grouping, O(n): one Map pass buckets analysed
-/// assets by (hash, width, height) — the [PhotoAnalysis]
-/// .isExactDuplicateOf rule (solutions 5.2) — with scan order
-/// preserved inside each bucket, then buckets of 2+ become groups
-/// with the usual keeper suggestion.
-List<DuplicateGroup> groupExactHashes({
+/// Similar grouping, Cleanup's seed rule (see file doc). Photos
+/// and screenshots are clustered separately, each in date order.
+List<DuplicateGroup> groupSimilarCleanup({
   required List<MediaAsset> assets,
-  required Map<String, PhotoAnalysis> analyses,
+  required Map<String, PhotoAssessment> assessments,
 }) {
-  final Map<(int, int, int), List<MediaAsset>> buckets =
-      <(int, int, int), List<MediaAsset>>{};
-  for (final MediaAsset asset in assets) {
-    final PhotoAnalysis? analysis = analyses[asset.id];
-    if (analysis == null) {
+  final List<DuplicateGroup> out = <DuplicateGroup>[];
+  for (final FingerprintClass assetClass in FingerprintClass.values) {
+    final List<MediaAsset> pool =
+        assets
+            .where(
+              (MediaAsset a) =>
+                  a.type == MediaAssetType.image &&
+                  fingerprintClassOf(a) == assetClass &&
+                  (assessments[a.id]?.fingerprint?.isValid ?? false),
+            )
+            .toList()
+          ..sort(_byDate);
+    final List<MediaAsset> remaining = List<MediaAsset>.of(pool);
+    while (remaining.isNotEmpty) {
+      final MediaAsset seed = remaining.first;
+      final PhotoFingerprint seedPrint = assessments[seed.id]!.fingerprint!;
+      final List<MediaAsset> members = <MediaAsset>[seed];
+      remaining.removeAt(0);
+      remaining.removeWhere((MediaAsset candidate) {
+        final PhotoFingerprint print = assessments[candidate.id]!.fingerprint!;
+        if (areSimilar(seedPrint, print, assetClass)) {
+          members.add(candidate);
+          return true;
+        }
+        return false;
+      });
+      // Members were collected in date order (the pool is sorted
+      // and removeWhere preserves order), seed first.
+      if (members.length >= 2) {
+        out.add(
+          DuplicateGroup(
+            assets: members,
+            keeperId: suggestKeeper(members, assessments),
+          ),
+        );
+      }
+    }
+  }
+  return out;
+}
+
+/// Exact-duplicate grouping, Cleanup's key (see file doc).
+/// Returns the groups (for display) and the duplicate reference
+/// (the persisted main + duplicates per set). A group's main is
+/// its suggested keeper — the existing keeper logic names it;
+/// [suggestKeeper]'s final tie-break (group order) makes it the
+/// seed (earliest by date) whenever scores and sizes tie.
+({List<DuplicateGroup> groups, List<DuplicateReference> references})
+groupExactDuplicates({
+  required List<MediaAsset> assets,
+  required Map<String, PhotoAssessment> assessments,
+  required Map<String, AssetInfo> assetInfos,
+}) {
+  final Map<(FingerprintClass, int, int, int, bool, int?), List<MediaAsset>>
+  buckets = <(FingerprintClass, int, int, int, bool, int?), List<MediaAsset>>{};
+  final List<MediaAsset> sorted =
+      assets.where((MediaAsset a) => a.type == MediaAssetType.image).toList()
+        ..sort(_byDate);
+  for (final MediaAsset asset in sorted) {
+    final PhotoFingerprint? print = assessments[asset.id]?.fingerprint;
+    final AssetInfo? info = assetInfos[asset.id];
+    if (print == null || !print.isValid || info == null) {
       continue;
     }
-    final (int, int, int) key = (
-      analysis.hash,
-      analysis.width,
-      analysis.height,
+    final (FingerprintClass, int, int, int, bool, int?) key = (
+      fingerprintClassOf(asset),
+      info.width,
+      info.height,
+      print.dHash,
+      info.isEdited,
+      info.sizeBytes,
     );
     (buckets[key] ??= <MediaAsset>[]).add(asset);
   }
   final List<DuplicateGroup> groups = <DuplicateGroup>[];
+  final List<DuplicateReference> references = <DuplicateReference>[];
   for (final List<MediaAsset> members in buckets.values) {
     if (members.length < 2) {
       continue;
     }
-    groups.add(
-      DuplicateGroup(
-        assets: members,
-        keeperId: suggestKeeper(members, analyses),
+    final String keeperId = suggestKeeper(members, assessments);
+    groups.add(DuplicateGroup(assets: members, keeperId: keeperId));
+    references.add(
+      DuplicateReference(
+        mainId: keeperId,
+        duplicateIds: <String>[
+          for (final MediaAsset member in members)
+            if (member.id != keeperId) member.id,
+        ],
       ),
     );
   }
-  return groups;
+  return (groups: groups, references: references);
 }
 
-/// Similar grouping: the greedy scan, with per-asset representative
-/// comparisons capped at [maxRepresentativeComparisons]. An asset
-/// whose match lies beyond the cap starts its own group (a safe
-/// split, never a wrong merge — see the file doc).
-List<DuplicateGroup> groupSimilar({
-  required List<MediaAsset> assets,
-  required Map<String, PhotoAnalysis> analyses,
-  required int threshold,
-}) {
-  final List<_Cluster> clusters = <_Cluster>[];
-  for (final MediaAsset asset in assets) {
-    final PhotoAnalysis? analysis = analyses[asset.id];
-    if (analysis == null) {
-      continue;
-    }
-    _Cluster? match;
-    int compared = 0;
-    for (final _Cluster cluster in clusters) {
-      if (compared >= maxRepresentativeComparisons) {
-        break;
-      }
-      compared++;
-      final PhotoAnalysis rep = analyses[cluster.representativeId]!;
-      if (hammingDistance(analysis.hash, rep.hash) <= threshold) {
-        match = cluster;
-        break;
-      }
-    }
-    if (match == null) {
-      clusters.add(_Cluster(asset.id, <MediaAsset>[asset]));
-    } else {
-      match.members.add(asset);
-    }
-  }
-  final List<DuplicateGroup> groups = <DuplicateGroup>[];
-  for (final _Cluster cluster in clusters) {
-    if (cluster.members.length < 2) {
-      continue;
-    }
-    groups.add(
-      DuplicateGroup(
-        assets: cluster.members,
-        keeperId: suggestKeeper(cluster.members, analyses),
-      ),
-    );
-  }
-  return groups;
-}
-
-/// Suggested keeper for [assets] (see file doc). Assumes non-empty;
-/// an empty list returns '' rather than crashing.
+/// Suggested keeper for [assets] (see file doc). Assumes
+/// non-empty; an empty list returns '' rather than crashing.
 String suggestKeeper(
   List<MediaAsset> assets,
-  Map<String, PhotoAnalysis> analyses,
+  Map<String, PhotoAssessment> assessments,
 ) {
   if (assets.isEmpty) {
     return '';
   }
   MediaAsset best = assets.first;
   for (final MediaAsset asset in assets.skip(1)) {
-    if (_beatsKeeper(asset, best, analyses)) {
+    if (_beatsKeeper(asset, best, assessments)) {
       best = asset;
     }
   }
   return best.id;
 }
 
-/// True when [candidate] outranks [current] as keeper: analysed
-/// beats unanalysed, higher blur score beats lower, larger size
-/// beats smaller. A full tie keeps the earlier asset, so the result
-/// is deterministic for a given order.
+/// True when [candidate] outranks [current] as keeper: scored
+/// beats unscored, lower blur score (sharper under the new
+/// measure) beats higher, larger size beats smaller. A full tie
+/// keeps the earlier asset, so the result is deterministic.
 bool _beatsKeeper(
   MediaAsset candidate,
   MediaAsset current,
-  Map<String, PhotoAnalysis> analyses,
+  Map<String, PhotoAssessment> assessments,
 ) {
-  final PhotoAnalysis? cand = analyses[candidate.id];
-  final PhotoAnalysis? curr = analyses[current.id];
-  if ((cand != null) != (curr != null)) {
-    return cand != null;
+  final double? candScore = assessments[candidate.id]?.blur?.score;
+  final double? currScore = assessments[current.id]?.blur?.score;
+  if ((candScore != null) != (currScore != null)) {
+    return candScore != null;
   }
-  if (cand != null && curr != null && cand.blurScore != curr.blurScore) {
-    return cand.blurScore > curr.blurScore;
+  if (candScore != null && currScore != null && candScore != currScore) {
+    return candScore < currScore;
   }
   return candidate.sizeBytes > current.sizeBytes;
 }
 
-class _Cluster {
-  _Cluster(this.representativeId, this.members);
-
-  final String representativeId;
-  final List<MediaAsset> members;
-}
-
-/// Runs a grouping off the UI isolate. A function of this shape,
-/// so callers can inject a gated runner in tests to prove
-/// ready-before-grouping and stale-result drops.
-typedef GroupingRunner = Future<List<DuplicateGroup>> Function(
-  List<MediaAsset> assets,
-  Map<String, PhotoAnalysis> analyses,
-  int threshold,
-);
-
-/// Runs the hub's list-level decks (duplicates groups + burst ids)
-/// off the UI isolate. Same injectable shape as [GroupingRunner]:
-/// callers prove progressive landing with a gated runner.
-typedef ListDecksRunner =
-    Future<({List<DuplicateGroup> groups, Set<String> burstIds})> Function(
-      List<MediaAsset> assets,
-      Map<String, PhotoAnalysis> analyses,
-      int threshold,
-    );
-
-/// The production grouping runner: the same [groupAssets] the UI
-/// thread used to run, on a worker isolate. Inputs are plain
-/// sendable data (ids, ints, doubles, dates), so the isolate call
-/// needs no serialization layer — and outputs are identical for
-/// identical inputs by construction.
-Future<List<DuplicateGroup>> groupAssetsOnIsolate(
-  List<MediaAsset> assets,
-  Map<String, PhotoAnalysis> analyses,
-  int threshold,
-) {
-  return Isolate.run(
-    () => groupAssets(assets: assets, analyses: analyses, threshold: threshold),
+/// Builds the full persisted product of one scan from its
+/// transient assessments: asset-info facts, similar + duplicate
+/// groups, the duplicate reference, and the blurry / dark
+/// membership sets. Pure — the scanner runs it on a worker
+/// isolate (see [buildScanMembershipsOnIsolate]).
+ScanMemberships buildScanMemberships({
+  required List<MediaAsset> assets,
+  required Map<String, PhotoAssessment> assessments,
+}) {
+  final Map<String, AssetInfo> infos = <String, AssetInfo>{
+    for (final MediaAsset asset in assets) asset.id: AssetInfo.fromAsset(asset),
+  };
+  final List<DuplicateGroup> similar = groupSimilarCleanup(
+    assets: assets,
+    assessments: assessments,
+  );
+  final ({List<DuplicateGroup> groups, List<DuplicateReference> references})
+  exact = groupExactDuplicates(
+    assets: assets,
+    assessments: assessments,
+    assetInfos: infos,
+  );
+  final List<ScanGroup> groups = <ScanGroup>[
+    for (final DuplicateGroup group in similar)
+      ScanGroup(
+        kind: ScanGroupKind.similar,
+        memberIds: <String>[for (final MediaAsset a in group.assets) a.id],
+        seedId: group.assets.first.id,
+        keeperId: group.keeperId,
+      ),
+    for (final DuplicateGroup group in exact.groups)
+      ScanGroup(
+        kind: ScanGroupKind.duplicate,
+        memberIds: <String>[for (final MediaAsset a in group.assets) a.id],
+        keeperId: group.keeperId,
+      ),
+    if (assets.any(
+      (MediaAsset a) =>
+          a.type == MediaAssetType.image &&
+          (assessments[a.id]?.isBlurry ?? false),
+    ))
+      ScanGroup(
+        kind: ScanGroupKind.blurry,
+        memberIds: <String>[
+          for (final MediaAsset a in assets)
+            if (a.type == MediaAssetType.image &&
+                (assessments[a.id]?.isBlurry ?? false))
+              a.id,
+        ],
+      ),
+    if (assets.any(
+      (MediaAsset a) =>
+          a.type == MediaAssetType.image &&
+          (assessments[a.id]?.isDark ?? false),
+    ))
+      ScanGroup(
+        kind: ScanGroupKind.dark,
+        memberIds: <String>[
+          for (final MediaAsset a in assets)
+            if (a.type == MediaAssetType.image &&
+                (assessments[a.id]?.isDark ?? false))
+              a.id,
+        ],
+      ),
+  ];
+  return ScanMemberships(
+    algorithmVersion: scanMembershipAlgorithmVersion,
+    assetInfos: infos,
+    groups: groups,
+    duplicateReferences: exact.references,
   );
 }
 
-/// The production list-decks runner: grouping + burst sort in one
-/// worker call, so the hub pays one isolate hop for both
-/// list-level decks instead of two.
-Future<({List<DuplicateGroup> groups, Set<String> burstIds})>
-computeListDecksOnIsolate(
+/// The production membership builder: [buildScanMemberships] on
+/// a worker isolate, so grouping a large library never runs on
+/// the UI thread. Inputs are plain sendable data.
+Future<ScanMemberships> buildScanMembershipsOnIsolate(
   List<MediaAsset> assets,
-  Map<String, PhotoAnalysis> analyses,
-  int threshold,
+  Map<String, PhotoAssessment> assessments,
 ) {
-  return Isolate.run(() {
-    final List<DuplicateGroup> groups = groupAssets(
-      assets: assets,
-      analyses: analyses,
-      threshold: threshold,
-    );
-    return (groups: groups, burstIds: burstAssetIds(assets));
-  });
+  return Isolate.run(
+    () => buildScanMemberships(assets: assets, assessments: assessments),
+  );
+}
+
+/// A function of this shape, so callers can inject a gated
+/// runner in tests to prove stale-result drops.
+typedef MembershipsRunner = Future<ScanMemberships> Function(
+  List<MediaAsset> assets,
+  Map<String, PhotoAssessment> assessments,
+);
+
+/// Display groups of one [kind] from persisted [memberships],
+/// resolving member ids against [assetsById]. Members that no
+/// longer resolve are dropped; a group left with fewer than 2
+/// members is dropped (it is not a group anymore).
+List<DuplicateGroup> groupsFromMemberships(
+  Map<String, MediaAsset> assetsById,
+  ScanMemberships memberships,
+  ScanGroupKind kind,
+) {
+  final List<DuplicateGroup> out = <DuplicateGroup>[];
+  for (final ScanGroup group in memberships.groupsOfKind(kind)) {
+    final List<MediaAsset> members = <MediaAsset>[
+      for (final String id in group.memberIds)
+        if (assetsById[id] != null) assetsById[id]!,
+    ];
+    if (members.length < 2) {
+      continue;
+    }
+    final String keeperId =
+        group.keeperId != null && assetsById.containsKey(group.keeperId)
+        ? group.keeperId!
+        : members.first.id;
+    out.add(DuplicateGroup(assets: members, keeperId: keeperId));
+  }
+  return out;
 }

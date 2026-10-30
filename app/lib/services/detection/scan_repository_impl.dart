@@ -23,7 +23,7 @@ import '../media/library_enumeration_service.dart';
 import '../media/media_asset.dart';
 import '../media/media_service.dart';
 import 'library_scanner.dart';
-import 'photo_analysis.dart';
+import 'photo_assessment.dart';
 import 'scan_repository.dart';
 
 /// Cancellation token for one scan run. Callbacks registered via
@@ -60,7 +60,10 @@ class ScanCancelToken {
 class _Subscriber {
   _Subscriber({this.onPage, this.onProgress, this.onDegraded});
 
-  final void Function(List<MediaAsset> page, Map<String, PhotoAnalysis> fresh)?
+  final void Function(
+    List<MediaAsset> page,
+    Map<String, PhotoAssessment> fresh,
+  )?
   onPage;
   final void Function(int scanned, int? estimatedTotal)? onProgress;
 
@@ -99,10 +102,10 @@ class _RunningScan {
   late final Future<LibraryScan> future;
 
   final List<List<MediaAsset>> pages = <List<MediaAsset>>[];
-  final List<Map<String, PhotoAnalysis>> pageFresh =
-      <Map<String, PhotoAnalysis>>[];
+  final List<Map<String, PhotoAssessment>> pageFresh =
+      <Map<String, PhotoAssessment>>[];
   final List<MediaAsset> assets = <MediaAsset>[];
-  final Map<String, PhotoAnalysis> analyses = <String, PhotoAnalysis>{};
+  final Map<String, PhotoAssessment> analyses = <String, PhotoAssessment>{};
   int scanned = 0;
   int? estimatedTotal;
   bool pageFailed = false;
@@ -133,8 +136,8 @@ class ScanRepositoryImpl implements ScanRepository {
   _RunningScan? _running;
   LibraryScan? _completed;
   List<List<MediaAsset>> _completedPages = <List<MediaAsset>>[];
-  List<Map<String, PhotoAnalysis>> _completedFresh =
-      <Map<String, PhotoAnalysis>>[];
+  List<Map<String, PhotoAssessment>> _completedFresh =
+      <Map<String, PhotoAssessment>>[];
   bool _dirty = false;
 
   bool _paused = false;
@@ -153,12 +156,12 @@ class ScanRepositoryImpl implements ScanRepository {
     // (its pages are live data) but will not be memoised.
     _completed = null;
     _completedPages = <List<MediaAsset>>[];
-    _completedFresh = <Map<String, PhotoAnalysis>>[];
+    _completedFresh = <Map<String, PhotoAssessment>>[];
   }
 
   @override
   ScanSubscription subscribe({
-    void Function(List<MediaAsset> page, Map<String, PhotoAnalysis> fresh)?
+    void Function(List<MediaAsset> page, Map<String, PhotoAssessment> fresh)?
     onPage,
     void Function(int scanned, int? estimatedTotal)? onProgress,
     void Function()? onDegraded,
@@ -266,7 +269,7 @@ class ScanRepositoryImpl implements ScanRepository {
     _dirty = false;
     _completed = null;
     _completedPages = <List<MediaAsset>>[];
-    _completedFresh = <Map<String, PhotoAnalysis>>[];
+    _completedFresh = <Map<String, PhotoAssessment>>[];
     final ScanCancelToken token = ScanCancelToken();
     final _RunningScan run = _RunningScan(token: token);
     run.future = _runScan(run);
@@ -295,7 +298,7 @@ class ScanRepositoryImpl implements ScanRepository {
       // the full map (cached + fresh) is merged from the final
       // result after the scan — see below. Callers reading the
       // final result (e.g. Duplicates grouping) need the full map.
-      onPage: (List<MediaAsset> page, Map<String, PhotoAnalysis> fresh) {
+      onPage: (List<MediaAsset> page, Map<String, PhotoAssessment> fresh) {
         // Direct run updates: a subscriber joining mid-run replays
         // exactly these pages, so live state and replay agree.
         run.pages.add(page);
@@ -324,7 +327,7 @@ class ScanRepositoryImpl implements ScanRepository {
     // idempotent — but without it, callers reading the final
     // result (e.g. Duplicates grouping from the cache) would see
     // an empty map whenever every asset was already cached.
-    run.analyses.addAll(result.analyses);
+    run.analyses.addAll(result.assessments);
     if (identical(_running, run)) {
       _running = null;
     }
@@ -335,7 +338,8 @@ class ScanRepositoryImpl implements ScanRepository {
     // completes late.
     final LibraryScan outcome = LibraryScan(
       assets: run.assets,
-      analyses: run.analyses,
+      assessments: run.analyses,
+      memberships: result.memberships,
       scanned: run.scanned,
       pageFailed: run.pageFailed,
       cancelled: result.cancelled,

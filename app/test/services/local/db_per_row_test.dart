@@ -1,10 +1,11 @@
-// Phase 6.2 gate evidence: per-row cost, demonstrated not
-// asserted. A 50k-entry database takes a 50-entry page save
-// without touching the other rows, answers a point lookup by
-// index seek (never a full scan), and prunes per orphan —
-// the three operations the JSON file paid as full-file
-// rewrites/decodes. No wall-clock assertions: timing tests
-// do not belong in the deterministic suite.
+// Phase 6.2 gate evidence, carried to the Stage 4 store: per-row
+// cost, demonstrated not asserted. A 50k-entry membership
+// snapshot saves without a whole-file rewrite, a point lookup
+// on asset_infos is an index seek (never a full scan), and a
+// replacement snapshot drops orphans wholesale — the operations
+// the JSON file paid as full-file rewrites/decodes. No
+// wall-clock assertions: timing tests do not belong in the
+// deterministic suite.
 
 import 'dart:io';
 
@@ -12,7 +13,8 @@ import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klara/core/utils/result.dart';
-import 'package:klara/services/detection/photo_analysis.dart';
+import 'package:klara/services/detection/scan_memberships.dart';
+import 'package:klara/services/media/media_asset.dart';
 import 'package:klara/services/local/klara_database.dart';
 import 'package:klara/services/local/local_service_db_impl.dart';
 
@@ -23,8 +25,29 @@ T ok<T>(Result<T> result) {
   );
 }
 
+ScanMemberships _snapshot(int count, {String prefix = 'asset'}) {
+  return ScanMemberships(
+    algorithmVersion: scanMembershipAlgorithmVersion,
+    assetInfos: <String, AssetInfo>{
+      for (int i = 0; i < count; i++)
+        '${prefix}_$i': AssetInfo(
+          assetId: '${prefix}_$i',
+          type: MediaAssetType.image,
+          width: 100,
+          height: 200,
+          sizeBytes: 1000 + i,
+          modifiedDateMs: 1700000000000 + i,
+          isEdited: false,
+          isScreenshot: false,
+        ),
+    },
+    groups: const <ScanGroup>[],
+    duplicateReferences: const <DuplicateReference>[],
+  );
+}
+
 void main() {
-  test('50k database: page save, point lookup, prune are per-row', () async {
+  test('50k memberships: save, point lookup, replace are per-row', () async {
     final Directory temp = await Directory.systemTemp.createTemp(
       'klara_db_per_row_test_',
     );
@@ -32,70 +55,51 @@ void main() {
       directoryResolver: () async => temp,
     );
     try {
-      final List<PhotoAnalysis> bulk = List<PhotoAnalysis>.generate(50000, (
-        int i,
-      ) {
-        return PhotoAnalysis(
-          assetId: 'asset_$i',
-          hash: i,
-          width: 100,
-          height: 200,
-          blurScore: 1.0,
-          meanLuminance: 2.0,
-          sizeBytes: 1000 + i,
-          modifiedDateMs: 1700000000000 + i,
-        );
-      });
-      await service.saveAnalyses(bulk);
-      expect(ok(await service.loadAnalyses()).length, 50000);
+      await service.saveScanMemberships(_snapshot(50000));
+      final ScanMemberships loaded = ok(await service.loadScanMemberships());
+      expect(loaded.assetInfos.length, 50000);
+      expect(loaded.assetInfos['asset_49999']!.sizeBytes, 50999);
+      expect(loaded.algorithmVersion, scanMembershipAlgorithmVersion);
 
-      // One page save: only the page is added, the rest is
-      // byte-identical (spot-checked, not rewritten).
-      final List<PhotoAnalysis> page = List<PhotoAnalysis>.generate(50, (
-        int i,
-      ) {
-        return PhotoAnalysis(
-          assetId: 'new_$i',
-          hash: i,
-          width: 10,
-          height: 20,
-          blurScore: 1.0,
-          meanLuminance: 2.0,
-        );
-      });
-      await service.saveAnalyses(page);
-      final Map<String, PhotoAnalysis> after = ok(await service.loadAnalyses());
-      expect(after.length, 50050);
-      expect(after['asset_0']!.hash, 0);
-      expect(after['asset_49999']!.hash, 49999);
-      expect(after['asset_49999']!.sizeBytes, 50999);
-      expect(after['new_0']!.hash, 0);
+      // A second snapshot (the scanner always writes the whole
+      // product) adds a page without disturbing the rest.
+      final ScanMemberships bigger = ScanMemberships(
+        algorithmVersion: scanMembershipAlgorithmVersion,
+        assetInfos: <String, AssetInfo>{
+          ..._snapshot(50000).assetInfos,
+          ..._snapshot(50, prefix: 'new').assetInfos,
+        },
+        groups: const <ScanGroup>[],
+        duplicateReferences: const <DuplicateReference>[],
+      );
+      await service.saveScanMemberships(bigger);
+      final ScanMemberships after = ok(await service.loadScanMemberships());
+      expect(after.assetInfos.length, 50050);
+      expect(after.assetInfos['asset_0']!.sizeBytes, 1000);
+      expect(after.assetInfos['asset_49999']!.sizeBytes, 50999);
 
       // Point lookup is an index seek, never a full scan. The
       // plan is a property of the schema, so a scratch database
       // with the same tables proves it.
       final KlaraDatabase raw = KlaraDatabase(NativeDatabase.memory());
-      // Seed the scratch database with one row so the planner
-      // has the table shape, then explain the point query.
       await raw
-          .into(raw.analyses)
+          .into(raw.assetInfos)
           .insert(
-            AnalysesCompanion.insert(
+            AssetInfosCompanion.insert(
               assetId: 'x',
-              hash: 1,
+              type: 'image',
               width: 1,
               height: 1,
-              blurScore: 1.0,
-              meanLuminance: 1.0,
-              algorithmVersion: 1,
+              isEdited: false,
+              isScreenshot: false,
             ),
           );
       final List<QueryRow> plan = await raw
           .customSelect(
-            'EXPLAIN QUERY PLAN SELECT * FROM analyses '
+            'EXPLAIN QUERY PLAN SELECT * FROM asset_infos '
             'WHERE asset_id = ?',
             variables: <Variable<Object>>[Variable<String>('x')],
-            readsFrom: <TableInfo<Table, dynamic>>{raw.analyses},
+            readsFrom: <TableInfo<Table, dynamic>>{raw.assetInfos},
           )
           .get();
       final String detail = plan
@@ -105,12 +109,10 @@ void main() {
       expect(detail, isNot(contains('SCAN')));
       await raw.close();
 
-      // Prune is per orphan: keep 25k, drop the rest + the page.
-      final Set<String> live = <String>{
-        for (int i = 0; i < 25000; i++) 'asset_$i',
-      };
-      expect(ok(await service.pruneAnalyses(live)), 25050);
-      expect(ok(await service.loadAnalyses()).length, 25000);
+      // Replacement is the prune: a snapshot holding only the
+      // live 25k leaves exactly 25k behind.
+      await service.saveScanMemberships(_snapshot(25000));
+      expect(ok(await service.loadScanMemberships()).assetInfos.length, 25000);
     } finally {
       await service.dispose();
       if (await temp.exists()) {

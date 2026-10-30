@@ -12,7 +12,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:klara/core/strings/app_strings.dart';
 import 'package:klara/core/utils/result.dart';
 import 'package:klara/services/detection/photo_analysis.dart';
+import 'package:klara/services/detection/scan_memberships.dart';
 import 'package:klara/services/local/json_file_store.dart';
+import 'package:klara/services/media/media_asset.dart';
 import 'package:klara/services/local/json_migration.dart';
 import 'package:klara/services/local/klara_database.dart';
 import 'package:klara/services/local/local_service.dart';
@@ -95,9 +97,13 @@ void main() {
     ).readAsBytes();
     final LocalServiceDbImpl service = openDb(temp);
     try {
-      final Map<String, PhotoAnalysis> analyses = ok(
-        await service.loadAnalyses(),
-      );
+      // The first interface call runs the migration. Stage 4
+      // (ADR-019): the legacy analyses do NOT round-trip through
+      // the database service — hashes and scores are never
+      // persisted anymore, so loadAnalyses serves nothing here;
+      // the analyses' FACTS land in the membership snapshot
+      // instead (asserted below).
+      expect(ok(await service.loadAnalyses()), isEmpty);
       final JsonMigrationReport report = service.lastMigrationReport!;
       expect(report.verified, isTrue);
       expect(report.imported, <String, int>{
@@ -113,15 +119,28 @@ void main() {
       expect(report.skipped['klara_trash.json'], 1);
       expect(report.skipped['klara_history.json'], 0);
 
-      expect(analyses.length, 2);
-      expect(analyses['a1']!.hash, 123);
-      expect(analyses['a1']!.sizeBytes, 1000);
-      expect(analyses['a1']!.algorithmVersion, 1);
-      // Old-version entry migrates as-is: version 0, null
-      // fingerprint — freshness logic treats it stale later.
-      expect(analyses['a2']!.algorithmVersion, 0);
-      expect(analyses['a2']!.sizeBytes, isNull);
-      expect(analyses.containsKey('bad'), isFalse);
+      // Stage 4 conversion: both readable analyses became
+      // asset-info facts at membership version 0 (never fresh —
+      // the next scan recomputes and restamps); the old groups
+      // are discarded, so no phantom groups can appear. The
+      // corrupt entry is nowhere.
+      final ScanMemberships memberships = ok(
+        await service.loadScanMemberships(),
+      );
+      expect(memberships.algorithmVersion, 0);
+      expect(memberships.assetInfos.length, 2);
+      expect(memberships.assetInfos['a1']!.width, 100);
+      expect(memberships.assetInfos['a1']!.height, 200);
+      expect(memberships.assetInfos['a1']!.sizeBytes, 1000);
+      expect(memberships.assetInfos['a1']!.modifiedDateMs, 1700000000000);
+      expect(memberships.assetInfos['a1']!.type, MediaAssetType.image);
+      expect(memberships.assetInfos['a1']!.isEdited, isFalse);
+      // Old-version entry converts with its null facts intact.
+      expect(memberships.assetInfos['a2']!.width, 300);
+      expect(memberships.assetInfos['a2']!.sizeBytes, isNull);
+      expect(memberships.assetInfos.containsKey('bad'), isFalse);
+      expect(memberships.groups, isEmpty);
+      expect(memberships.duplicateReferences, isEmpty);
 
       final DeckSession? all = ok(await service.loadSession('all'));
       expect(all!.currentIndex, 4);
@@ -266,7 +285,10 @@ void main() {
 
     final LocalServiceDbImpl second = openDb(temp);
     try {
-      expect(ok(await second.loadAnalyses()).length, 2);
+      // Stage 4: the re-import restores the analyses as
+      // membership facts (the analyses themselves are gone by
+      // design — nothing persists a hash anymore).
+      expect(ok(await second.loadScanMemberships()).assetInfos.length, 2);
       expect(ok(await second.listSessions()).length, 2);
       expect(second.lastMigrationReport!.verified, isTrue);
     } finally {
@@ -292,14 +314,17 @@ void main() {
 
     final LocalServiceDbImpl second = openDb(temp);
     try {
-      final Map<String, PhotoAnalysis> analyses = ok(
-        await second.loadAnalyses(),
+      final ScanMemberships memberships = ok(
+        await second.loadScanMemberships(),
       );
       // No migration ran on this launch: the marker path was
       // taken, so the JSON files were never consulted.
       expect(second.lastMigrationReport, isNull);
-      expect(analyses.length, 2);
-      expect(analyses['a1']!.hash, 123);
+      // Stage 4: the migrated analyses survive as membership
+      // facts (their hashes/scores are gone by design).
+      expect(memberships.assetInfos.length, 2);
+      expect(memberships.assetInfos['a1']!.width, 100);
+      expect(memberships.assetInfos['a1']!.sizeBytes, 1000);
       expect((ok(await second.loadSession('all'))!).currentIndex, 4);
       expect(ok(await second.loadTrashEntries()).length, 2);
       expect(ok(await second.loadHistory()).length, 2);

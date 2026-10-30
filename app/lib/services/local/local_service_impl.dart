@@ -32,6 +32,8 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/strings/app_strings.dart';
 import '../../core/utils/result.dart';
 import '../detection/photo_analysis.dart';
+import '../detection/scan_memberships.dart';
+import '../media/media_asset.dart';
 import '../trash/trash_entry.dart';
 import 'json_file_store.dart';
 import 'local_service.dart';
@@ -45,6 +47,10 @@ class LocalServiceImpl implements LocalService {
     _history = JsonFileStore(fileName: _historyFile, directoryResolver: _dir);
     _settings = JsonFileStore(fileName: _settingsFile, directoryResolver: _dir);
     _analyses = JsonFileStore(fileName: _analysesFile, directoryResolver: _dir);
+    _memberships = JsonFileStore(
+      fileName: _membershipsFile,
+      directoryResolver: _dir,
+    );
     _snoozes = JsonFileStore(fileName: _snoozesFile, directoryResolver: _dir);
     _completions = JsonFileStore(
       fileName: _completionsFile,
@@ -65,6 +71,7 @@ class LocalServiceImpl implements LocalService {
   static const String _historyFile = 'klara_history.json';
   static const String _settingsFile = 'klara_settings.json';
   static const String _analysesFile = 'klara_analyses.json';
+  static const String _membershipsFile = 'klara_scan_memberships.json';
   static const String _snoozesFile = 'klara_snoozes.json';
   static const String _completionsFile = 'klara_completions.json';
 
@@ -76,6 +83,7 @@ class LocalServiceImpl implements LocalService {
   late final JsonFileStore _history;
   late final JsonFileStore _settings;
   late final JsonFileStore _analyses;
+  late final JsonFileStore _memberships;
   late final JsonFileStore _snoozes;
   late final JsonFileStore _completions;
 
@@ -462,22 +470,50 @@ class LocalServiceImpl implements LocalService {
     }
   }
 
+  /// Parses the legacy analyses document. The primary load
+  /// ([loadAnalyses]) counts bad entries in the salvage report;
+  /// the memberships fallback below re-reads the same file purely
+  /// to convert it, and must NOT count the same bad entries a
+  /// second time (the report is per logical read — the migration
+  /// asserts exactly one skip per corrupt entry).
+  Map<String, PhotoAnalysis> _parseAnalysesMap(
+    Map<String, dynamic> all, {
+    required bool countSkips,
+  }) {
+    final Map<String, PhotoAnalysis> analyses = <String, PhotoAnalysis>{};
+    for (final MapEntry<String, dynamic> entry in all.entries) {
+      final PhotoAnalysis? analysis = countSkips
+          ? _parseEntry<PhotoAnalysis>(
+              entry.value,
+              PhotoAnalysis.fromJson,
+              _analysesFile,
+            )
+          : _tryParseAnalysis(entry.value);
+      if (analysis != null) {
+        analyses[entry.key] = analysis;
+      }
+    }
+    return analyses;
+  }
+
+  PhotoAnalysis? _tryParseAnalysis(Object? raw) {
+    try {
+      if (raw is! Map<String, dynamic>) {
+        return null;
+      }
+      return PhotoAnalysis.fromJson(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Future<Result<Map<String, PhotoAnalysis>>> loadAnalyses() async {
     try {
       final Map<String, dynamic> all = await _analyses.readMap();
-      final Map<String, PhotoAnalysis> analyses = <String, PhotoAnalysis>{};
-      for (final MapEntry<String, dynamic> entry in all.entries) {
-        final PhotoAnalysis? analysis = _parseEntry<PhotoAnalysis>(
-          entry.value,
-          PhotoAnalysis.fromJson,
-          _analysesFile,
-        );
-        if (analysis != null) {
-          analyses[entry.key] = analysis;
-        }
-      }
-      return Success<Map<String, PhotoAnalysis>>(analyses);
+      return Success<Map<String, PhotoAnalysis>>(
+        _parseAnalysesMap(all, countSkips: true),
+      );
     } catch (_) {
       return Failure<Map<String, PhotoAnalysis>>(_failure);
     }
@@ -503,6 +539,77 @@ class LocalServiceImpl implements LocalService {
       return Success<int>(orphaned.length);
     } catch (_) {
       return Failure<int>(_failure);
+    }
+  }
+
+  // -- Scan memberships (fix plan Stage 4, ADR-019) ---------------
+  //
+  // The JSON store's shape of the Stage 4 product: one snapshot
+  // document (scan_memberships.dart's serialised form — facts,
+  // memberships, duplicate reference; no hash/score fields
+  // exist in it). Written wholesale after a complete scan,
+  // through the same atomic JsonFileStore mechanics as every
+  // other store here.
+
+  @override
+  Future<Result<ScanMemberships>> loadScanMemberships() async {
+    try {
+      final Map<String, dynamic> all = await _memberships.readMap();
+      if (all.isNotEmpty) {
+        return Success<ScanMemberships>(ScanMemberships.fromJson(all));
+      }
+      // No membership snapshot yet: convert any legacy analysis
+      // cache into FACTS ONLY at version 0 — the old engine's
+      // groups are discarded (ADR-019), and version 0 is never
+      // fresh, so the next scan recomputes and restamps. The
+      // conversion re-read does not count salvage skips (see
+      // _parseAnalysesMap); an unreadable cache converts to the
+      // empty snapshot, exactly like a failed legacy load did.
+      final Map<String, PhotoAnalysis> analyses;
+      try {
+        analyses = _parseAnalysesMap(
+          await _analyses.readMap(),
+          countSkips: false,
+        );
+      } catch (_) {
+        return const Success<ScanMemberships>(ScanMemberships.empty);
+      }
+      return Success<ScanMemberships>(
+        ScanMemberships(
+          algorithmVersion: 0,
+          assetInfos: <String, AssetInfo>{
+            for (final PhotoAnalysis a in analyses.values)
+              a.assetId: AssetInfo(
+                assetId: a.assetId,
+                type: MediaAssetType.image,
+                width: a.width,
+                height: a.height,
+                sizeBytes: a.sizeBytes,
+                modifiedDateMs: a.modifiedDateMs,
+                isEdited: false,
+                isScreenshot: false,
+              ),
+          },
+          groups: const <ScanGroup>[],
+          duplicateReferences: const <DuplicateReference>[],
+        ),
+      );
+    } catch (_) {
+      return Failure<ScanMemberships>(_failure);
+    }
+  }
+
+  @override
+  Future<Result<void>> saveScanMemberships(ScanMemberships memberships) async {
+    try {
+      final Map<String, dynamic> all = await _memberships.readMap();
+      all
+        ..clear()
+        ..addAll(memberships.toJson());
+      await _memberships.writeNow();
+      return const Success<void>(null);
+    } catch (_) {
+      return Failure<void>(_failure);
     }
   }
 

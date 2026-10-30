@@ -2,10 +2,12 @@
 // scanning, grouping, keeper choice and review navigation live in
 // DuplicatesController.
 //
-// The similarity slider regroups live from cached hashes: moving it
-// never re-downloads thumbnails, so groups update instantly. The
-// keeper badge marks the suggested keeper; tapping any thumbnail
-// changes it before "mark others for deletion" is pressed.
+// Stage 4: the groups are the scan's exact-duplicate memberships
+// (fixed Cleanup rules) — the similarity slider is removed
+// (owner-approved, ADR-019); Stage 7 owns this screen's layout
+// redesign. The keeper badge marks the suggested keeper; tapping
+// any thumbnail changes it before "mark others for deletion" is
+// pressed.
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -103,68 +105,18 @@ class _ReadyBody extends StatelessWidget {
               ),
               onDismiss: () => controller.protectedExcludedCount.value = 0,
             ),
-          Padding(
-            padding: EdgeInsets.all(context.sizes.screenPadding),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: <Widget>[
-                    Text(
-                      AppStrings.tr(AppStrings.duplicatesSliderLabel),
-                      style: context.textStyles.labelLarge,
-                    ),
-                    Text(
-                      AppStrings.tr(
-                        AppStrings.duplicatesSliderValue,
-                        <String, String>{
-                          'value': controller.threshold.value.toString(),
-                        },
-                      ),
-                      style: context.textStyles.labelLarge,
-                    ),
-                  ],
+          if (controller.errorKey.value.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.all(context.sizes.screenPadding),
+              child: Text(
+                AppStrings.tr(controller.errorKey.value),
+                // Phase 3B: same 4.29:1 light-error fix as the
+                // deck's share error text (design.md §9).
+                style: context.textStyles.bodySmall.copyWith(
+                  color: context.palette.textPrimary,
                 ),
-                Slider(
-                  value: controller.threshold.value.toDouble(),
-                  min: DuplicatesController.sliderMin.toDouble(),
-                  max: DuplicatesController.sliderMax.toDouble(),
-                  divisions:
-                      DuplicatesController.sliderMax -
-                      DuplicatesController.sliderMin,
-                  label: controller.threshold.value.toString(),
-                  // Phase 1.1: drag previews the value, release
-                  // regroups once — regrouping on every tick froze
-                  // the slider on large libraries.
-                  onChanged: (double value) =>
-                      controller.previewThreshold(value.round()),
-                  onChangeEnd: (double value) {
-                    controller.previewThreshold(value.round());
-                    controller.commitThreshold();
-                  },
-                ),
-                Text(
-                  AppStrings.tr(AppStrings.duplicatesSliderHint),
-                  style: context.textStyles.bodySmall.copyWith(
-                    color: context.palette.textSecondary,
-                  ),
-                ),
-                if (controller.errorKey.value.isNotEmpty)
-                  Padding(
-                    padding: EdgeInsets.only(top: context.sizes.sm),
-                    child: Text(
-                      AppStrings.tr(controller.errorKey.value),
-                      // Phase 3B: same 4.29:1 light-error fix as the
-                      // deck's share error text (design.md §9).
-                      style: context.textStyles.bodySmall.copyWith(
-                        color: context.palette.textPrimary,
-                      ),
-                    ),
-                  ),
-              ],
+              ),
             ),
-          ),
           Expanded(
             child: ListView.separated(
               padding: EdgeInsets.symmetric(

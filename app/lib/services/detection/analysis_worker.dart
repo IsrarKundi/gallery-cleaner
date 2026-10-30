@@ -1,89 +1,88 @@
-// Analysis batch worker (solutions 5.1): per-page thumbnail
-// analysis runs off the UI isolate.
+// Analysis batch workers (fix plan Stage 4): per-page
+// fingerprint and blur batches run off the UI isolate.
 //
 // Pure Dart only — no platform channels, no Flutter imports — so
 // this file is safe on a background isolate. The scanner fetches
 // thumbnails on the main isolate (photo_manager lives there) and
-// hands only bytes + asset facts across; the worker decodes and
-// scores them and hands back analyses. No photo content ever
-// leaves the device, and no decoded pixels leave this file —
-// only the hash and scores (see thumbnail_analysis.dart).
+// hands only bytes across; the workers decode and compute and
+// hand back fingerprints / blur measures. No photo content ever
+// leaves the device, and no decoded pixels leave this file.
 //
 // Per-asset degradation: one asset's bad bytes (or an unexpected
 // decode error) yields null for that asset only, never a failed
 // batch. A whole-batch failure (isolate spawn failure) is the
-// scanner's problem: it falls back to [analyzeBatchSync] on the
-// UI thread and reports the degraded state, never a hang.
+// scanner's problem: it falls back to the sync variants on the
+// UI thread and reports the degraded state, never a hang. Sync
+// and isolate outputs are identical for identical inputs — both
+// run the same functions.
 
 import 'dart:isolate';
 import 'dart:typed_data';
 
-import 'photo_analysis.dart';
+import 'blur_detection.dart';
 import 'thumbnail_analysis.dart';
 
-/// One asset's input to a batch analysis run: thumbnail bytes plus
-/// the asset facts the analysis needs. [bytes] is transferred, not
-/// copied, across the isolate boundary; it may be materialized
+/// One asset's input to a batch run: thumbnail bytes, transferred
+/// (not copied) across the isolate boundary; may be materialized
 /// exactly once, on whichever isolate runs the batch.
 class AnalysisBatchInput {
-  const AnalysisBatchInput({
-    required this.assetId,
-    required this.bytes,
-    required this.width,
-    required this.height,
-    required this.sizeBytes,
-    this.modifiedDateMs,
-  });
+  const AnalysisBatchInput({required this.assetId, required this.bytes});
 
   final String assetId;
   final TransferableTypedData bytes;
-  final int width;
-  final int height;
-
-  /// Fingerprint facts (solutions 5.3) stamped onto the analysis
-  /// the worker produces, so the cache entry describes the exact
-  /// file version that was hashed.
-  final int sizeBytes;
-  final int? modifiedDateMs;
 }
 
-/// Runs a batch analysis on a worker isolate. A function of this
-/// shape, so the scanner can inject a failing runner in tests to
-/// prove the degraded fallback.
-typedef AnalyzeBatchRunner = Future<List<PhotoAnalysis?>> Function(
+/// A fingerprint batch runner of this shape, so the scanner can
+/// inject a failing runner in tests to prove the degraded
+/// fallback.
+typedef FingerprintBatchRunner = Future<List<FingerprintComputation?>> Function(
   List<AnalysisBatchInput> inputs,
 );
 
-/// The production runner: one [Isolate.run] per page-batch (never
-/// per photo — spawn/copy overhead would exceed the saving).
-/// The batch is bounded by the scanner's page size, which is also
-/// the memory cap: at most one page of small analysis thumbnails
-/// is in flight at once.
-Future<List<PhotoAnalysis?>> analyzeBatchOnIsolate(
+/// A blur batch runner of this shape (same reasoning).
+typedef BlurBatchRunner = Future<List<BlurAssessment?>> Function(
+  List<AnalysisBatchInput> inputs,
+);
+
+/// Production fingerprint runner: one [Isolate.run] per batch
+/// (never per photo — spawn/copy overhead would exceed the
+/// saving). The batch is bounded by the scanner's page size.
+Future<List<FingerprintComputation?>> fingerprintBatchOnIsolate(
   List<AnalysisBatchInput> inputs,
 ) {
-  return Isolate.run(() => analyzeBatchSync(inputs));
+  return Isolate.run(() => fingerprintBatchSync(inputs));
 }
 
-/// Synchronous batch analysis: materialize each input's bytes and
-/// run the exact same [analyzeThumbnail] the UI thread used to
-/// run, with per-asset try/catch so one bad asset degrades to
-/// null instead of failing the batch. Used by the isolate worker
-/// above AND by the scanner's UI-thread fallback when isolate
-/// spawn fails, so fallback outputs are identical to worker
-/// outputs for the same inputs.
-List<PhotoAnalysis?> analyzeBatchSync(List<AnalysisBatchInput> inputs) {
+/// Production blur runner: one [Isolate.run] per batch. Blur
+/// batches are bounded by the scanner's fetch concurrency (8),
+/// matching Cleanup's separate-pass parallelism cap.
+Future<List<BlurAssessment?>> blurBatchOnIsolate(
+  List<AnalysisBatchInput> inputs,
+) {
+  return Isolate.run(() => blurBatchSync(inputs));
+}
+
+/// Synchronous fingerprint batch (the worker body + the
+/// scanner's UI-thread fallback).
+List<FingerprintComputation?> fingerprintBatchSync(
+  List<AnalysisBatchInput> inputs,
+) {
   return inputs.map((AnalysisBatchInput input) {
     try {
       final Uint8List bytes = input.bytes.materialize().asUint8List();
-      return analyzeThumbnail(
-        assetId: input.assetId,
-        bytes: bytes,
-        width: input.width,
-        height: input.height,
-        sizeBytes: input.sizeBytes,
-        modifiedDateMs: input.modifiedDateMs,
-      );
+      return computeFingerprint(bytes);
+    } catch (_) {
+      return null;
+    }
+  }).toList();
+}
+
+/// Synchronous blur batch (the worker body + the fallback).
+List<BlurAssessment?> blurBatchSync(List<AnalysisBatchInput> inputs) {
+  return inputs.map((AnalysisBatchInput input) {
+    try {
+      final Uint8List bytes = input.bytes.materialize().asUint8List();
+      return computeBlur(bytes);
     } catch (_) {
       return null;
     }

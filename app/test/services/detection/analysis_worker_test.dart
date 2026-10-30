@@ -1,7 +1,7 @@
-// Solutions 5.1: analysis batch worker — correctness against the
-// UI-thread oracle, per-asset degradation, and the isolate path
-// producing identical outputs. No device, no MediaStore: bytes
-// are synthetic PNGs generated in-test.
+// Stage 4 batch workers: the isolate runners must equal the
+// sync oracle asset for asset (fingerprints AND blur), and one
+// corrupt entry degrades to null for that asset only. No
+// device, no MediaStore: bytes are synthetic PNGs.
 
 import 'dart:isolate';
 import 'dart:typed_data';
@@ -9,7 +9,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:klara/services/detection/analysis_worker.dart';
-import 'package:klara/services/detection/photo_analysis.dart';
+import 'package:klara/services/detection/blur_detection.dart';
 import 'package:klara/services/detection/thumbnail_analysis.dart';
 
 Uint8List _patternPng(int seed) {
@@ -27,69 +27,73 @@ AnalysisBatchInput _input(String id, Uint8List bytes) {
   return AnalysisBatchInput(
     assetId: id,
     bytes: TransferableTypedData.fromList(<Uint8List>[bytes]),
-    width: 100,
-    height: 100,
-    sizeBytes: bytes.length,
   );
 }
 
+List<AnalysisBatchInput> _inputs(List<Uint8List> all) {
+  return <AnalysisBatchInput>[
+    for (int i = 0; i < all.length; i++) _input('a$i', all[i]),
+  ];
+}
+
 void main() {
-  test('isolate batch equals the UI-thread oracle, asset for asset', () async {
+  test('fingerprint isolate batch equals the sync oracle', () async {
     final List<Uint8List> bytes = <Uint8List>[
       _patternPng(1),
       _patternPng(2),
       _patternPng(3),
     ];
-    final List<AnalysisBatchInput> inputs = <AnalysisBatchInput>[
-      for (int i = 0; i < bytes.length; i++) _input('a$i', bytes[i]),
-    ];
-    final List<PhotoAnalysis?> fromIsolate = await analyzeBatchOnIsolate(
-      inputs,
-    );
-    // The oracle: the same function the UI thread used to run.
-    final List<PhotoAnalysis?> oracle = <PhotoAnalysis?>[
-      for (int i = 0; i < bytes.length; i++)
-        analyzeThumbnail(
-          assetId: 'a$i',
-          bytes: bytes[i],
-          width: 100,
-          height: 100,
-        ),
+    final List<FingerprintComputation?> fromIsolate =
+        await fingerprintBatchOnIsolate(_inputs(bytes));
+    final List<FingerprintComputation?> oracle = <FingerprintComputation?>[
+      for (final Uint8List b in bytes) computeFingerprint(b),
     ];
     expect(fromIsolate.length, 3);
     for (int i = 0; i < 3; i++) {
       expect(fromIsolate[i], isNotNull);
-      expect(fromIsolate[i]!.hash, oracle[i]!.hash);
-      expect(fromIsolate[i]!.blurScore, oracle[i]!.blurScore);
+      expect(fromIsolate[i]!.fingerprint.dHash, oracle[i]!.fingerprint.dHash);
+      expect(
+        fromIsolate[i]!.fingerprint.colorHistogram,
+        oracle[i]!.fingerprint.colorHistogram,
+      );
       expect(fromIsolate[i]!.meanLuminance, oracle[i]!.meanLuminance);
     }
   });
 
+  test('blur isolate batch equals the sync oracle', () async {
+    final List<Uint8List> bytes = <Uint8List>[_patternPng(1), _patternPng(2)];
+    final List<BlurAssessment?> fromIsolate = await blurBatchOnIsolate(
+      _inputs(bytes),
+    );
+    for (int i = 0; i < 2; i++) {
+      expect(fromIsolate[i]?.score, computeBlur(bytes[i])?.score);
+      expect(fromIsolate[i]?.reblur, computeBlur(bytes[i])?.reblur);
+    }
+  });
+
   test('one corrupt entry degrades to null, the rest still compute', () async {
-    final List<AnalysisBatchInput> inputs = <AnalysisBatchInput>[
-      _input('good-1', _patternPng(1)),
-      _input('bad', Uint8List.fromList(<int>[0, 1, 2, 3, 4])),
-      _input('good-2', _patternPng(2)),
+    final List<Uint8List> bytes = <Uint8List>[
+      _patternPng(1),
+      Uint8List.fromList(<int>[0, 1, 2, 3, 4]),
+      _patternPng(2),
     ];
-    final List<PhotoAnalysis?> results = await analyzeBatchOnIsolate(inputs);
+    final List<FingerprintComputation?> results =
+        await fingerprintBatchOnIsolate(_inputs(bytes));
     expect(results[0], isNotNull);
     expect(results[1], isNull);
     expect(results[2], isNotNull);
     // The sync fallback path degrades identically.
-    final List<AnalysisBatchInput> syncInputs = <AnalysisBatchInput>[
-      _input('good-1', _patternPng(1)),
-      _input('bad', Uint8List.fromList(<int>[0, 1, 2, 3, 4])),
-      _input('good-2', _patternPng(2)),
-    ];
-    final List<PhotoAnalysis?> syncResults = analyzeBatchSync(syncInputs);
+    final List<FingerprintComputation?> syncResults = fingerprintBatchSync(
+      _inputs(bytes),
+    );
     expect(syncResults[0], isNotNull);
     expect(syncResults[1], isNull);
     expect(syncResults[2], isNotNull);
-    expect(syncResults[0]!.hash, results[0]!.hash);
-    expect(syncResults[2]!.hash, results[2]!.hash);
+    expect(syncResults[0]!.fingerprint.dHash, results[0]!.fingerprint.dHash);
   });
 
-  test('empty batch is an empty result, not an isolate error', () async {
-    expect(await analyzeBatchOnIsolate(<AnalysisBatchInput>[]), isEmpty);
+  test('empty batches are empty results, not isolate errors', () async {
+    expect(await fingerprintBatchOnIsolate(<AnalysisBatchInput>[]), isEmpty);
+    expect(await blurBatchOnIsolate(<AnalysisBatchInput>[]), isEmpty);
   });
 }

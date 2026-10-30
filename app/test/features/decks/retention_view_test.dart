@@ -27,6 +27,7 @@ import 'package:klara/features/decks/widgets/maybe_pile_row.dart';
 import 'package:klara/services/detection/photo_analysis.dart';
 import 'package:klara/services/detection/smart_decks.dart';
 import 'package:klara/services/local/local_service.dart';
+import 'package:klara/services/detection/scan_memberships.dart';
 import 'package:klara/services/media/media_asset.dart';
 import 'package:klara/services/media/media_service.dart';
 import 'package:klara/services/trash/trash_entry.dart';
@@ -108,6 +109,15 @@ class _Media implements MediaService {
 }
 
 class _Local implements LocalService {
+  // Stage 4: memberships default to "none stored" in this fake.
+  @override
+  Future<Result<ScanMemberships>> loadScanMemberships() async =>
+      const Success<ScanMemberships>(ScanMemberships.empty);
+
+  @override
+  Future<Result<void>> saveScanMemberships(ScanMemberships memberships) async =>
+      const Success<void>(null);
+
   @override
   Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
     return const Success<int>(0);
@@ -314,21 +324,21 @@ void main() {
           ],
         ),
       );
-      // Phase 5.1: the hub scan analyses on a worker isolate, and
-      // isolate replies are real async events that starve under
-      // testWidgets' fake-async pumps — so wait for the scan in
-      // real async (bounded; a broken scan fails the expects
-      // below instead of hanging).
-      await tester.runAsync(() async {
-        final DecksController controller = Get.find<DecksController>();
-        int waits = 0;
-        while ((controller.status.value == DecksStatus.loading ||
-                controller.status.value == DecksStatus.scanning) &&
-            waits < 500) {
-          await Future<void>.delayed(const Duration(milliseconds: 20));
-          waits++;
-        }
-      });
+      // Stage 4: the hub scan makes three worker-isolate hops;
+      // isolate replies starve under fake-async pumps alone, so
+      // the wait interleaves pumps with real-async delays
+      // (bounded; a broken scan fails the expects below).
+      final DecksController controller = Get.find<DecksController>();
+      int rounds = 0;
+      while ((controller.status.value == DecksStatus.loading ||
+              controller.status.value == DecksStatus.scanning) &&
+          rounds < 100) {
+        await tester.pump(const Duration(milliseconds: 50));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        rounds++;
+      }
       await tester.pumpAndSettle();
       final Finder metricPill = find.byKey(const Key('decks_metric_pill'));
       if (metricPill.evaluate().isNotEmpty) {

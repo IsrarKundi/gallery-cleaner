@@ -180,9 +180,7 @@ class AppStrings {
   static const String duplicatesTapToKeep = 'duplicatesTapToKeep';
   static const String duplicatesMarkNonKeepers = 'duplicatesMarkNonKeepers';
   static const String duplicatesShowMore = 'duplicatesShowMore';
-  static const String duplicatesSliderLabel = 'duplicatesSliderLabel';
-  static const String duplicatesSliderValue = 'duplicatesSliderValue';
-  static const String duplicatesSliderHint = 'duplicatesSliderHint';
+
   static const String smartDeckProgress = 'smartDeckProgress';
   static const String smartDeckFinishedTitle = 'smartDeckFinishedTitle';
   static const String smartDeckFinishedMessage = 'smartDeckFinishedMessage';
@@ -299,6 +297,30 @@ class AppStrings {
   static const String reminderCountsBody = 'reminderCountsBody';
   static const String reminderNeverSwipedTitle = 'reminderNeverSwipedTitle';
   static const String reminderNeverSwipedBody = 'reminderNeverSwipedBody';
+
+  // Finish screen + review ask (wipe. fix plan Stage 5, ADR-020).
+  // The finish rows keep the three space states apart (§4): a
+  // Review batch is freed, a Trash batch is only in Trash until
+  // its date. The review-ask title/body/buttons are the owner's
+  // decided copy (30 Oct 2026); {amount} is always a real number
+  // from the app's records, formatted like the finish screen's.
+  static const String finishTitle = 'finishTitle';
+  static const String finishSubtitle = 'finishSubtitle';
+  static const String finishPhotosCount = 'finishPhotosCount';
+  static const String finishDeletedCaption = 'finishDeletedCaption';
+  static const String finishFreedCaption = 'finishFreedCaption';
+  static const String finishInTrashCaption = 'finishInTrashCaption';
+  static const String finishInTrashNoDateCaption = 'finishInTrashNoDateCaption';
+  static const String finishDone = 'finishDone';
+  static const String reviewAskTitle = 'reviewAskTitle';
+  static const String reviewAskBody = 'reviewAskBody';
+  static const String reviewAskGo = 'reviewAskGo';
+  static const String reviewAskLater = 'reviewAskLater';
+  static const String reviewAskNotHappy = 'reviewAskNotHappy';
+  static const String feedbackTitle = 'feedbackTitle';
+  static const String feedbackHint = 'feedbackHint';
+  static const String feedbackSubmit = 'feedbackSubmit';
+  static const String feedbackThanks = 'feedbackThanks';
 
   // Review leave-guard (fix plan Stage 1, requirements §4).
   static const String reviewLeaveTitle = 'reviewLeaveTitle';
@@ -422,16 +444,12 @@ class AppStrings {
     deckDuplicates: 'Duplicates',
     duplicatesTitle: 'Duplicates',
     duplicatesEmptyTitle: 'No duplicates found',
-    duplicatesEmptyMessage:
-        'No photos look alike at this similarity level. Try moving the slider.',
-    duplicatesGroupCount: '{count} similar photos',
+    duplicatesEmptyMessage: 'No exact copies of your photos were found. Duplicates appear here after a scan.',
+    duplicatesGroupCount: '{count} duplicate photos',
     duplicatesKeeper: 'Keeper',
     duplicatesTapToKeep: 'Tap a photo to make it the keeper.',
     duplicatesMarkNonKeepers: 'Mark others for deletion',
     duplicatesShowMore: 'Show {count} more photos',
-    duplicatesSliderLabel: 'Similarity',
-    duplicatesSliderValue: 'Distance {value}',
-    duplicatesSliderHint: 'Higher values group photos that look less alike. Groups update instantly.',
     smartDeckProgress: '{index} of {count} decided',
     smartDeckFinishedTitle: 'All decided',
     smartDeckFinishedMessage: 'Every photo in this album has a mark. Review your choices before anything is removed.',
@@ -654,6 +672,25 @@ class AppStrings {
     reminderNeverSwipedBody:
         'Swipe through your photos and say goodbye to the ones '
         'you don\'t need.',
+    finishTitle: 'Congratulations!',
+    finishSubtitle: 'You cleaned up your gallery',
+    finishPhotosCount: '{count} photos',
+    finishDeletedCaption: 'You have deleted',
+    finishFreedCaption: 'Freed from your storage',
+    finishInTrashCaption: 'In Trash — freed on {date}',
+    finishInTrashNoDateCaption: 'In Trash — freed when Trash is emptied',
+    finishDone: 'Done',
+    reviewAskTitle: 'You just freed up {amount}',
+    reviewAskBody:
+        'Enjoying your extra space? Show wipe. some love with a '
+        'quick rating!',
+    reviewAskGo: "Let's Go!",
+    reviewAskLater: 'Maybe Later',
+    reviewAskNotHappy: "Not happy? Tell us what's wrong",
+    feedbackTitle: "Tell us what's not working",
+    feedbackHint: 'What should we do better?',
+    feedbackSubmit: 'Send feedback',
+    feedbackThanks: 'Thanks for telling us',
     reviewLeaveTitle: 'Leave with photos waiting?',
     reviewLeaveMessage:
         '{count} photos are still waiting in Review. They stay '

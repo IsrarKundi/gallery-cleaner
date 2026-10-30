@@ -24,18 +24,29 @@
 // in [JsonMigrationReport.skipped], never fatal); a JSON file
 // that cannot be read at all fails the migration, and the
 // caller keeps serving JSON.
+//
+// Stage 4 (ADR-019): the legacy analyses file no longer imports
+// into an analyses table — there is none. Its rows convert to
+// asset-info FACTS at membership version 0 (groups discarded,
+// rescanned by the next scan), exactly like the in-database
+// v2 -> v3 upgrade. A JSON membership snapshot written by a
+// Stage 4 build still in JSON mode (version >= 1) imports
+// whole: facts, groups, duplicate reference and its version.
 
+import 'package:drift/drift.dart';
 import 'package:klara/core/utils/result.dart';
 import 'package:klara/services/detection/photo_analysis.dart';
+import 'package:klara/services/detection/scan_memberships.dart';
 import 'package:klara/services/local/klara_database.dart';
 import 'package:klara/services/local/local_service.dart';
 import 'package:klara/services/local/local_service_impl.dart';
+import 'package:klara/services/media/media_asset.dart';
 import 'package:klara/services/trash/trash_entry.dart';
 
-import 'analysis_store.dart';
 import 'completion_store.dart';
 import 'history_store.dart';
 import 'meta_store.dart';
+import 'scan_membership_store.dart';
 import 'session_store.dart';
 import 'snooze_store.dart';
 import 'trash_store.dart';
@@ -76,6 +87,8 @@ class JsonMigrationRunner {
       // against a source that could not be read.
       final Result<Map<String, PhotoAnalysis>> analysesResult = await _json
           .loadAnalyses();
+      final Result<ScanMemberships> membershipsResult = await _json
+          .loadScanMemberships();
       final Result<List<DeckSession>> sessionsResult = await _json
           .listSessions();
       final Result<List<TrashEntry>> trashResult = await _json
@@ -87,6 +100,7 @@ class JsonMigrationRunner {
       final Result<List<DateTime>> completionsResult = await _json
           .loadCompletionDays();
       if (analysesResult is Failure ||
+          membershipsResult is Failure ||
           sessionsResult is Failure ||
           trashResult is Failure ||
           historyResult is Failure ||
@@ -101,6 +115,16 @@ class JsonMigrationRunner {
       }
       final Map<String, PhotoAnalysis> analyses =
           (analysesResult as Success<Map<String, PhotoAnalysis>>).value;
+      // The membership snapshot to import: a real Stage 4
+      // snapshot (version >= 1) imports whole; anything else
+      // (the JSON reader's facts-only conversion of the legacy
+      // analyses) is rebuilt from [analyses] so the two paths
+      // agree field for field.
+      final ScanMemberships jsonMemberships =
+          (membershipsResult as Success<ScanMemberships>).value;
+      final ScanMemberships memberships = jsonMemberships.algorithmVersion > 0
+          ? jsonMemberships
+          : _factsOnly(analyses);
       final List<DeckSession> sessions =
           (sessionsResult as Success<List<DeckSession>>).value;
       final List<TrashEntry> trash =
@@ -116,7 +140,7 @@ class JsonMigrationRunner {
       // 2. Import, atomically. Upserts make a re-run converge,
       // so a crash here is repaired by the next launch.
       await _db.transaction(() async {
-        await AnalysisStore(_db).saveAll(analyses.values.toList());
+        await _importMemberships(memberships);
         for (final DeckSession session in sessions) {
           await SessionStore(_db).save(session);
         }
@@ -137,14 +161,18 @@ class JsonMigrationRunner {
       // imported rows without a marker: JSON stays
       // authoritative and the next launch re-imports.
       await _verify(
-        analyses: analyses,
+        memberships: memberships,
         sessions: sessions,
         trash: trash,
         history: history,
         snoozes: snoozes,
         completions: completions,
       );
-      await MetaStore(_db).set('schema_version', '1');
+      // The stamp is the app schema version this import ran
+      // under (kDbSchemaVersion in local_service_db_impl.dart):
+      // '3' since fix plan Stage 4 — the import writes through
+      // the v3 stores.
+      await MetaStore(_db).set('schema_version', '3');
       await MetaStore(_db).set('migration_completed', '1');
 
       return JsonMigrationReport(
@@ -172,10 +200,106 @@ class JsonMigrationRunner {
     }
   }
 
+  /// Facts-only memberships from the legacy analysis cache: the
+  /// same conversion the in-database v2 -> v3 upgrade performs
+  /// (type 'image', edited false, screenshot marking unknown).
+  ScanMemberships _factsOnly(Map<String, PhotoAnalysis> analyses) {
+    return ScanMemberships(
+      algorithmVersion: 0,
+      assetInfos: <String, AssetInfo>{
+        for (final PhotoAnalysis a in analyses.values)
+          a.assetId: AssetInfo(
+            assetId: a.assetId,
+            type: MediaAssetType.image,
+            width: a.width,
+            height: a.height,
+            sizeBytes: a.sizeBytes,
+            modifiedDateMs: a.modifiedDateMs,
+            isEdited: false,
+            isScreenshot: false,
+          ),
+      },
+      groups: const <ScanGroup>[],
+      duplicateReferences: const <DuplicateReference>[],
+    );
+  }
+
+  /// Writes [memberships] into the membership tables inside the
+  /// caller's transaction (the Drift store's own save() opens
+  /// its own transaction, so the import writes the rows
+  /// directly here, mirroring ScanMembershipStore's shape).
+  Future<void> _importMemberships(ScanMemberships memberships) async {
+    await _db.batch((Batch batch) {
+      batch.insertAll(_db.assetInfos, <AssetInfosCompanion>[
+        for (final AssetInfo info in memberships.assetInfos.values)
+          AssetInfosCompanion.insert(
+            assetId: info.assetId,
+            type: info.type.name,
+            width: info.width,
+            height: info.height,
+            sizeBytes: Value<int?>(info.sizeBytes),
+            modifiedDateMs: Value<int?>(info.modifiedDateMs),
+            isEdited: info.isEdited,
+            isScreenshot: info.isScreenshot,
+          ),
+      ], mode: InsertMode.insertOrReplace);
+    });
+    for (final ScanGroup group in memberships.groups) {
+      final int groupRowId = await _db
+          .into(_db.scanGroups)
+          .insert(
+            ScanGroupsCompanion.insert(
+              kind: group.kind.name,
+              seedId: Value<String?>(group.seedId),
+              keeperId: Value<String?>(group.keeperId),
+            ),
+          );
+      await _db.batch((Batch batch) {
+        batch.insertAll(_db.scanGroupMembers, <ScanGroupMembersCompanion>[
+          for (int i = 0; i < group.memberIds.length; i++)
+            ScanGroupMembersCompanion.insert(
+              groupRowId: groupRowId,
+              assetId: group.memberIds[i],
+              memberIndex: i,
+            ),
+        ]);
+      });
+    }
+    for (final DuplicateReference reference
+        in memberships.duplicateReferences) {
+      final int refRowId = await _db
+          .into(_db.duplicateReferences)
+          .insert(
+            DuplicateReferencesCompanion.insert(mainId: reference.mainId),
+          );
+      await _db.batch((Batch batch) {
+        batch.insertAll(
+          _db.duplicateReferenceMembers,
+          <DuplicateReferenceMembersCompanion>[
+            for (int i = 0; i < reference.duplicateIds.length; i++)
+              DuplicateReferenceMembersCompanion.insert(
+                referenceRowId: refRowId,
+                assetId: reference.duplicateIds[i],
+                memberIndex: i,
+              ),
+          ],
+        );
+      });
+    }
+    await _db
+        .into(_db.metaEntries)
+        .insertOnConflictUpdate(
+          MetaEntriesCompanion.insert(
+            key: kMembershipVersionKey,
+            value: '${memberships.algorithmVersion}',
+          ),
+        );
+  }
+
   /// Counts + first/last spot-checks, after the import commits.
   /// Throws on any mismatch, which withholds the marker.
   Future<void> _verify({
-    required Map<String, PhotoAnalysis> analyses,
+    required ScanMemberships memberships,
     required List<DeckSession> sessions,
     required List<TrashEntry> trash,
     required List<HistoryRecord> history,
@@ -188,27 +312,36 @@ class JsonMigrationRunner {
       }
     }
 
-    final Map<String, PhotoAnalysis> dbAnalyses = await AnalysisStore(_db)
-        .loadAll();
-    check(dbAnalyses.length == analyses.length, 'analyses count');
+    final Result<ScanMemberships> loaded = await ScanMembershipStore(_db)
+        .load();
+    final ScanMemberships dbMemberships = loaded.fold(
+      onSuccess: (ScanMemberships value) => value,
+      onFailure: (_) => throw StateError('membership reload failed'),
+    );
+    check(
+      dbMemberships.algorithmVersion == memberships.algorithmVersion,
+      'membership version',
+    );
+    check(
+      dbMemberships.assetInfos.length == memberships.assetInfos.length,
+      'asset infos count',
+    );
+    check(
+      dbMemberships.groups.length == memberships.groups.length,
+      'scan groups count',
+    );
+    check(
+      dbMemberships.duplicateReferences.length ==
+          memberships.duplicateReferences.length,
+      'duplicate references count',
+    );
     for (final String id in <String>{
-      if (analyses.isNotEmpty) analyses.keys.first,
-      if (analyses.isNotEmpty) analyses.keys.last,
+      if (memberships.assetInfos.isNotEmpty) memberships.assetInfos.keys.first,
+      if (memberships.assetInfos.isNotEmpty) memberships.assetInfos.keys.last,
     }) {
-      final PhotoAnalysis? back = dbAnalyses[id];
-      final PhotoAnalysis source = analyses[id]!;
-      check(
-        back != null &&
-            back.hash == source.hash &&
-            back.width == source.width &&
-            back.height == source.height &&
-            back.blurScore == source.blurScore &&
-            back.meanLuminance == source.meanLuminance &&
-            back.sizeBytes == source.sizeBytes &&
-            back.modifiedDateMs == source.modifiedDateMs &&
-            back.algorithmVersion == source.algorithmVersion,
-        'analysis $id values',
-      );
+      final AssetInfo? back = dbMemberships.assetInfos[id];
+      final AssetInfo source = memberships.assetInfos[id]!;
+      check(back != null && back.sameFacts(source), 'asset info $id values');
     }
 
     final List<DeckSession> dbSessions = await SessionStore(_db).listAll();

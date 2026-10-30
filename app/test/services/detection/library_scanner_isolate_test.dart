@@ -1,6 +1,8 @@
-// Solutions 5.1: the scanner's isolate batch path — bounded
-// parallel fetch, isolate analysis with UI-thread fallback, and
-// the degraded flag. Fakes only; no device, no MediaStore.
+// Stage 4 scanner paths: the two worker passes (fingerprint +
+// blur) with UI-thread fallback and the degraded flag,
+// bounded-parallel fetch, per-asset skipping, and the rule
+// that only a complete scan writes memberships. Fakes only;
+// no device, no MediaStore.
 
 import 'dart:io';
 import 'dart:typed_data';
@@ -9,8 +11,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:klara/core/utils/result.dart';
 import 'package:klara/services/detection/analysis_worker.dart';
+import 'package:klara/services/detection/grouping.dart';
 import 'package:klara/services/detection/library_scanner.dart';
-import 'package:klara/services/detection/photo_analysis.dart';
+import 'package:klara/services/detection/scan_memberships.dart';
 import 'package:klara/services/detection/thumbnail_analysis.dart';
 import 'package:klara/services/local/local_service_impl.dart';
 import 'package:klara/services/media/media_asset.dart';
@@ -132,12 +135,12 @@ class _CountingLocal extends LocalServiceImpl {
   _CountingLocal({required Directory directory})
     : super(directoryResolver: () async => directory);
 
-  int saveAnalysesCalls = 0;
+  int saveMembershipsCalls = 0;
 
   @override
-  Future<Result<void>> saveAnalyses(List<PhotoAnalysis> analyses) {
-    saveAnalysesCalls++;
-    return super.saveAnalyses(analyses);
+  Future<Result<void>> saveScanMemberships(ScanMemberships memberships) {
+    saveMembershipsCalls++;
+    return super.saveScanMemberships(memberships);
   }
 }
 
@@ -157,15 +160,17 @@ void main() {
     }
   });
 
-  test('default batch runner is the worker isolate', () {
+  test('default batch runners are the worker isolates', () {
     final LibraryScanner scanner = LibraryScanner(
       media: _FakeMedia(pages: const <List<MediaAsset>>[]),
       local: local,
     );
-    expect(scanner.analyzeBatch, same(analyzeBatchOnIsolate));
+    expect(scanner.fingerprintBatch, same(fingerprintBatchOnIsolate));
+    expect(scanner.blurBatch, same(blurBatchOnIsolate));
+    expect(scanner.membershipsRunner, same(buildScanMembershipsOnIsolate));
   });
 
-  test('scan analyses every uncached image via the isolate batch', () async {
+  test('scan computes every image via the two isolate passes', () async {
     final _FakeMedia media = _FakeMedia(
       pages: <List<MediaAsset>>[
         <MediaAsset>[_asset('a1'), _asset('a2'), _asset('a3')],
@@ -178,48 +183,23 @@ void main() {
     );
     expect(result.cancelled, isFalse);
     expect(result.degraded, isFalse);
-    expect(result.analyses.length, 3);
-    expect(media.getThumbnailCalls, 3);
-    expect(local.saveAnalysesCalls, 1);
+    expect(result.assessments.length, 3);
+    // Fingerprint pass + blur pass: 2 fetches per image.
+    expect(media.getThumbnailCalls, 6);
+    expect(local.saveMembershipsCalls, 1);
     expect(seenPages.length, 1);
-    // Oracle check: the stored hash is the one the thumbnail yields.
+    // Oracle check: the fingerprint is the one the bytes yield.
     for (final String id in <String>['a1', 'a2', 'a3']) {
       final int seed = int.parse(id.substring(1));
-      final PhotoAnalysis? oracle = analyzeThumbnail(
-        assetId: id,
-        bytes: _patternPng(seed),
-        width: 100,
-        height: 100,
+      final FingerprintComputation? oracle = computeFingerprint(
+        _patternPng(seed),
       );
-      expect(result.analyses[id]!.hash, oracle!.hash);
+      expect(
+        result.assessments[id]!.fingerprint!.dHash,
+        oracle!.fingerprint.dHash,
+      );
     }
-  });
-
-  test('cached assets pay no thumbnail fetch', () async {
-    await local.saveAnalyses(<PhotoAnalysis>[
-      PhotoAnalysis(
-        assetId: 'a1',
-        hash: 42,
-        width: 100,
-        height: 100,
-        blurScore: 1,
-        meanLuminance: 2,
-        // Phase 5.3: the seeded entry must carry the fingerprint
-        // of _asset('a1') (size 1000, no modified date) or the
-        // scanner rightly treats it as stale and re-analyses.
-        sizeBytes: 1000,
-      ),
-    ]);
-    final _FakeMedia media = _FakeMedia(
-      pages: <List<MediaAsset>>[
-        <MediaAsset>[_asset('a1'), _asset('a2')],
-      ],
-    );
-    final LibraryScanner scanner = LibraryScanner(media: media, local: local);
-    final LibraryScan result = await scanner.scan();
-    expect(media.getThumbnailCalls, 1);
-    expect(result.analyses['a1']!.hash, 42);
-    expect(result.analyses['a2'], isNotNull);
+    expect(result.memberships.algorithmVersion, scanMembershipAlgorithmVersion);
   });
 
   test('videos are never fetched for analysis', () async {
@@ -230,8 +210,10 @@ void main() {
     );
     final LibraryScanner scanner = LibraryScanner(media: media, local: local);
     final LibraryScan result = await scanner.scan();
-    expect(media.getThumbnailCalls, 1);
-    expect(result.analyses.containsKey('v1'), isFalse);
+    expect(media.getThumbnailCalls, 2);
+    expect(result.assessments.containsKey('v1'), isFalse);
+    // …but the video's facts are part of the membership product.
+    expect(result.memberships.assetInfos.containsKey('v1'), isTrue);
   });
 
   test(
@@ -245,12 +227,12 @@ void main() {
       media.thumbDelay = const Duration(milliseconds: 5);
       final LibraryScanner scanner = LibraryScanner(media: media, local: local);
       final LibraryScan result = await scanner.scan();
-      expect(result.analyses.length, 20);
+      expect(result.assessments.length, 20);
       expect(media.maxInFlight, LibraryScanner.fetchConcurrency);
     },
   );
 
-  test('failed and corrupt thumbnails skip only their own asset', () async {
+  test('failed and corrupt thumbnails skip only their own values', () async {
     final _FakeMedia media = _FakeMedia(
       pages: <List<MediaAsset>>[
         <MediaAsset>[_asset('a1'), _asset('a2'), _asset('a3')],
@@ -260,45 +242,41 @@ void main() {
     media.corruptThumbs.add('a2');
     final LibraryScanner scanner = LibraryScanner(media: media, local: local);
     final LibraryScan result = await scanner.scan();
-    expect(result.analyses.containsKey('a1'), isFalse);
-    expect(result.analyses.containsKey('a2'), isFalse);
-    expect(result.analyses.containsKey('a3'), isTrue);
+    expect(result.assessments['a1']!.fingerprint, isNull);
+    expect(result.assessments['a2']!.fingerprint, isNull);
+    expect(result.assessments['a3']!.fingerprint, isNotNull);
     expect(result.pageFailed, isFalse);
   });
 
-  test(
-    'spawn failure degrades to the UI thread with identical results',
-    () async {
-      final _FakeMedia media = _FakeMedia(
-        pages: <List<MediaAsset>>[
-          <MediaAsset>[_asset('a1'), _asset('a2')],
-        ],
-      );
-      int degradedCalls = 0;
-      final LibraryScanner scanner = LibraryScanner(
-        media: media,
-        local: local,
-        analyzeBatch: (_) async {
-          throw StateError('no isolate');
-        },
-      );
-      final LibraryScan result = await scanner.scan(
-        onDegraded: () => degradedCalls++,
-      );
-      expect(result.degraded, isTrue);
-      expect(degradedCalls, 1);
-      expect(result.analyses.length, 2);
-      final PhotoAnalysis? oracle = analyzeThumbnail(
-        assetId: 'a1',
-        bytes: _patternPng(1),
-        width: 100,
-        height: 100,
-      );
-      expect(result.analyses['a1']!.hash, oracle!.hash);
-    },
-  );
+  test('worker spawn failure degrades to the UI thread with '
+      'identical results', () async {
+    final _FakeMedia media = _FakeMedia(
+      pages: <List<MediaAsset>>[
+        <MediaAsset>[_asset('a1'), _asset('a2')],
+      ],
+    );
+    int degradedCalls = 0;
+    final LibraryScanner scanner = LibraryScanner(
+      media: media,
+      local: local,
+      fingerprintBatch: (_) async {
+        throw StateError('no isolate');
+      },
+    );
+    final LibraryScan result = await scanner.scan(
+      onDegraded: () => degradedCalls++,
+    );
+    expect(result.degraded, isTrue);
+    expect(degradedCalls, 1);
+    expect(result.assessments.length, 2);
+    final FingerprintComputation? oracle = computeFingerprint(_patternPng(1));
+    expect(
+      result.assessments['a1']!.fingerprint!.dHash,
+      oracle!.fingerprint.dHash,
+    );
+  });
 
-  test('cancelled scan reports no pages and no checkpoint save', () async {
+  test('cancelled scan reports no pages and no membership save', () async {
     final _FakeMedia media = _FakeMedia(
       pages: <List<MediaAsset>>[
         <MediaAsset>[_asset('a1')],
@@ -312,7 +290,7 @@ void main() {
     );
     expect(result.cancelled, isTrue);
     expect(seenPages, isEmpty);
-    expect(local.saveAnalysesCalls, 0);
+    expect(local.saveMembershipsCalls, 0);
   });
 
   test('pages arrive in page order', () async {

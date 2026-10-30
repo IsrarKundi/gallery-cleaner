@@ -12,6 +12,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:image/image.dart' as img;
 import 'package:klara/core/utils/app_haptics.dart';
 import 'package:klara/core/utils/result.dart';
 import 'package:klara/features/deck/controller/deck_controller.dart';
@@ -20,7 +21,6 @@ import 'package:klara/features/decks/controller/smart_deck_controller.dart';
 import 'package:klara/features/decks/model/smart_deck_launch.dart';
 import 'package:klara/features/review/controller/review_controller.dart';
 import 'package:klara/features/trash/controller/trash_controller.dart';
-import 'package:klara/services/detection/photo_analysis.dart';
 import 'package:klara/services/detection/smart_decks.dart';
 import 'package:klara/services/local/local_service.dart';
 import 'package:klara/services/local/local_service_impl.dart';
@@ -29,18 +29,28 @@ import 'package:klara/services/media/media_service.dart';
 import 'package:klara/services/trash/trash_entry.dart';
 import 'package:klara/services/trash/trash_service.dart';
 
-MediaAsset _asset(String id, {bool systemFavourite = false}) {
+MediaAsset _asset(
+  String id, {
+  bool systemFavourite = false,
+  int sizeBytes = 1000,
+}) {
   return MediaAsset(
     id: id,
     type: MediaAssetType.image,
     width: 10,
     height: 10,
-    sizeBytes: 1000,
+    sizeBytes: sizeBytes,
     createDate: DateTime(2026, 10, 20),
     title: '$id.jpg',
     albumName: 'Camera',
     isSystemFavourite: systemFavourite,
   );
+}
+
+Uint8List _png(int r, int g, int b) {
+  final img.Image image = img.Image(width: 32, height: 32);
+  img.fill(image, color: img.ColorRgb8(r, g, b));
+  return Uint8List.fromList(img.encodePng(image));
 }
 
 TrashEntry _entry(String id, DateTime trashedAt) {
@@ -101,7 +111,10 @@ class _Media implements MediaService {
     int size, {
     int quality = 85,
   }) async {
-    return Success<Uint8List>(Uint8List.fromList(<int>[1, 2, 3]));
+    // Stage 4: a real decodable PNG — the scan computes
+    // fingerprints from thumbnails, undecodable bytes would
+    // leave every deck empty.
+    return Success<Uint8List>(_png(5, 5, 5));
   }
 
   @override
@@ -302,24 +315,8 @@ void main() {
   });
 
   group('duplicates protection', () {
-    PhotoAnalysis analysis(String id, int hash) {
-      return PhotoAnalysis(
-        assetId: id,
-        hash: hash,
-        width: 10,
-        height: 10,
-        blurScore: id == 'a' ? 900 : 10,
-        meanLuminance: 128,
-      );
-    }
-
     Future<DuplicatesController> make(bool protectionOn) async {
       final LocalServiceImpl local = await _tempLocal();
-      await local.saveAnalyses(<PhotoAnalysis>[
-        analysis('a', 0),
-        analysis('b', 0),
-        analysis('c', 63),
-      ]);
       if (protectionOn) {
         await local.saveSettings(const AppSettings(protection: true));
         await local.saveSession(
@@ -331,8 +328,17 @@ void main() {
           ),
         );
       }
+      // Stage 4: the group comes from the scan's exact-duplicate
+      // memberships — 'a' and 'b' share thumbnail bytes and every
+      // fact, so they group with 'a' as keeper (equal blur, equal
+      // size, earliest first); 'c' carries a different file size,
+      // so the duplicate key leaves it out.
       final DuplicatesController controller = DuplicatesController(
-        media: _Media(<MediaAsset>[_asset('a'), _asset('b'), _asset('c')]),
+        media: _Media(<MediaAsset>[
+          _asset('a'),
+          _asset('b'),
+          _asset('c', sizeBytes: 2000),
+        ]),
         local: local,
       );
       await controller.init();

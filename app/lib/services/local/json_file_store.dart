@@ -12,11 +12,13 @@
 // - Serialised writes: every disk write chains onto one future per
 //   file, so concurrent read-modify-write callers cannot interleave
 //   and lose each other's updates (issue F-09).
-// - Atomic writes: bytes go to `<name>.tmp`, are flushed, then the
-//   temp file is renamed over the target — a kill mid-write leaves
-//   the old file or the new file intact, never a truncation (issue
-//   F-39). A leftover `.tmp` is ignored on load and overwritten by
-//   the next write.
+// - Atomic writes, via [AtomicFileWriter] (Cleanup's pattern,
+//   fix plan Stage 3): bytes go to `<name>.tmp`, are flushed and
+//   synced, then the temp file is renamed over the target — a
+//   kill mid-write leaves the old file or the new file intact,
+//   never a truncation (issue F-39). A refused rename falls back
+//   to copying the temp file over the target. A leftover `.tmp`
+//   is ignored on load and overwritten by the next write.
 // - Coalescing (opt-in per call via [scheduleWrite]): session saves
 //   flush at most every ~1.5 s (fixed window — see [scheduleWrite]
 //   for why there is no count trigger). Only session saves
@@ -44,6 +46,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'atomic_file_writer.dart';
+
 /// Resolves the directory holding Klara's JSON files. Shared by all
 /// stores of one [LocalServiceImpl] so the documents directory is
 /// resolved once (Phase 1.4 behaviour, kept).
@@ -53,10 +57,13 @@ class JsonFileStore {
   JsonFileStore({
     required this.fileName,
     required DirectoryResolver directoryResolver,
-  }) : _dirResolver = directoryResolver;
+    AtomicFileWriter? atomicWriter,
+  }) : _dirResolver = directoryResolver,
+       _atomicWriter = atomicWriter ?? const AtomicFileWriter();
 
   final String fileName;
   final DirectoryResolver _dirResolver;
+  final AtomicFileWriter _atomicWriter;
 
   /// Coalescing window for [scheduleWrite] (solutions 4.1: ~1–2 s).
   /// Fixed window, NOT a resetting debounce: the timer starts on
@@ -219,9 +226,7 @@ class JsonFileStore {
       final String text = jsonEncode(_snapshot);
       final Directory dir = await _dir();
       final File target = File('${dir.path}/$fileName');
-      final File tmp = File('${dir.path}/$fileName.tmp');
-      await tmp.writeAsString(text, flush: true);
-      await tmp.rename(target.path);
+      await _atomicWriter.write(target, text);
       diskWrites++;
       // Only clear dirty when nothing was scheduled during the
       // write: a concurrent mutation postdates these bytes and

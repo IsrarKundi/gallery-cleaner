@@ -27,6 +27,7 @@ import 'package:klara/features/splash/view/splash_view.dart';
 import 'package:klara/main.dart';
 import 'package:klara/services/detection/photo_analysis.dart';
 import 'package:klara/services/local/local_service.dart';
+import 'package:klara/services/detection/scan_memberships.dart';
 import 'package:klara/services/media/media_asset.dart';
 import 'package:klara/services/media/media_service.dart';
 import 'package:klara/services/trash/trash_entry.dart';
@@ -107,6 +108,15 @@ class _Media implements MediaService {
 }
 
 class _Local implements LocalService {
+  // Stage 4: memberships default to "none stored" in this fake.
+  @override
+  Future<Result<ScanMemberships>> loadScanMemberships() async =>
+      const Success<ScanMemberships>(ScanMemberships.empty);
+
+  @override
+  Future<Result<void>> saveScanMemberships(ScanMemberships memberships) async =>
+      const Success<void>(null);
+
   @override
   Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
     return const Success<int>(0);

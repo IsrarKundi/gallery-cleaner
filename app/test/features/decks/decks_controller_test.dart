@@ -13,10 +13,10 @@ import 'package:klara/core/strings/app_strings.dart';
 import 'package:klara/core/utils/result.dart';
 import 'package:klara/features/decks/controller/decks_controller.dart';
 import 'package:klara/features/decks/model/decks_status.dart';
-import 'package:klara/services/detection/grouping.dart';
 import 'package:klara/services/detection/photo_analysis.dart';
 import 'package:klara/services/detection/smart_decks.dart';
 import 'package:klara/services/local/local_service.dart';
+import 'package:klara/services/detection/scan_memberships.dart';
 import 'package:klara/services/media/media_asset.dart';
 import 'package:klara/services/media/media_service.dart';
 import 'package:klara/services/trash/trash_entry.dart';
@@ -27,6 +27,7 @@ MediaAsset _asset(
   DateTime? date,
   String album = 'Camera',
   MediaAssetType type = MediaAssetType.image,
+  bool screenshot = false,
 }) {
   return MediaAsset(
     id: id,
@@ -37,11 +38,18 @@ MediaAsset _asset(
     createDate: date ?? DateTime.now(),
     title: '$id.jpg',
     albumName: album,
+    // Stage 4: the screenshots deck follows the enumeration's
+    // file-name marking, not the album name.
+    isScreenshot: screenshot,
   );
 }
 
-/// Dark uniform PNG: analyses as blurry + dark, and identical bytes
-/// mean identical hashes (so all images group as duplicates).
+/// Dark uniform PNG: identical bytes mean identical fingerprints
+/// (so all images group together); its luminance puts every image
+/// in the dark deck. Under Stage 4's blur rule a uniform frame has
+/// NO blur measures (Cleanup's null rule), so it is never blurry —
+/// the old engine flagged it blurry; that difference is the new
+/// rule working as specified.
 Uint8List _darkPng() {
   final img.Image image = img.Image(width: 32, height: 32);
   img.fill(image, color: img.ColorRgb8(5, 5, 5));
@@ -74,6 +82,7 @@ class _Media implements MediaService {
         'shot',
         album: 'Screenshots',
         date: now.subtract(const Duration(days: 10)),
+        screenshot: true,
       ),
       _asset(
         'wa',
@@ -155,6 +164,15 @@ class _Media implements MediaService {
 }
 
 class _Local implements LocalService {
+  // Stage 4: memberships default to "none stored" in this fake.
+  @override
+  Future<Result<ScanMemberships>> loadScanMemberships() async =>
+      const Success<ScanMemberships>(ScanMemberships.empty);
+
+  @override
+  Future<Result<void>> saveScanMemberships(ScanMemberships memberships) async =>
+      const Success<void>(null);
+
   @override
   Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
     return const Success<int>(0);
@@ -297,12 +315,12 @@ void main() {
       );
       await controller.init();
       expect(controller.status.value, DecksStatus.ready);
-      // Phase 5.2: list-level decks (bursts, duplicates) land
-      // off-isolate AFTER ready, so wait for them instead of
-      // asserting in the same microtask as init.
+      // Bursts still land off-isolate AFTER ready, so wait for
+      // them; duplicates/blurry/dark now arrive WITH the scan
+      // result (Stage 4 memberships) and need no wait.
       for (
         int waits = 0;
-        controller.assetsFor(SmartDeckId.duplicates).length != 8 && waits < 250;
+        controller.assetsFor(SmartDeckId.bursts).length != 3 && waits < 250;
         waits++
       ) {
         await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -315,11 +333,17 @@ void main() {
       expect(controller.assetsFor(SmartDeckId.large).length, 1);
       expect(controller.assetsFor(SmartDeckId.old).length, 1);
       expect(controller.assetsFor(SmartDeckId.bursts).length, 3);
-      // Every image shares the dark thumbnail: blurry + dark decks
-      // hold all 8 images, and they group as duplicates.
-      expect(controller.assetsFor(SmartDeckId.blurry).length, 8);
+      // Every image shares the dark thumbnail: the dark deck
+      // holds all 8 images and they group as duplicates. The
+      // blurry deck is EMPTY: a uniform frame has no blur
+      // measures under the new rule (see _darkPng's doc).
+      expect(controller.assetsFor(SmartDeckId.blurry).length, 0);
       expect(controller.assetsFor(SmartDeckId.dark).length, 8);
-      expect(controller.assetsFor(SmartDeckId.duplicates).length, 8);
+      // 7, not 8: 'shot' is screenshot-class (Stage 2 marking),
+      // so it groups only with screenshots — alone, it forms no
+      // group and stays out of the duplicates union. Under the
+      // old engine it mixed with the photos.
+      expect(controller.assetsFor(SmartDeckId.duplicates).length, 7);
       expect(controller.progress, 1.0);
     });
 
@@ -344,106 +368,74 @@ void main() {
       expect(controller.status.value, DecksStatus.denied);
     });
 
-    test('phase 5.2: hub reaches ready before list decks land', () async {
-      final Completer<({List<DuplicateGroup> groups, Set<String> burstIds})>
-      gate = Completer<({List<DuplicateGroup> groups, Set<String> burstIds})>();
+    test('stage 4: hub reaches ready before bursts land; '
+        'membership decks arrive with the scan', () async {
+      final Completer<Set<String>> gate = Completer<Set<String>>();
       List<MediaAsset> capturedAssets = <MediaAsset>[];
-      Map<String, PhotoAnalysis> capturedAnalyses = <String, PhotoAnalysis>{};
-      int capturedThreshold = 5;
       final DecksController controller = DecksController(
         media: _Media(),
         local: _Local(),
-        listDecksRunner:
-            (
-              List<MediaAsset> assets,
-              Map<String, PhotoAnalysis> analyses,
-              int threshold,
-            ) {
-              capturedAssets = assets;
-              capturedAnalyses = analyses;
-              capturedThreshold = threshold;
-              return gate.future;
-            },
+        burstRunner: (List<MediaAsset> assets) {
+          capturedAssets = assets;
+          return gate.future;
+        },
       );
       await controller.init();
-      // Ready, per-page decks filled — but the gated list decks
-      // have not landed yet, and the hub must not wait for them.
+      // Ready, per-page decks filled, and the membership decks
+      // (duplicates) already applied from the scan result — but
+      // the gated bursts have not landed yet.
       expect(controller.status.value, DecksStatus.ready);
       expect(controller.assetsFor(SmartDeckId.screenshots).length, 1);
-      expect(controller.assetsFor(SmartDeckId.duplicates), isEmpty);
+      expect(controller.assetsFor(SmartDeckId.duplicates).length, 7);
       expect(controller.assetsFor(SmartDeckId.bursts), isEmpty);
       // Release the gate with the direct computation over the
-      // captured inputs: the list decks land progressively.
-      gate.complete((
-        groups: groupAssets(
-          assets: capturedAssets,
-          analyses: capturedAnalyses,
-          threshold: capturedThreshold,
-        ),
-        burstIds: burstAssetIds(capturedAssets),
-      ));
+      // captured inputs: bursts land progressively.
+      gate.complete(burstAssetIds(capturedAssets));
       for (
         int waits = 0;
-        controller.assetsFor(SmartDeckId.duplicates).length != 8 && waits < 250;
+        controller.assetsFor(SmartDeckId.bursts).length != 3 && waits < 250;
         waits++
       ) {
         await Future<void>.delayed(const Duration(milliseconds: 20));
       }
-      expect(controller.assetsFor(SmartDeckId.duplicates).length, 8);
       expect(controller.assetsFor(SmartDeckId.bursts).length, 3);
     });
 
-    test('phase 5.2: stale list-deck result is dropped', () async {
-      final Completer<({List<DuplicateGroup> groups, Set<String> burstIds})>
-      gate = Completer<({List<DuplicateGroup> groups, Set<String> burstIds})>();
+    test('stage 4: stale burst result is dropped', () async {
+      final Completer<Set<String>> gate = Completer<Set<String>>();
       int calls = 0;
-      Future<({List<DuplicateGroup> groups, Set<String> burstIds})> runner(
-        List<MediaAsset> assets,
-        Map<String, PhotoAnalysis> analyses,
-        int threshold,
-      ) {
+      Future<Set<String>> runner(List<MediaAsset> assets) {
         calls++;
         if (calls == 1) {
           return gate.future;
         }
-        return Future<
-          ({List<DuplicateGroup> groups, Set<String> burstIds})
-        >.value((
-          groups: groupAssets(
-            assets: assets,
-            analyses: analyses,
-            threshold: threshold,
-          ),
-          burstIds: burstAssetIds(assets),
-        ));
+        return Future<Set<String>>.value(burstAssetIds(assets));
       }
 
       final DecksController controller = DecksController(
         media: _Media(),
         local: _Local(),
-        listDecksRunner: runner,
+        burstRunner: runner,
       );
       await controller.init();
       expect(controller.status.value, DecksStatus.ready);
-      expect(controller.assetsFor(SmartDeckId.duplicates), isEmpty);
-      // A second scan (memoised replay) launches a newer list-deck
-      // computation, which lands first.
+      expect(controller.assetsFor(SmartDeckId.bursts), isEmpty);
+      // A second scan launches a newer burst computation, which
+      // lands first.
       await controller.init();
       for (
         int waits = 0;
-        controller.assetsFor(SmartDeckId.duplicates).length != 8 && waits < 250;
+        controller.assetsFor(SmartDeckId.bursts).length != 3 && waits < 250;
         waits++
       ) {
         await Future<void>.delayed(const Duration(milliseconds: 20));
       }
-      expect(controller.assetsFor(SmartDeckId.duplicates).length, 8);
       expect(controller.assetsFor(SmartDeckId.bursts).length, 3);
-      // The first computation finally resolves — with EMPTY
-      // decks. If it landed, the decks would be wiped; the guard
+      // The first computation finally resolves — with an EMPTY
+      // set. If it landed, the bursts would be wiped; the guard
       // must drop it.
-      gate.complete((groups: <DuplicateGroup>[], burstIds: <String>{}));
+      gate.complete(<String>{});
       await Future<void>.delayed(const Duration(milliseconds: 50));
-      expect(controller.assetsFor(SmartDeckId.duplicates).length, 8);
       expect(controller.assetsFor(SmartDeckId.bursts).length, 3);
     });
 

@@ -8,7 +8,9 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klara/core/utils/result.dart';
 import 'package:klara/services/detection/photo_analysis.dart';
+import 'package:klara/services/detection/scan_memberships.dart';
 import 'package:klara/services/local/klara_database.dart';
+import 'package:klara/services/media/media_asset.dart';
 import 'package:klara/services/local/local_service.dart';
 import 'package:klara/services/local/local_service_db_impl.dart';
 import 'package:klara/services/local/meta_store.dart';
@@ -37,7 +39,7 @@ void main() {
     }
   });
 
-  test('sessions, analyses, trash, history through the interface', () async {
+  test('sessions, memberships, trash, history through the interface', () async {
     await service.saveSession(
       const DeckSession(
         filterKey: 'all',
@@ -55,18 +57,32 @@ void main() {
     );
     expect(ok(await service.listSessions()).length, 1);
 
-    await service.saveAnalyses(<PhotoAnalysis>[
-      const PhotoAnalysis(
-        assetId: 'a',
-        hash: 7,
-        width: 10,
-        height: 20,
-        blurScore: 1.0,
-        meanLuminance: 2.0,
+    // Stage 4 (ADR-019): the persisted scan product is the
+    // membership snapshot — facts only, no hash/score fields.
+    // Saving a smaller snapshot replaces the old one wholesale
+    // (the prune analogue: nothing of the old snapshot remains).
+    await service.saveScanMemberships(
+      const ScanMemberships(
+        algorithmVersion: 1,
+        assetInfos: <String, AssetInfo>{
+          'a': AssetInfo(
+            assetId: 'a',
+            type: MediaAssetType.image,
+            width: 10,
+            height: 20,
+            sizeBytes: 5,
+            modifiedDateMs: null,
+            isEdited: false,
+            isScreenshot: false,
+          ),
+        },
+        groups: <ScanGroup>[],
+        duplicateReferences: <DuplicateReference>[],
       ),
-    ]);
-    expect(ok(await service.loadAnalyses()).length, 1);
-    expect(ok(await service.pruneAnalyses(<String>{})), 1);
+    );
+    expect(ok(await service.loadScanMemberships()).assetInfos.length, 1);
+    await service.saveScanMemberships(ScanMemberships.empty);
+    expect(ok(await service.loadScanMemberships()).assetInfos.length, 0);
 
     await service.recordTrashed(<TrashEntry>[
       TrashEntry(

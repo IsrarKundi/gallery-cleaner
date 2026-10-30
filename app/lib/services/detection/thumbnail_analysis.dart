@@ -1,70 +1,98 @@
-// Decodes a thumbnail into a [PhotoAnalysis] (requirements §7,
-// Phase 2). Service-layer code only: feature code never decodes
-// bytes itself, and no decoded pixels ever leave this file — only
-// the hash and scores.
+// Decodes thumbnails into Stage 4's transient values
+// (requirements §7): the two-part fingerprint (from a thumbnail
+// of at most 1024 px — the scanner fetches 128 px, inside the
+// cap) and the blur measures (from a 512 px thumbnail, Cleanup's
+// analysis size). Service-layer code only: no decoded pixels
+// ever leave this file — only the fingerprint, the blur
+// measures and the mean luminance.
 //
-// Thumbnails arrive from MediaService (square, [thumbnailSize] px).
-// They are downscaled to 64x64 for blur/darkness and 8x8 for the
-// hash, so aspect is not preserved — irrelevant for these
-// heuristics, which only need overall structure, detail and light.
-// A decode failure returns null; the caller skips analysis for that
-// asset instead of failing the whole scan.
+// A decode failure returns null; the caller skips that value
+// for that asset instead of failing the whole scan.
 
 import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
 
-import 'photo_analysis.dart';
+import 'blur_detection.dart';
+import 'photo_assessment.dart';
 
-/// Thumbnail edge requested from MediaService for analysis. Small on
-/// purpose: analysis needs structure, not pixels, and a small
-/// thumbnail keeps scans cheap on large libraries.
+/// Thumbnail edge requested from MediaService for the
+/// fingerprint. Small on purpose (Cleanup's cap is 1024 px):
+/// the fingerprint needs structure and colour distribution,
+/// not pixels, and a small thumbnail keeps scans cheap.
 const int analysisThumbnailSize = 128;
 
-/// Builds the analysis for one asset from its thumbnail bytes, or
-/// null when the bytes do not decode (corrupt/unsupported format).
-/// [width]/[height] are the asset's real dimensions from MediaAsset,
-/// used for the exact-duplicate rule — not the thumbnail's size.
-/// [sizeBytes]/[modifiedDateMs] are fingerprinted onto the
-/// analysis (solutions 5.3) so a rescan can tell whether the
-/// cached entry still describes the file.
-PhotoAnalysis? analyzeThumbnail({
-  required String assetId,
-  required Uint8List bytes,
-  required int width,
-  required int height,
-  int? sizeBytes,
-  int? modifiedDateMs,
-}) {
+/// Thumbnail edge requested for the blur pass (Cleanup's
+/// analysis size, algorithms.md §4).
+const int blurThumbnailSize = 512;
+
+/// One asset's computed fingerprint + mean luminance.
+class FingerprintComputation {
+  const FingerprintComputation({
+    required this.fingerprint,
+    required this.meanLuminance,
+  });
+
+  final PhotoFingerprint fingerprint;
+  final double meanLuminance;
+}
+
+/// Computes the two-part fingerprint (photo_assessment.dart)
+/// from thumbnail [bytes], or null when the bytes do not decode.
+FingerprintComputation? computeFingerprint(Uint8List bytes) {
+  final img.Image? decoded = img.decodeImage(bytes);
+  if (decoded == null || decoded.width < 1 || decoded.height < 1) {
+    return null;
+  }
+  // Colour summary: per-channel histograms over the raster as
+  // decoded, folded into 8 bands of 32 values, each band sum
+  // divided by (width x height) / 16.
+  final List<double> bands = List<double>.filled(24, 0);
+  final double divisor = (decoded.width * decoded.height) / 16.0;
+  double luminanceSum = 0;
+  for (int y = 0; y < decoded.height; y++) {
+    for (int x = 0; x < decoded.width; x++) {
+      final img.Pixel pixel = decoded.getPixel(x, y);
+      bands[(pixel.r.toInt() ~/ 32)] += 1;
+      bands[8 + (pixel.g.toInt() ~/ 32)] += 1;
+      bands[16 + (pixel.b.toInt() ~/ 32)] += 1;
+      luminanceSum += 0.299 * pixel.r + 0.587 * pixel.g + 0.114 * pixel.b;
+    }
+  }
+  for (int i = 0; i < 24; i++) {
+    bands[i] = bands[i] / divisor;
+  }
+  // Shape: difference hash over a 9x8 grayscale raster — bit set
+  // when the left pixel is brighter than its right neighbour.
+  final img.Image small = img.copyResize(
+    img.grayscale(decoded.clone()),
+    width: 9,
+    height: 8,
+    interpolation: img.Interpolation.average,
+  );
+  int dHash = 0;
+  for (int y = 0; y < 8; y++) {
+    for (int x = 0; x < 8; x++) {
+      final num left = small.getPixel(x, y).r;
+      final num right = small.getPixel(x + 1, y).r;
+      if (left > right) {
+        dHash |= 1 << (y * 8 + x);
+      }
+    }
+  }
+  return FingerprintComputation(
+    fingerprint: PhotoFingerprint(dHash: dHash, colorHistogram: bands),
+    meanLuminance: luminanceSum / (decoded.width * decoded.height),
+  );
+}
+
+/// Computes the blur measures (blur_detection.dart) from the
+/// 512 px thumbnail [bytes], or null when the bytes do not
+/// decode.
+BlurAssessment? computeBlur(Uint8List bytes) {
   final img.Image? decoded = img.decodeImage(bytes);
   if (decoded == null) {
     return null;
   }
-  final List<double> gray64 = _grayscale(decoded, blurGridSize);
-  final List<double> gray8 = _grayscale(decoded, hashGridSize);
-  return PhotoAnalysis(
-    assetId: assetId,
-    hash: averageHash(gray8),
-    width: width,
-    height: height,
-    blurScore: laplacianVariance(gray64, blurGridSize),
-    meanLuminance: meanLuminance(gray64),
-    sizeBytes: sizeBytes,
-    modifiedDateMs: modifiedDateMs,
-  );
-}
-
-/// Grayscale grid of side [size] from [image]: resize, then Rec. 601
-/// luminance per pixel, row-major. Resizing first is what makes the
-/// hash and blur scores resolution-independent.
-List<double> _grayscale(img.Image image, int size) {
-  final img.Image small = img.copyResize(image, width: size, height: size);
-  final List<double> gray = <double>[];
-  for (int y = 0; y < size; y++) {
-    for (int x = 0; x < size; x++) {
-      final img.Pixel pixel = small.getPixel(x, y);
-      gray.add(0.299 * pixel.r + 0.587 * pixel.g + 0.114 * pixel.b);
-    }
-  }
-  return gray;
+  return assessBlur(decoded);
 }

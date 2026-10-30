@@ -12,6 +12,11 @@ class AppRoutes {
   /// Review screen: editable grid of marked photos.
   static const String review = '/review';
 
+  /// Finish screen after a completed delete batch (fix plan
+  /// Stage 5, ADR-020). The batch travels as the route argument
+  /// (a FinishSummary).
+  static const String finish = '/finish';
+
   /// 30-day Trash with restore.
   static const String trash = '/trash';
 
@@ -21,7 +26,9 @@ class AppRoutes {
   /// Smart-deck hub (Phase 2A).
   static const String decks = '/decks';
 
-  /// Duplicate / similar groups with the similarity slider (Phase 2A).
+  /// Exact-duplicate groups from the scan's memberships (Phase 2A;
+  /// the similarity slider was removed in fix plan Stage 4,
+  /// ADR-019).
   static const String duplicates = '/duplicates';
 
   /// One smart deck as a swipe deck (Phase 2A). The deck's assets

@@ -27,6 +27,7 @@ import 'package:klara/features/splash/view/splash_view.dart';
 import 'package:klara/main.dart';
 import 'package:klara/services/detection/photo_analysis.dart';
 import 'package:klara/services/local/local_service.dart';
+import 'package:klara/services/detection/scan_memberships.dart';
 import 'package:klara/services/media/media_asset.dart';
 import 'package:klara/services/media/media_service.dart';
 import 'package:klara/services/trash/trash_entry.dart';
@@ -107,6 +108,15 @@ class _Media implements MediaService {
 }
 
 class _Local implements LocalService {
+  // Stage 4: memberships default to "none stored" in this fake.
+  @override
+  Future<Result<ScanMemberships>> loadScanMemberships() async =>
+      const Success<ScanMemberships>(ScanMemberships.empty);
+
+  @override
+  Future<Result<void>> saveScanMemberships(ScanMemberships memberships) async =>
+      const Success<void>(null);
+
   @override
   Future<Result<int>> pruneAnalyses(Set<String> liveIds) async {
     return const Success<int>(0);
@@ -390,10 +400,18 @@ void main() {
     await tester.tap(find.text('Delete All'));
     await tester.pumpAndSettle();
 
-    // Returns directly to deck: photo is permanently deleted, never trashed.
-    expect(find.byType(SwipeCard), findsOneWidget);
+    // Stage 5 (ADR-020): a completed batch lands on the finish
+    // screen first — the photo is permanently deleted, never
+    // trashed, and the space row says so.
+    expect(find.text('Congratulations!'), findsOneWidget);
+    expect(find.text('Freed from your storage'), findsOneWidget);
     expect(trash.entries, isEmpty);
     expect(trash.deletedIds, <String>['a1']);
+
+    // Done returns to the deck.
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SwipeCard), findsOneWidget);
 
     // History shows the freed record — freed MB, trashed 0.
     Get.offAllNamed<dynamic>(AppRoutes.history);

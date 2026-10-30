@@ -87,6 +87,14 @@ related work starts. This file is the single source of truth for the build; the 
   delete, denied delete) sync back to the origin deck of each photo independently without corrupting
   per-deck sessions. Smart decks' own internal review flow from inside a folder continues to work
   scoped to its own set. Smart decks remain marks-only without an undo window.
+- AMENDED 30 Oct 2026 (owner decision, wipe. fix plan Stage 5, ADR-020): when a delete batch
+  completes — a whole-set Review permanent delete, or a Clean-deck batched trash run — the user
+  lands on a finish screen before returning to the deck: how many photos were deleted, and the
+  space with its TRUE state (freed for a Review batch; "In Trash — freed on [date]" for a trash
+  batch, the date read from the recorded Trash entries). This amends only the LANDING in the
+  ADR-014 amendment above ("returns directly to the deck" becomes "via the finish screen, whose
+  Done returns to the deck"); the delete mechanics of ADR-013/014/015 are unchanged. No
+  "saved time" figure is ever shown — there is no honest way to measure it.
 
 ## 5. Permissions and platform rules
 
@@ -131,9 +139,30 @@ app UI, and a single smart deck screen is labelled "Album". The internal feature
 
 Duplicate / similar grouping with changeable keeper (app suggests best shot, user may pick another);
 blurry and dark photo detection; smart decks (Screenshots, WhatsApp, Downloads, Videos, Large
-photos, Old photos 90+ days, Bursts); similarity slider; Maybe snooze (7 / 14 / 30 days); goals
+photos, Old photos 90+ days, Bursts); Maybe snooze (7 / 14 / 30 days); goals
 ("free 1 GB this week"); streaks; On This Day deck; session summary + shareable result card;
 storage projection bar (device storage before → after).
+
+AMENDED 30 Oct 2026 (owner decision, wipe. fix plan Stages 4 + 7): the similarity slider is
+REMOVED. Matching uses fixed rules (Cleanup's recovered compare table, per photo/screenshot
+class) computed inside the library scan; the Duplicates screen shows the scan's exact-duplicate
+groups and offers no threshold control. See ADR-019.
+
+AMENDED 30 Oct 2026 (owner decision, wipe. fix plan Stage 5, ADR-020): the retention loop is
+completed. (a) The Phase 1 promises are kept in code again: the live three-state meter shows on
+the deck while cleaning, and a reopened deck lands on the exact photo where the user left,
+even across page boundaries. (b) A review ask runs on counted rules from the app's real
+records (lifetime photos deleted, lifetime swipes, distinct days used): after deleting, on the
+finish screen, when total deletes pass 10 (allowed on the first clean); after swiping, at deck
+session end only, at 60 total swipes; on the home screen at 3 usage days plus at least one
+delete, only if the other two never fired. Once per place; closing an ask without answering
+re-arms that place only at double the count (10 → 20 → 40; 60 → 120 → 240); a review or
+feedback given anywhere silences every place forever. The ask is two steps: wipe.'s own sheet
+first (the owner's kitten artwork; "You just freed up {amount}" with the same real amount the
+finish screen shows), then the Play in-app review prompt for "Let's Go!", or a feedback form
+for unhappy users — submitted through the system share sheet so the user picks the destination
+(the app has no support channel; nothing is ever sent silently). (c) Empty-state pictures are
+limited to History and Trash only; every other empty screen keeps its icon.
 
 ### Phase 3 — Trust and polish
 
