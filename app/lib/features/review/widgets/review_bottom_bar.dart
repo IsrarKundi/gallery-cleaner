@@ -20,6 +20,10 @@ import '../controller/review_controller.dart';
 ///
 /// Keep occupies 40% and Delete occupies 60% of the
 /// available button width, excluding the gap.
+///
+/// Loading is per action (ADR-025): a running action spins
+/// ONLY its own button (design.md §5); the other button is
+/// disabled — not spinning, not tappable — for the duration.
 class ReviewBottomBar extends StatelessWidget {
   const ReviewBottomBar({
     super.key,
@@ -51,6 +55,7 @@ class ReviewBottomBar extends StatelessWidget {
           final bool hasSelection = controller.hasSelection;
           final int selectedCount = controller.selectedItems.length;
           final bool isDeleting = controller.isDeleting.value;
+          final bool isKeeping = controller.isKeeping.value;
 
           return Row(
             children: <Widget>[
@@ -64,10 +69,15 @@ class ReviewBottomBar extends StatelessWidget {
                         )
                       : 'Keep',
                   icon: AppIcons.keep,
-                  onPressed: hasSelection
+                  // While Delete runs, Keep is disabled outright;
+                  // while Keep itself runs, the button's own
+                  // isLoading disables it (ADR-025).
+                  onPressed: isDeleting
+                      ? null
+                      : hasSelection
                       ? controller.keepSelected
                       : controller.keepAll,
-                  isLoading: isDeleting,
+                  isLoading: isKeeping,
                 ),
               ),
               SizedBox(width: context.sizes.sm),
@@ -81,7 +91,7 @@ class ReviewBottomBar extends StatelessWidget {
                         )
                       : 'Delete All',
                   icon: AppIcons.delete,
-                  onPressed: onDelete,
+                  onPressed: isKeeping ? null : onDelete,
                   isLoading: isDeleting,
                 ),
               ),

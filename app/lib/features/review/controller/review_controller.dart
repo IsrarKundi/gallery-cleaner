@@ -90,7 +90,22 @@ class ReviewController extends GetxController {
       _thumbnails.thumbnailsFor(thumbnailSize);
   RxSet<String> get failedThumbnails => _thumbnails.failedFor(thumbnailSize);
   final RxBool isLoading = false.obs;
+
+  /// Per-action busy state for the bottom bar (ADR-025): this
+  /// flag belongs to the Delete action ALONE — it drives only
+  /// the Delete button's spinner. It used to also drive the Keep
+  /// button's spinner, so one tap spun both buttons.
   final RxBool isDeleting = false.obs;
+
+  /// The Keep actions' own busy flag (ADR-025): drives only the
+  /// Keep button's spinner. Before ADR-025 the keep actions had
+  /// no loading state at all.
+  final RxBool isKeeping = false.obs;
+
+  /// True while either bottom-bar action is running. An action
+  /// starts only when neither is running, and the bar disables
+  /// the idle button for the duration.
+  bool get isBusy => isDeleting.value || isKeeping.value;
   final RxString errorKey = ''.obs;
   final Rx<ReviewDeleteOutcome?> lastOutcome = Rx<ReviewDeleteOutcome?>(null);
 
@@ -301,23 +316,30 @@ class ReviewController extends GetxController {
   /// (decided, so they do not reappear in the deck) and resets the
   /// stack to the deck.
   Future<void> keepAll() async {
-    if (items.isEmpty) {
+    if (items.isEmpty || isBusy) {
       return;
     }
-    errorKey.value = '';
-    final bool saved = await syncReviewKept(
-      local: local,
-      assets: items.toList(),
-      originSessionKeys: originSessionKeys,
-      defaultFilterKey: _filterKey,
-    );
-    if (!saved) {
-      errorKey.value = AppStrings.errorLocal;
-      return;
+    isKeeping.value = true;
+    try {
+      errorKey.value = '';
+      final bool saved = await syncReviewKept(
+        local: local,
+        assets: items.toList(),
+        originSessionKeys: originSessionKeys,
+        defaultFilterKey: _filterKey,
+      );
+      if (!saved) {
+        errorKey.value = AppStrings.errorLocal;
+        return;
+      }
+      items.clear();
+      selection.clear();
+      goToDeck();
+    } finally {
+      // The Keep spinner never outlives the keep action itself,
+      // on any outcome (ADR-025).
+      isKeeping.value = false;
     }
-    items.clear();
-    selection.clear();
-    goToDeck();
   }
 
   /// Keeps only the selected photos: their marks become keep in
@@ -327,26 +349,31 @@ class ReviewController extends GetxController {
   /// lands on the deck like [keepAll]. Never called with an empty
   /// selection (the Keep button falls back to [keepAll] then).
   Future<void> keepSelected() async {
-    if (selectedItems.isEmpty) {
+    if (selectedItems.isEmpty || isBusy) {
       return;
     }
-    errorKey.value = '';
-    final List<MediaAsset> toKeep = selectedItems.toList();
-    final bool saved = await syncReviewKept(
-      local: local,
-      assets: toKeep,
-      originSessionKeys: originSessionKeys,
-      defaultFilterKey: _filterKey,
-    );
-    if (!saved) {
-      errorKey.value = AppStrings.errorLocal;
-      return;
-    }
-    final Set<String> kept = toKeep.map((MediaAsset a) => a.id).toSet();
-    items.removeWhere((MediaAsset item) => kept.contains(item.id));
-    _syncSelection();
-    if (items.isEmpty) {
-      goToDeck();
+    isKeeping.value = true;
+    try {
+      errorKey.value = '';
+      final List<MediaAsset> toKeep = selectedItems.toList();
+      final bool saved = await syncReviewKept(
+        local: local,
+        assets: toKeep,
+        originSessionKeys: originSessionKeys,
+        defaultFilterKey: _filterKey,
+      );
+      if (!saved) {
+        errorKey.value = AppStrings.errorLocal;
+        return;
+      }
+      final Set<String> kept = toKeep.map((MediaAsset a) => a.id).toSet();
+      items.removeWhere((MediaAsset item) => kept.contains(item.id));
+      _syncSelection();
+      if (items.isEmpty) {
+        goToDeck();
+      }
+    } finally {
+      isKeeping.value = false;
     }
   }
 
@@ -360,7 +387,8 @@ class ReviewController extends GetxController {
   /// (MediaStore.createDeleteRequest on API 30+) and returns the outcome
   /// for the view to act on (return to deck, denied dialog + deck
   /// navigation, or the error state with retry). Returns null when
-  /// there is nothing to delete or a delete is already running.
+  /// there is nothing to delete or a bottom-bar action is already
+  /// running.
   ///
   /// [onlyIds] scopes the run to the selection: only those photos
   /// are deleted and the rest stay in the grid (the view shows a
@@ -376,69 +404,77 @@ class ReviewController extends GetxController {
     final List<MediaAsset> scope = onlyIds == null
         ? items.toList()
         : items.where((MediaAsset a) => onlyIds.contains(a.id)).toList();
-    if (scope.isEmpty || isDeleting.value) {
+    if (scope.isEmpty || isBusy) {
       return null;
     }
     isDeleting.value = true;
-    errorKey.value = '';
-    deniedIds.clear();
-    trashedUntil.value = null;
-    lastOutcome.value = null;
-    protectedExcludedCount.value = 0;
-    lastDeletedCount.value = 0;
-    lastFailedCount.value = 0;
-    lastDeletedBytes.value = 0;
-    // Phase 3B: protection filtering lives in review_delete.dart
-    // (extracted to hold the controller's line budget).
-    final ReviewDeletePlan plan = await planReviewDelete(
-      items: scope,
-      local: local,
-      filterKey: _filterKey,
-    );
-    protectedExcludedCount.value = plan.protectedCount;
-    final List<MediaAsset> toDelete = plan.toDelete;
-    if (toDelete.isEmpty) {
-      isDeleting.value = false;
-      return null;
-    }
-    final List<String> ids = toDelete.map((MediaAsset a) => a.id).toList();
-    final Result<DeleteOutcome> result = await trash.deletePermanently(ids);
-    isDeleting.value = false;
-    if (result.isFailure) {
-      errorKey.value = (result as Failure<DeleteOutcome>).failure.messageKey;
-      lastOutcome.value = ReviewDeleteOutcome.serviceError;
-      return ReviewDeleteOutcome.serviceError;
-    }
-    final DeleteOutcome outcome = (result as Success<DeleteOutcome>).value;
-    // Phase 3B: record the split before branching, so the view can
-    // explain mixed runs (deleted + denied, deleted + failed) instead
-    // of reporting only the winning outcome and hiding the rest.
-    lastDeletedCount.value = outcome.deletedIds.length;
-    lastFailedCount.value = outcome.failedIds.length;
-    if (outcome.deletedIds.isNotEmpty) {
-      await _applyDeleted(outcome.deletedIds);
-      // Phase 3A haptics (design.md §8): medium click when a
-      // delete is confirmed through the native sheet.
-      AppHaptics.deleteConfirm();
-    }
-    if (outcome.deniedIds.isNotEmpty) {
-      await syncReviewDenied(
+    try {
+      errorKey.value = '';
+      deniedIds.clear();
+      trashedUntil.value = null;
+      lastOutcome.value = null;
+      protectedExcludedCount.value = 0;
+      lastDeletedCount.value = 0;
+      lastFailedCount.value = 0;
+      lastDeletedBytes.value = 0;
+      // Phase 3B: protection filtering lives in review_delete.dart
+      // (extracted to hold the controller's line budget).
+      final ReviewDeletePlan plan = await planReviewDelete(
+        items: scope,
         local: local,
-        deniedIds: outcome.deniedIds,
-        originSessionKeys: originSessionKeys,
-        defaultFilterKey: _filterKey,
+        filterKey: _filterKey,
       );
-      deniedIds.assignAll(outcome.deniedIds);
-      lastOutcome.value = ReviewDeleteOutcome.denied;
-      return ReviewDeleteOutcome.denied;
+      protectedExcludedCount.value = plan.protectedCount;
+      final List<MediaAsset> toDelete = plan.toDelete;
+      if (toDelete.isEmpty) {
+        return null;
+      }
+      final List<String> ids = toDelete.map((MediaAsset a) => a.id).toList();
+      final Result<DeleteOutcome> result = await trash.deletePermanently(ids);
+      if (result.isFailure) {
+        errorKey.value = (result as Failure<DeleteOutcome>).failure.messageKey;
+        lastOutcome.value = ReviewDeleteOutcome.serviceError;
+        return ReviewDeleteOutcome.serviceError;
+      }
+      final DeleteOutcome outcome = (result as Success<DeleteOutcome>).value;
+      // Phase 3B: record the split before branching, so the view can
+      // explain mixed runs (deleted + denied, deleted + failed) instead
+      // of reporting only the winning outcome and hiding the rest.
+      lastDeletedCount.value = outcome.deletedIds.length;
+      lastFailedCount.value = outcome.failedIds.length;
+      if (outcome.deletedIds.isNotEmpty) {
+        await _applyDeleted(outcome.deletedIds);
+        // Phase 3A haptics (design.md §8): medium click when a
+        // delete is confirmed through the native sheet.
+        AppHaptics.deleteConfirm();
+      }
+      if (outcome.deniedIds.isNotEmpty) {
+        await syncReviewDenied(
+          local: local,
+          deniedIds: outcome.deniedIds,
+          originSessionKeys: originSessionKeys,
+          defaultFilterKey: _filterKey,
+        );
+        deniedIds.assignAll(outcome.deniedIds);
+        lastOutcome.value = ReviewDeleteOutcome.denied;
+        return ReviewDeleteOutcome.denied;
+      }
+      if (outcome.failedIds.isNotEmpty) {
+        errorKey.value = AppStrings.errorTrash;
+        lastOutcome.value = ReviewDeleteOutcome.failed;
+        return ReviewDeleteOutcome.failed;
+      }
+      lastOutcome.value = ReviewDeleteOutcome.deleted;
+      return ReviewDeleteOutcome.deleted;
+    } finally {
+      // The Delete spinner never outlives the delete action
+      // itself — success, denied, failed, or a throw from the
+      // planning/service calls above (ADR-025). Before this, the
+      // flag was cleared by hand on two paths only, and a throw
+      // stranded it at true forever (both buttons spinning, and
+      // the entry guard swallowing every later delete).
+      isDeleting.value = false;
     }
-    if (outcome.failedIds.isNotEmpty) {
-      errorKey.value = AppStrings.errorTrash;
-      lastOutcome.value = ReviewDeleteOutcome.failed;
-      return ReviewDeleteOutcome.failed;
-    }
-    lastOutcome.value = ReviewDeleteOutcome.deleted;
-    return ReviewDeleteOutcome.deleted;
   }
 
   /// Clears deleted ids' delete marks (best-effort), removes them

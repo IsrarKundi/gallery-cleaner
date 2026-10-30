@@ -29,7 +29,7 @@ import java.util.concurrent.Executors
  *   frame extraction).
  * - `extractFrames(assetId, timestampsUs)` -> one entry per
  *   requested timestamp, in order: the frame at that time
- *   (OPTION_CLOSEST_SYNC_FRAME), scaled to exactly 9x8 px and
+ *   (OPTION_CLOSEST_SYNC), scaled to exactly 9x8 px and
  *   PNG-encoded, or null when that frame could not be read.
  *   The 9x8 raster is the whole point: the Dart side feeds
  *   these bytes through the SAME fingerprint code as photos,
@@ -189,14 +189,14 @@ class VideoFrameChannel(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             return retriever.getScaledFrameAtTime(
                 timeUs,
-                MediaMetadataRetriever.OPTION_CLOSEST_SYNC_FRAME,
+                MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
                 FRAME_WIDTH,
                 FRAME_HEIGHT,
             )
         }
         val frame = retriever.getFrameAtTime(
             timeUs,
-            MediaMetadataRetriever.OPTION_CLOSEST_SYNC_FRAME,
+            MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
         ) ?: return null
         if (frame.width == FRAME_WIDTH && frame.height == FRAME_HEIGHT) {
             return frame
