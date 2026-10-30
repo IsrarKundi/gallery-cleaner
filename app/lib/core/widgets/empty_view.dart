@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../theme/theme_ext.dart';
 import 'primary_button.dart';
@@ -25,6 +26,7 @@ class EmptyView extends StatelessWidget {
     this.onCta,
     this.secondaryCtaLabel,
     this.onSecondaryCta,
+    this.imageAsset,
   });
 
   final IconData icon;
@@ -34,6 +36,12 @@ class EmptyView extends StatelessWidget {
   final VoidCallback? onCta;
   final String? secondaryCtaLabel;
   final VoidCallback? onSecondaryCta;
+
+  /// Optional decided illustration (SVG asset) shown INSTEAD of
+  /// the icon (fix plan Stage 5, ADR-020 decision 14): only the
+  /// History and Trash empty states pass one — the owner's scope
+  /// for empty-state pictures. Every other caller keeps the icon.
+  final String? imageAsset;
 
   @override
   Widget build(BuildContext context) {
@@ -47,11 +55,18 @@ class EmptyView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(
-              icon,
-              size: context.sizes.iconLg,
-              color: context.palette.textSecondary,
-            ),
+            if (imageAsset != null)
+              SvgPicture.asset(
+                imageAsset!,
+                width: context.sizes.emptyArt,
+                semanticsLabel: title,
+              )
+            else
+              Icon(
+                icon,
+                size: context.sizes.iconLg,
+                color: context.palette.textSecondary,
+              ),
             SizedBox(height: context.sizes.md),
             Text(title, style: context.textStyles.titleLarge),
             SizedBox(height: context.sizes.sm),

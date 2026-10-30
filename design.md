@@ -106,6 +106,29 @@ For Klara — a utility, not a portfolio piece — borrow the boring parts: one 
   2. Clean result: "No duplicates found" + [Scan again] + storage summary.
   3. No filter results: "No screenshots in this period" + [Clear filters].
   Illustration small, above the CTA, never full-screen. Never a bare "Nothing here yet" with no direction.
+  AMENDED 30 Oct 2026 (owner decision, wipe. fix plan Stage 5, ADR-020): exactly two empty
+  states carry a picture instead of the icon — History (calendar) and Trash (bin), the owner's
+  accepted ref-style artwork, small and above the text like every illustration here. Every
+  other empty state keeps its icon; loading keeps skeleton screens (no artwork).
+- **Finish screen (Stage 5, ADR-020):** after a delete batch — the Fluent party popper
+  (MIT artwork) on top, "Congratulations!", then two tonal result rows (white-circle icon,
+  big value, caption): photos deleted, and the space with its true state ("Freed from your
+  storage" / "In Trash — freed on [date]"). One primary "Done" pinned at the bottom. No
+  saved-time row, ever.
+- **Review-ask sheet (Stage 5, ADR-020):** the owner's decided design — heart-paws kitten
+  photo, five soft gold stars (static), the title carrying the real freed amount, one primary
+  ("Let's Go!"), "Maybe Later" as its text dismissal, and a quieter text action for the
+  unhappy path, which swaps the SAME sheet to the feedback form (sheets never stack). The
+  artwork's own soft gradient (the stars) is the owner's accepted asset, not UI chrome —
+  §2's flat rule for surfaces is unchanged.
+- **Duplicates screen (Stage 7, ADR-022):** results first — one summary line (non-keeper
+  count + size), one explanation line for the whole screen, Select all / Deselect all as
+  tertiary text actions; group cards headed by non-keeper count + size, their photos
+  large and square, two per row filling the card; the keeper carries a pill badge in the
+  success colours on its photo; every non-keeper carries a round selection mark on the
+  photo (filled error colour + check = will be marked, scrim ring = spared) with a 48dp
+  hit area of its own; one sticky primary button carrying the live selected totals,
+  disabled at zero with the §5 caption. Flat tokens only, like every screen.
 
 ---
 

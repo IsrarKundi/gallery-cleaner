@@ -67,6 +67,9 @@ class _Body extends StatelessWidget {
           message: AppStrings.tr(AppStrings.historyEmptyMessage),
           ctaLabel: AppStrings.tr(AppStrings.actionBackToDeck),
           onCta: controller.goToDeck,
+          // Stage 5 (ADR-020 decision 14): the owner's decided
+          // empty-state picture for History — one of only two.
+          imageAsset: 'assets/images/img_empty_history.svg',
         );
       }
       return ListView.builder(

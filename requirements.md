@@ -164,6 +164,33 @@ for unhappy users — submitted through the system share sheet so the user picks
 (the app has no support channel; nothing is ever sent silently). (c) Empty-state pictures are
 limited to History and Trash only; every other empty screen keeps its icon.
 
+AMENDED 30 Oct 2026 (owner decision, wipe. fix plan Stage 6, ADR-021): a Similar Videos smart
+deck joins the Phase 2 decks. It is a scan membership like blurry/dark, not a metadata deck:
+during the library scan, each video of 400 MB or smaller is sampled at frames spread evenly
+across its duration (normally 7 frames, at most 13; neighbouring frames stay 2–10 seconds
+apart whenever the 13-frame cap allows — for longer videos the cap wins and the gaps widen,
+per ADR-021), each frame is fingerprinted from a 9×8 raster
+with the same two-part fingerprint as photos and compared with the normal-photo rule, and
+two videos are similar when at least 2 of their sampled frames match. Groups follow the
+photo seed rule (a video joins only by matching the group's seed). The deck itself is an
+ordinary smart deck: marks only, review + native confirmation own removal, delete marks
+surface in the Trash-tab union like every smart deck (ADR-015). Videos over 400 MB are
+never frame-checked. Cleanup's 100 MB "big file" mark is NOT adopted: its role in their
+pipeline is unknown and no UI is built for it.
+
+AMENDED 30 Oct 2026 (owner decision, wipe. fix plan Stage 7, ADR-022): the Duplicates
+screen's layout follows Cleanup's structure in wipe.'s own design. It opens with the
+results: a summary line counting the duplicate photos — the non-keepers across all
+groups — and their total size, one explanation line, and Select all / Deselect all.
+Each group card is headed by its non-keeper count and size and shows its photos large,
+two per row; the suggested keeper carries a "Keeper" pill on its photo, and every
+non-keeper starts selected, shown by a round mark on the photo (tapping the mark spares
+or re-selects that one photo; tapping the photo still changes the keeper). One sticky
+bottom button — "Mark N duplicates for review" with the live selected totals — writes
+delete marks for the selected photos into the duplicates session and opens Review with
+them, exactly as the old per-card buttons did; the screen itself never deletes, and
+photos the user spares are left undecided.
+
 ### Phase 3 — Trust and polish
 
 Private blur mode for trash thumbnails (review thumbnails are always revealed); favourites /

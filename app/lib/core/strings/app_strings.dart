@@ -50,6 +50,7 @@ class AppStrings {
   static const String actionKeepAll = 'actionKeepAll';
   static const String actionSelect = 'actionSelect';
   static const String actionSelectAll = 'actionSelectAll';
+  static const String actionDeselectAll = 'actionDeselectAll';
   static const String actionSkip = 'actionSkip';
   static const String actionAddToAlbum = 'actionAddToAlbum';
   static const String actionShare = 'actionShare';
@@ -172,13 +173,16 @@ class AppStrings {
   static const String deckBlurry = 'deckBlurry';
   static const String deckDark = 'deckDark';
   static const String deckDuplicates = 'deckDuplicates';
+  static const String deckSimilarVideos = 'deckSimilarVideos';
   static const String duplicatesTitle = 'duplicatesTitle';
   static const String duplicatesEmptyTitle = 'duplicatesEmptyTitle';
   static const String duplicatesEmptyMessage = 'duplicatesEmptyMessage';
-  static const String duplicatesGroupCount = 'duplicatesGroupCount';
+  static const String duplicatesSummary = 'duplicatesSummary';
+  static const String duplicatesExplanation = 'duplicatesExplanation';
+  static const String duplicatesGroupHeader = 'duplicatesGroupHeader';
   static const String duplicatesKeeper = 'duplicatesKeeper';
-  static const String duplicatesTapToKeep = 'duplicatesTapToKeep';
-  static const String duplicatesMarkNonKeepers = 'duplicatesMarkNonKeepers';
+  static const String duplicatesMarkSelected = 'duplicatesMarkSelected';
+  static const String duplicatesSelectHint = 'duplicatesSelectHint';
   static const String duplicatesShowMore = 'duplicatesShowMore';
 
   static const String smartDeckProgress = 'smartDeckProgress';
@@ -369,6 +373,12 @@ class AppStrings {
   static const String a11yThumbKeeperUntitled = 'a11yThumbKeeperUntitled';
   static const String a11yThumb = 'a11yThumb';
   static const String a11yThumbUntitled = 'a11yThumbUntitled';
+  static const String a11yDuplicateMarked = 'a11yDuplicateMarked';
+  static const String a11yDuplicateMarkedUntitled =
+      'a11yDuplicateMarkedUntitled';
+  static const String a11yDuplicateSpared = 'a11yDuplicateSpared';
+  static const String a11yDuplicateSparedUntitled =
+      'a11yDuplicateSparedUntitled';
   static const String a11yReviewTile = 'a11yReviewTile';
   static const String a11yReviewTileUntitled = 'a11yReviewTileUntitled';
   static const String a11ySelected = 'a11ySelected';
@@ -442,13 +452,18 @@ class AppStrings {
     deckBlurry: 'Blurry photos',
     deckDark: 'Dark photos',
     deckDuplicates: 'Duplicates',
+    deckSimilarVideos: 'Similar videos',
     duplicatesTitle: 'Duplicates',
     duplicatesEmptyTitle: 'No duplicates found',
     duplicatesEmptyMessage: 'No exact copies of your photos were found. Duplicates appear here after a scan.',
-    duplicatesGroupCount: '{count} duplicate photos',
+    duplicatesSummary: '{count} photos · {size}',
+    duplicatesExplanation:
+        'These are exact copies of the same photo. Marked duplicates '
+        'go to Review — nothing is deleted from this screen.',
+    duplicatesGroupHeader: '{count} duplicates',
     duplicatesKeeper: 'Keeper',
-    duplicatesTapToKeep: 'Tap a photo to make it the keeper.',
-    duplicatesMarkNonKeepers: 'Mark others for deletion',
+    duplicatesMarkSelected: 'Mark {count} duplicates for review · {size}',
+    duplicatesSelectHint: 'Select at least 1 photo',
     duplicatesShowMore: 'Show {count} more photos',
     smartDeckProgress: '{index} of {count} decided',
     smartDeckFinishedTitle: 'All decided',
@@ -471,6 +486,7 @@ class AppStrings {
     actionKeepAll: 'Keep all',
     actionSelect: 'Select',
     actionSelectAll: 'Select all',
+    actionDeselectAll: 'Deselect all',
     actionSkip: 'Skip',
     actionAddToAlbum: 'Add to album',
     actionShare: 'Share',
@@ -765,6 +781,11 @@ class AppStrings {
     a11yThumbKeeperUntitled: 'Keeper photo, tap to keep this photo',
     a11yThumb: '{name}, tap to make this photo the keeper',
     a11yThumbUntitled: 'Photo, tap to make this photo the keeper',
+    a11yDuplicateMarked: '{name}, will be marked, tap to spare this photo',
+    a11yDuplicateMarkedUntitled:
+        'Photo, will be marked, tap to spare this photo',
+    a11yDuplicateSpared: '{name}, spared, tap to mark this photo',
+    a11yDuplicateSparedUntitled: 'Photo, spared, tap to mark this photo',
     a11yReviewTile: '{name}, tap to remove from review',
     a11yReviewTileUntitled: 'Photo, tap to remove from review',
     a11ySelected: 'selected',

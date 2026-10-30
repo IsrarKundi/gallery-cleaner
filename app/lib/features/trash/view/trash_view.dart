@@ -231,6 +231,9 @@ class _Body extends StatelessWidget {
           message: AppStrings.tr(AppStrings.trashEmptyMessage),
           ctaLabel: AppStrings.tr(AppStrings.actionBackToDeck),
           onCta: controller.goToDeck,
+          // Stage 5 (ADR-020 decision 14): the owner's decided
+          // empty-state picture for Trash — one of only two.
+          imageAsset: 'assets/images/img_empty_trash.svg',
         );
       }
       return Column(

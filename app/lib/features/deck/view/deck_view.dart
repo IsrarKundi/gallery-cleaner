@@ -15,8 +15,12 @@ import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/empty_view.dart';
 import '../../../core/widgets/error_view.dart';
 import '../../../core/widgets/info_banner.dart';
+import '../../../core/widgets/review_ask_sheet.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
+import '../../../services/review_ask/review_ask.dart';
+import '../../../services/review_ask/review_ask_service.dart';
+import '../../finish/model/finish_summary.dart';
 import '../controller/deck_controller.dart';
 import '../model/deck_status.dart';
 import '../widgets/album_picker_sheet.dart';
@@ -24,7 +28,7 @@ import '../widgets/deck_action_bar.dart';
 import '../widgets/deck_home_skeleton.dart';
 import '../widgets/filter_sheet.dart';
 import '../widgets/session_summary_card.dart';
-// import '../widgets/space_meter_bar.dart';
+import '../widgets/space_meter_bar.dart';
 import '../widgets/deck_card_stack.dart';
 import '../widgets/tutorial_overlay.dart';
 
@@ -120,55 +124,179 @@ class DeckView extends GetView<DeckController> {
 
   @override
   Widget build(BuildContext context) {
-    return Obx(() {
-      final bool showBar =
-          controller.status.value == DeckStatus.ready &&
-          controller.currentAsset != null;
-      final MediaAsset? current = controller.currentAsset;
-      final bool isFav =
-          current != null && controller.favouriteIds.contains(current.id);
-      return AppScaffold(
-        titleWidget: SvgPicture.asset(
-          'assets/icons/wipe_logo.svg',
-          height: context.sizes.iconLg,
-          theme: SvgTheme(currentColor: context.palette.textPrimary),
-          semanticsLabel: AppStrings.tr(AppStrings.appTitle),
-        ),
-        actions: <Widget>[
-          IconButton(
-            icon: Icon(AppIcons.history, size: context.sizes.iconMd),
-            tooltip: AppStrings.tr(AppStrings.screenHistory),
-            onPressed: () => Get.toNamed<dynamic>(AppRoutes.history),
+    return _Stage5Watcher(
+      controller: controller,
+      child: Obx(() {
+        final bool showBar =
+            controller.status.value == DeckStatus.ready &&
+            controller.currentAsset != null;
+        final MediaAsset? current = controller.currentAsset;
+        final bool isFav =
+            current != null && controller.favouriteIds.contains(current.id);
+        return AppScaffold(
+          titleWidget: SvgPicture.asset(
+            'assets/icons/wipe_logo.svg',
+            height: context.sizes.iconLg,
+            theme: SvgTheme(currentColor: context.palette.textPrimary),
+            semanticsLabel: AppStrings.tr(AppStrings.appTitle),
           ),
-          IconButton(
-            icon: Icon(AppIcons.filter, size: context.sizes.iconMd),
-            tooltip: AppStrings.tr(AppStrings.filterTitle),
-            onPressed: () => _openFiltersWithAlbums(context),
-          ),
-        ],
-        bottomBar: showBar
-            ? DeckActionBar(
-                onMark: controller.markCurrent,
-                onUndo: controller.undo,
-                canUndo: controller.canUndo,
-                onReview: controller.goToReview,
-                isFavourite: isFav,
-                onFavorite: () => controller.markCurrent(DeckMark.favourite),
-                onAddToAlbum: () => _openAlbumPickerWithAlbums(context),
-                onShare: _shareCurrentAsset,
-              )
-            : null,
-        bottomNav: showBottomNav ? const AppBottomNav(currentIndex: 0) : null,
-        body: Stack(
-          children: <Widget>[
-            _Body(controller: controller),
-            if (controller.showTutorial.value)
-              TutorialOverlay(onDismiss: controller.dismissTutorial),
+          actions: <Widget>[
+            IconButton(
+              icon: Icon(AppIcons.history, size: context.sizes.iconMd),
+              tooltip: AppStrings.tr(AppStrings.screenHistory),
+              onPressed: () => Get.toNamed<dynamic>(AppRoutes.history),
+            ),
+            IconButton(
+              icon: Icon(AppIcons.filter, size: context.sizes.iconMd),
+              tooltip: AppStrings.tr(AppStrings.filterTitle),
+              onPressed: () => _openFiltersWithAlbums(context),
+            ),
           ],
-        ),
+          bottomBar: showBar
+              ? DeckActionBar(
+                  onMark: controller.markCurrent,
+                  onUndo: controller.undo,
+                  canUndo: controller.canUndo,
+                  onReview: controller.goToReview,
+                  isFavourite: isFav,
+                  onFavorite: () => controller.markCurrent(DeckMark.favourite),
+                  onAddToAlbum: () => _openAlbumPickerWithAlbums(context),
+                  onShare: _shareCurrentAsset,
+                )
+              : null,
+          bottomNav: showBottomNav ? const AppBottomNav(currentIndex: 0) : null,
+          body: Stack(
+            children: <Widget>[
+              _Body(controller: controller),
+              if (controller.showTutorial.value)
+                TutorialOverlay(onDismiss: controller.dismissTutorial),
+            ],
+          ),
+        );
+      }),
+    );
+  }
+}
+
+/// Stage 5 presentations (ADR-020): watches the controller's
+/// Stage-5 state and presents, in priority order — a completed
+/// trash batch opens the finish screen; a finished session may
+/// present the swipe ask; the deck becoming ready may present
+/// the home ask (once per view lifetime; the service's due
+/// check does the real gating). Workers are disposed with the
+/// view, and every presentation is guarded against overlap.
+class _Stage5Watcher extends StatefulWidget {
+  const _Stage5Watcher({required this.controller, required this.child});
+
+  final DeckController controller;
+  final Widget child;
+
+  @override
+  State<_Stage5Watcher> createState() => _Stage5WatcherState();
+}
+
+class _Stage5WatcherState extends State<_Stage5Watcher> {
+  final List<Worker> _workers = <Worker>[];
+  bool _presenting = false;
+  bool _homeChecked = false;
+
+  DeckController get _controller => widget.controller;
+  ReviewAskService? get _service => _controller.reviewAsk;
+
+  @override
+  void initState() {
+    super.initState();
+    _workers.add(
+      ever<FinishSummary?>(_controller.lastFinishSummary, _onFinishSummary),
+    );
+    _workers.add(ever<bool>(_controller.swipeAskPending, _onSwipePending));
+    _workers.add(ever<DeckStatus>(_controller.status, _onStatus));
+  }
+
+  @override
+  void dispose() {
+    for (final Worker worker in _workers) {
+      worker.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _onFinishSummary(FinishSummary? summary) async {
+    if (summary == null || _presenting || !mounted) {
+      return;
+    }
+    _presenting = true;
+    _controller.lastFinishSummary.value = null;
+    await Get.toNamed<dynamic>(AppRoutes.finish, arguments: summary);
+    _presenting = false;
+    // A session that finished under the finish screen still
+    // gets its session-end ask moment afterwards.
+    if (mounted && _controller.swipeAskPending.value) {
+      await _presentSwipeAsk();
+    }
+  }
+
+  Future<void> _onSwipePending(bool pending) async {
+    if (!pending || _presenting || !mounted) {
+      return;
+    }
+    if (_controller.lastFinishSummary.value != null) {
+      return; // The finish navigation goes first (see above).
+    }
+    await _presentSwipeAsk();
+  }
+
+  Future<void> _presentSwipeAsk() async {
+    _controller.swipeAskPending.value = false;
+    final ReviewAskService? service = _service;
+    if (service == null || !mounted) {
+      return;
+    }
+    _presenting = true;
+    int amount = _controller.summary.deleteMarkedBytes;
+    if (amount <= 0) {
+      amount = await service.fallbackAmountBytes();
+    }
+    if (mounted) {
+      await ReviewAskSheet.maybeShow(
+        context,
+        service: service,
+        place: ReviewAskPlace.swipe,
+        amountBytes: amount,
       );
+    }
+    _presenting = false;
+  }
+
+  void _onStatus(DeckStatus status) {
+    if (status != DeckStatus.ready || _homeChecked) {
+      return;
+    }
+    _homeChecked = true;
+    final ReviewAskService? service = _service;
+    if (service == null) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _presenting) {
+        return;
+      }
+      _presenting = true;
+      final int amount = await service.fallbackAmountBytes();
+      if (mounted) {
+        await ReviewAskSheet.maybeShow(
+          context,
+          service: service,
+          place: ReviewAskPlace.home,
+          amountBytes: amount,
+        );
+      }
+      _presenting = false;
     });
   }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class _Body extends StatelessWidget {
@@ -328,7 +456,13 @@ class _ReadyBody extends StatelessWidget {
             }
             return Column(children: banners);
           }),
-          // Obx(() => SpaceMeterBar(totals: controller.meter)),
+          // Fix plan Stage 5 (ADR-020 decision 3): the live
+          // payoff meter is restored — the approved plan orders
+          // exactly this surface back (audit F-29a): the three
+          // honest states with the numbers the code already
+          // calculates. The other switched-off F-29 surfaces
+          // stay exactly as the owner left them.
+          Obx(() => SpaceMeterBar(totals: controller.meter)),
           // Phase 3.1: the stack owns the thumbnail Obx, so preload
           // arrivals rebuild only the stack — this Obx reads the
           // queue and index, never the thumbnail maps.

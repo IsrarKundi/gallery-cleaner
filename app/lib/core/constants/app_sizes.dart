@@ -66,9 +66,17 @@ class AppSizes {
   // its own duration).
   Duration get snackBarDuration => const Duration(seconds: 4);
 
-  // Duplicates grid tile edge (Phase 2A): large enough to judge a
-  // keeper at a glance, small enough for 3-up rows on a phone.
-  double get duplicateThumb => 96;
+  // Duplicates selection mark (Stage 7): the round spare/select
+  // mark on a duplicate photo — the visible circle; its hit area
+  // is the standard 48dp (hitArea above).
+  double get selectionMark => 28;
+
+  // Stage 5 artwork (ADR-020): the finish-screen popper and the
+  // review-sheet kitten render at celebration width; the two
+  // empty-state pictures render smaller (design.md §6:
+  // illustration small, above the CTA, never full-screen).
+  double get celebrationArt => 200;
+  double get emptyArt => 160;
 
   // Splash (design.md §13): logo width on the splash screen, and the
   // hold-timer fallback. The Lottie itself is ~1.67s, so the timer only

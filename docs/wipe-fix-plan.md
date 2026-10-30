@@ -311,6 +311,14 @@ Rules that go with the counts:
 
 - A new **Similar Videos** deck that uses Cleanup's sampling numbers above as the starting point (≤400 MB, frames every 2–10 s, 7–13 frames, ≥2 matching frames), our own code, tested on sample videos with the results shown to the user before the stage counts as done.
 
+### Stage 6 execution note (30 Oct 2026, ADR-021)
+
+- Done: a Similar Videos smart deck fed by the scan, all Cleanup's numbers as wipe.'s own code — only videos ≤ 400 MB are checked; frames evenly spread including both ends (normally 7, at most 13, gaps kept inside 2–10 s by adjusting the count — the settings carry the three numbers, not a formula, so the derivation is recorded in ADR-021); each frame a 9×8 raster fingerprinted with Stage 4's two-part fingerprint and compared with the normal-photo rule; ≥2 distinctly matching frame pairs = similar (the teardown's required-count formula, capped by the smaller list); seed grouping exactly like photos. Groups persist as memberships (algorithm v2, DB schema v4 whose upgrade only restamps the membership version — kinds are text, no new tables); no frame fingerprint is ever saved.
+- Frame extraction is wipe.'s own native channel (MediaMetadataRetriever over the content URI), following Stage 2's pattern: the enumeration carries no duration, so duration is read in the same channel; below API 30 the full frame is bitmap-scaled to 9×8 (the scaled-frame call starts at API 30; minSdk is 24). The pass runs inside the shared scan after the photo phases — sequential per video, cancellation honoured, a cancelled pass saves nothing, and a fresh snapshot skips it entirely. The Kotlin has never been compiled or run on a device in this environment; on-device verification is outstanding (same residual class as Stage 2's channel).
+- The deck is an ordinary marks-only smart deck (hub row after Duplicates, scan-gated like blurry/dark, delete marks in the Trash-tab union under ADR-015). Similar-video groups carry a seed and no keeper — a swipe deck has no keeper concept.
+- Sample-video validation (plan requirement) ran the shipped code end to end over generated samples (free-license store photos as a 20 s slideshow; ffmpeg as the frame source in place of the device channel): the re-encode (320×180, lower bitrate) matched 6 frame pairs, the brightness-shifted copy matched 6, the 12 s trim matched 5 — all grouped with the base; an unrelated test-pattern video matched 0 and stayed out. The final timestamp (exactly at the base video's end) yielded no frame for the 20 s videos in the harness; the lists simply carry 6 frames and every verdict is unchanged.
+- NOT built, recorded: Cleanup's 100 MB "big file" mark — its role in their pipeline is UNKNOWN in the teardown and the plan builds no UI for it; the constant is parked in code with the reason attached. Screen recordings are treated as plain videos (Cleanup's own separation is a file-name rule behind a flag that defaults off).
+
 ---
 
 ## Stage 7 — Duplicates screen: Cleanup's layout, wipe.'s own clothes
@@ -354,6 +362,12 @@ From their own Play Store screenshot of the duplicates screen, plus their text t
 
 - Groups bigger than 2 photos: their screenshot only shows pairs fully — we use the same two-per-row grid and let it wrap; nothing new invented.
 - Whether tapping a photo opens a full-screen compare view: no evidence — NOT included.
+
+### Stage 7 execution note (30 Oct 2026, ADR-022)
+
+- Done: the Duplicates screen rebuilt to Cleanup's layout in wipe.'s design — summary under the title counting the NON-KEEPERS across all groups and their size (the same definition the group headers use, so every number on the screen agrees), one explanation line under it, Select all / Deselect all beside it, group cards headed "N duplicates" + the non-keepers' size, photos large and square two per row filling the card (3+ groups wrap in the same grid; no full-screen compare), the Keeper pill on the suggested keeper's photo in the success colours, a round selection mark on every non-keeper (filled delete-colour check = will be marked, scrim ring = spared; non-keepers start selected; the mark is its own 48dp hit target, separate from the photo's keeper tap), the per-card buttons removed, and one sticky primary button — "Mark N duplicates for review · X" with the live SELECTED totals, disabled at zero with the design.md §5 caption. The slider stays gone (removed in Stage 4); no sensitivity control or distance number exists anywhere on the screen.
+- Flow unchanged underneath: the button writes delete marks for the selected photos into the same `duplicates` session (keeper of each contributing group marked keep; Phase 3A protection untouched) and opens Review with the marked list — the exact completion the per-card buttons used. Spared photos get no mark and stay undecided; a group contributing nothing is left untouched. Recorded in ADR-022: the Trash-tab union (ADR-015) reads Clean sessions + `smart:` sessions, so this screen's marks were never a Trash-tab path — they reach the user through its own Review opening, as before.
+- Two build findings worth keeping: (1) selection follows the keeper — change the keeper and the old keeper joins the selection selected, the new one leaves it (a spare on the old keeper is superseded by the keeper change); (2) GetX's Obx does not track reads inside a lazy list builder, so the list snapshots the selection inside an Obx builder — before that fix the bottom bar updated on a mark tap while the marks themselves stayed stale (caught by the new widget tests, not by eye).
 
 ---
 

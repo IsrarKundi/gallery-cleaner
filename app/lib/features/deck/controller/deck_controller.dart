@@ -12,11 +12,13 @@ import '../../../services/lifecycle/app_lifecycle.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/media/media_service.dart';
+import '../../../services/review_ask/review_ask_service.dart';
 import '../../../services/share/share_service.dart';
 import '../../../services/thumbnail/thumbnail_service.dart';
 import '../../../services/trash/trash_entry.dart';
 import '../../../services/trash/trash_service.dart';
 import '../../../services/warmup/deck_warm_up.dart';
+import '../../finish/model/finish_summary.dart';
 import '../model/deck_filter.dart';
 import '../model/deck_queue.dart';
 import '../model/deck_status.dart';
@@ -53,6 +55,7 @@ class DeckController extends GetxController {
     this.warmUp,
     ThumbnailService? thumbnailService,
     this.lifecycle,
+    this.reviewAsk,
   }) : _preloader = ThumbnailPreloader(media: media, service: thumbnailService),
        retention = DeckRetention(local: local, share: share),
        access = DeckAccess(media: media),
@@ -66,6 +69,22 @@ class DeckController extends GetxController {
   /// paths without the initial binding: the deck then behaves
   /// exactly as before, with no resume handling).
   final AppLifecycle? lifecycle;
+
+  /// Review-ask service (fix plan Stage 5, ADR-020), optional:
+  /// marks and completed trash batches are counted here, and
+  /// the view reads it to present the swipe/home asks. Null in
+  /// tests that do not wire it — counting is then simply off.
+  final ReviewAskService? reviewAsk;
+
+  /// A completed Clean-deck trash batch (Stage 5), published
+  /// for the view to present as the finish screen; the view
+  /// consumes it (sets it back to null) when it navigates.
+  final Rx<FinishSummary?> lastFinishSummary = Rx<FinishSummary?>(null);
+
+  /// Set when a mark finishes this session: the view presents
+  /// the swipe-place review ask (session end only, never
+  /// mid-session), then consumes the flag.
+  final RxBool swipeAskPending = false.obs;
 
   /// Phase 2.2 warm-up, started by the splash binding. Null in tests
   /// and on any entry path that skips the splash: the deck then runs
@@ -292,6 +311,13 @@ class DeckController extends GetxController {
   /// cheap page-0 refresh, marks and position preserved.
   Future<void> _doResume() async {
     try {
+      // Stage 5: a resume is a use of the app — count the day
+      // for the home review ask (date-only, de-duplicated by
+      // the service). Fire-and-forget like every ask write.
+      final ReviewAskService? ask = reviewAsk;
+      if (ask != null) {
+        unawaited(ask.recordUsageDay(DateTime.now()));
+      }
       _preloader.setPaused(false);
       await local.flushPendingWrites();
       if (status.value == DeckStatus.ready) {
@@ -493,6 +519,19 @@ class DeckController extends GetxController {
       _persist();
     }
     currentIndex.value = firstUndecidedIndex(queue, marks);
+    // Stage 5 resume (ADR-020 decision 4): the session stores
+    // where the user left, and first-undecided IS that photo —
+    // but only once its page is loaded. When a decided run
+    // crosses a page boundary, the photo sits on a later page
+    // and the deck would wrongly show the finished summary;
+    // page forward until it is loaded or pages run out. A
+    // failed page stops the walk and keeps the old behaviour.
+    while (currentIndex.value >= queue.length && _hasMore) {
+      if (!await _loadPage(_nextPage)) {
+        break;
+      }
+      currentIndex.value = firstUndecidedIndex(queue, marks);
+    }
     status.value = DeckStatus.ready;
     _preloader.preloadAround(queue, currentIndex.value);
     // Post-ready: meter inputs refresh without gating readiness.
@@ -672,11 +711,21 @@ class DeckController extends GetxController {
     }
     // Phase 3A haptics (design.md §8): light tick on every mark.
     AppHaptics.mark();
+    // Stage 5 counting point (ADR-020 decision 6): every
+    // recorded mark counts as a swipe for the review ask.
+    // Fire-and-forget — counting never delays a swipe.
+    final ReviewAskService? ask = reviewAsk;
+    if (ask != null) {
+      unawaited(ask.recordSwipe());
+    }
     // Phase 2B streak day: the moment the final mark lands, this
     // session is complete. Recording is idempotent per day, so an
     // undo + re-mark on the same day records nothing new.
     if (isFinished) {
       retention.recordCompletion();
+      // Stage 5: session end is the swipe ask's moment — flag
+      // it for the view (never mid-session).
+      swipeAskPending.value = true;
     }
   }
 
@@ -769,11 +818,13 @@ class DeckController extends GetxController {
   }
 
   /// Moves every committed photo to Trash through ONE native
-  /// sheet, called when the user leaves the Clean deck (the
-  /// shell hooks tab switches away from Clean). One sheet per
-  /// batch, never one per photo: per-photo sheets would
-  /// interrupt swiping, which is exactly the friction this
-  /// removes. Re-entrant calls and empty batches are no-ops.
+  /// sheet. One sheet per batch, never one per photo: per-photo
+  /// sheets would interrupt swiping, which is exactly the
+  /// friction this removes. Re-entrant calls and empty batches
+  /// are no-ops. (Its former shell tab-switch trigger was
+  /// removed by the owner in 306f75d; Stage 5 hooks the
+  /// COMPLETION — the finish summary + ask counting below —
+  /// never a new trigger. ADR-020 decision 1.)
   ///
   /// Intent is verified against the session before anything is
   /// trashed: a photo Review kept or unmarked after its swipe
@@ -862,6 +913,48 @@ class DeckController extends GetxController {
       _awaitingTrash.removeWhere((MediaAsset asset) => toTrash.contains(asset));
       if (deniedIds.isNotEmpty) {
         trashBatchDeniedKey.value = AppStrings.trashBatchDenied;
+      }
+      if (trashedIds.isNotEmpty) {
+        // Stage 5 (ADR-020 decisions 1–2, 6): a completed trash
+        // batch is a delete batch. Its finish summary reads the
+        // recover-by date back from the entries the trash
+        // service just recorded (the batch's earliest), and the
+        // batch counts toward the review ask.
+        int bytes = 0;
+        for (final MediaAsset asset in toTrash) {
+          if (trashedIds.contains(asset.id)) {
+            bytes += asset.sizeBytes;
+          }
+        }
+        DateTime? recoverableUntil;
+        final Result<List<TrashEntry>> entriesResult = await trash
+            .listTrashed();
+        entriesResult.fold(
+          onSuccess: (List<TrashEntry> entries) {
+            for (final TrashEntry entry in entries) {
+              if (!trashedIds.contains(entry.assetId)) {
+                continue;
+              }
+              if (recoverableUntil == null ||
+                  entry.recoverableUntil.isBefore(recoverableUntil!)) {
+                recoverableUntil = entry.recoverableUntil;
+              }
+            }
+          },
+          onFailure: (_) {},
+        );
+        lastFinishSummary.value = FinishSummary(
+          deletedCount: trashedIds.length,
+          sizeBytes: bytes,
+          spaceState: FinishSpaceState.inTrash,
+          recoverableUntil: recoverableUntil,
+        );
+        final ReviewAskService? ask = reviewAsk;
+        if (ask != null) {
+          unawaited(
+            ask.recordDeleteBatch(count: trashedIds.length, bytes: bytes),
+          );
+        }
       }
       _refreshMonths();
       _preloader.preloadAround(queue, currentIndex.value);

@@ -22,6 +22,7 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/app_snackbar.dart';
 import '../../../core/widgets/empty_view.dart';
 import '../../../core/widgets/info_banner.dart';
+import '../../../core/widgets/review_ask_sheet.dart';
 import '../../../features/deck/widgets/album_picker_sheet.dart';
 import '../../../features/deck/widgets/deck_action_bar.dart';
 import '../../../features/deck/widgets/deck_card_stack.dart';
@@ -30,6 +31,8 @@ import '../../../features/deck/widgets/session_summary_card.dart';
 import '../../../services/detection/smart_decks.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
+import '../../../services/review_ask/review_ask.dart';
+import '../../../services/review_ask/review_ask_service.dart';
 import '../controller/smart_deck_controller.dart';
 import '../model/smart_deck_meta.dart';
 
@@ -85,57 +88,122 @@ class SmartDeckView extends GetView<SmartDeckController> {
 
   @override
   Widget build(BuildContext context) {
-    return Obx(() {
-      final bool showBar =
-          controller.ready.value && controller.currentAsset != null;
-      final SmartDeckId? deckId = controller.deckId;
-      final int decided = controller.marks.length;
-      final int total = controller.queue.length;
-      final MediaAsset? current = controller.currentAsset;
-      final bool isFav =
-          current != null && controller.favouriteIds.contains(current.id);
+    return _SwipeAskWatcher(
+      controller: controller,
+      child: Obx(() {
+        final bool showBar =
+            controller.ready.value && controller.currentAsset != null;
+        final SmartDeckId? deckId = controller.deckId;
+        final int decided = controller.marks.length;
+        final int total = controller.queue.length;
+        final MediaAsset? current = controller.currentAsset;
+        final bool isFav =
+            current != null && controller.favouriteIds.contains(current.id);
 
-      return AppScaffold(
-        title: deckId == null
-            ? AppStrings.tr(AppStrings.screenSmartDeck)
-            : AppStrings.tr(smartDeckTitleKey(deckId)),
-        actions: <Widget>[
-          if (showBar && total > 0)
-            Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: context.sizes.screenPadding,
-                ),
-                child: Text(
-                  AppStrings.tr(AppStrings.smartDeckProgress, <String, String>{
-                    'index': decided.toString(),
-                    'count': total.toString(),
-                  }),
-                  style: context.textStyles.bodySmall.copyWith(
-                    color: context.palette.textSecondary,
+        return AppScaffold(
+          title: deckId == null
+              ? AppStrings.tr(AppStrings.screenSmartDeck)
+              : AppStrings.tr(smartDeckTitleKey(deckId)),
+          actions: <Widget>[
+            if (showBar && total > 0)
+              Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: context.sizes.screenPadding,
+                  ),
+                  child: Text(
+                    AppStrings.tr(
+                      AppStrings.smartDeckProgress,
+                      <String, String>{
+                        'index': decided.toString(),
+                        'count': total.toString(),
+                      },
+                    ),
+                    style: context.textStyles.bodySmall.copyWith(
+                      color: context.palette.textSecondary,
+                    ),
                   ),
                 ),
               ),
-            ),
-        ],
-        bottomBar: showBar
-            ? DeckActionBar(
-                onMark: controller.markCurrent,
-                onUndo: controller.undo,
-                canUndo: controller.canUndo,
-                onReview: controller.goToReview,
-                isCleanScreen: true,
-                isFavourite: isFav,
-                onFavorite: () => controller.markCurrent(DeckMark.favourite),
-                onAddToAlbum: () =>
-                    _openAlbumPickerWithAlbums(context, controller),
-                onShare: () => _shareCurrentAsset(controller),
-              )
-            : null,
-        body: _Body(controller: controller),
-      );
-    });
+          ],
+          bottomBar: showBar
+              ? DeckActionBar(
+                  onMark: controller.markCurrent,
+                  onUndo: controller.undo,
+                  canUndo: controller.canUndo,
+                  onReview: controller.goToReview,
+                  isCleanScreen: true,
+                  isFavourite: isFav,
+                  onFavorite: () => controller.markCurrent(DeckMark.favourite),
+                  onAddToAlbum: () =>
+                      _openAlbumPickerWithAlbums(context, controller),
+                  onShare: () => _shareCurrentAsset(controller),
+                )
+              : null,
+          body: _Body(controller: controller),
+        );
+      }),
+    );
   }
+}
+
+/// Stage 5 (ADR-020): presents the swipe-place review ask when
+/// a mark finishes this session — session end only, never
+/// mid-session (the controller flags the moment; the sheet's
+/// due check does the gating).
+class _SwipeAskWatcher extends StatefulWidget {
+  const _SwipeAskWatcher({required this.controller, required this.child});
+
+  final SmartDeckController controller;
+  final Widget child;
+
+  @override
+  State<_SwipeAskWatcher> createState() => _SwipeAskWatcherState();
+}
+
+class _SwipeAskWatcherState extends State<_SwipeAskWatcher> {
+  Worker? _worker;
+  bool _presenting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _worker = ever<bool>(widget.controller.swipeAskPending, _onPending);
+  }
+
+  @override
+  void dispose() {
+    _worker?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _onPending(bool pending) async {
+    if (!pending || _presenting || !mounted) {
+      return;
+    }
+    widget.controller.swipeAskPending.value = false;
+    final ReviewAskService? service = widget.controller.reviewAsk;
+    if (service == null) {
+      return;
+    }
+    _presenting = true;
+    int amount = widget.controller.summary.deleteMarkedBytes;
+    if (amount <= 0) {
+      amount = await service.fallbackAmountBytes();
+    }
+    if (mounted) {
+      await ReviewAskSheet.maybeShow(
+        context,
+        service: service,
+        place: ReviewAskPlace.swipe,
+        amountBytes: amount,
+      );
+    }
+    _presenting = false;
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class _Body extends StatelessWidget {

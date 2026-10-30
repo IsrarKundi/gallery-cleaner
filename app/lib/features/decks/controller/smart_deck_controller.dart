@@ -16,6 +16,7 @@
 // The controller never deletes: marks only, review + native
 // confirmation still own removal (requirements §4).
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:get/get.dart';
@@ -28,6 +29,7 @@ import '../../../services/detection/smart_decks.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/media/media_service.dart';
+import '../../../services/review_ask/review_ask_service.dart';
 import '../../../services/share/share_service.dart';
 import '../../deck/controller/deck_protection.dart';
 import '../../deck/controller/deck_retention.dart';
@@ -43,6 +45,7 @@ class SmartDeckController extends GetxController {
     ShareService? share,
     this.initialLaunch,
     ThumbnailService? thumbnailService,
+    this.reviewAsk,
   }) : _thumbnails = thumbnailService ?? ThumbnailServiceImpl(media: media),
        retention = DeckRetention(
          local: local,
@@ -62,6 +65,15 @@ class SmartDeckController extends GetxController {
   final MediaService media;
   final LocalService local;
   final SmartDeckLaunch? initialLaunch;
+
+  /// Review-ask service (fix plan Stage 5, ADR-020), optional —
+  /// same contract as the main deck's: marks count as swipes,
+  /// session end flags the swipe ask for the view.
+  final ReviewAskService? reviewAsk;
+
+  /// Set when a mark finishes this session: the view presents
+  /// the swipe-place review ask, then consumes the flag.
+  final RxBool swipeAskPending = false.obs;
 
   /// Phase 2.3: bytes live in the shared thumbnail service.
   final ThumbnailService _thumbnails;
@@ -229,9 +241,17 @@ class SmartDeckController extends GetxController {
     _preloadAround(currentIndex.value);
     _persist();
     AppHaptics.mark();
+    // Stage 5 counting point (ADR-020 decision 6): every
+    // recorded mark counts as a swipe for the review ask.
+    final ReviewAskService? ask = reviewAsk;
+    if (ask != null) {
+      unawaited(ask.recordSwipe());
+    }
     // Phase 2B streak day, same contract as the main deck.
     if (isFinished) {
       retention.recordCompletion();
+      // Stage 5: session end is the swipe ask's moment.
+      swipeAskPending.value = true;
     }
   }
 

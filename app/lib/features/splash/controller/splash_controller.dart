@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 
 import '../../../core/constants/app_sizes.dart';
 import '../../../services/notifications/reminder_service.dart';
+import '../../../services/review_ask/review_ask_service.dart';
 import '../../../services/warmup/deck_warm_up.dart';
 
 /// Splash completion contract (design.md §13).
@@ -28,6 +29,7 @@ class SplashController extends GetxController {
     Duration? reducedMotionHoldDuration,
     this.warmUp,
     this.reminders,
+    this.reviewAsk,
   }) : holdDuration = holdDuration ?? const AppSizes().splashHold,
        reducedMotionHoldDuration =
            reducedMotionHoldDuration ??
@@ -53,6 +55,11 @@ class SplashController extends GetxController {
   /// its reminder here). Fire-and-forget like the warm-up: it
   /// never gates or delays completion. Null in tests.
   final ReminderService? reminders;
+
+  /// Fix plan Stage 5: today's usage day is recorded for the
+  /// home review ask at every launch, fire-and-forget in the
+  /// same way. Null in tests.
+  final ReviewAskService? reviewAsk;
 
   /// Fallback duration; see the class doc.
   final Duration holdDuration;
@@ -83,6 +90,11 @@ class SplashController extends GetxController {
     // Stage 1: same overlap for the reminder re-plan (see the
     // [reminders] field doc). refresh() never throws.
     unawaited(reminders?.refresh() ?? Future<void>.value());
+    // Stage 5: record today's usage day (see [reviewAsk]).
+    final ReviewAskService? ask = reviewAsk;
+    if (ask != null) {
+      unawaited(ask.recordUsageDay(DateTime.now()));
+    }
     _holdTimer = Timer(holdDuration, _complete);
   }
 

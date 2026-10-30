@@ -1,13 +1,16 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:get/get.dart';
 
 import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
+import '../../finish/model/finish_summary.dart';
 import '../../shell/controller/shell_controller.dart';
 import '../../../core/utils/app_haptics.dart';
 import '../../../core/utils/result.dart';
 import '../../../services/local/local_service.dart';
+import '../../../services/review_ask/review_ask_service.dart';
 import '../../../services/media/media_asset.dart';
 import '../../../services/media/media_service.dart';
 import '../../../services/thumbnail/thumbnail_service.dart';
@@ -39,6 +42,7 @@ class ReviewController extends GetxController {
     Map<String, String>? initialOriginSessionKeys,
     this.filterKeyOverride,
     ThumbnailService? thumbnailService,
+    this.reviewAsk,
   }) : _thumbnails = thumbnailService ?? ThumbnailServiceImpl(media: media),
        originSessionKeys = initialOriginSessionKeys != null
            ? Map<String, String>.of(initialOriginSessionKeys)
@@ -123,6 +127,27 @@ class ReviewController extends GetxController {
   final RxInt lastDeletedCount = 0.obs;
   RxInt get lastTrashedCount => lastDeletedCount;
   final RxInt lastFailedCount = 0.obs;
+
+  /// Total bytes of the last run's deleted photos (fix plan
+  /// Stage 5): the finish screen's space number and the
+  /// review-ask record for the run.
+  final RxInt lastDeletedBytes = 0.obs;
+
+  /// Review-ask service (Stage 5, ADR-020), optional: delete
+  /// batches are counted here. Null in tests that do not wire
+  /// it — counting is then simply off.
+  final ReviewAskService? reviewAsk;
+
+  /// The finish-screen summary for the run that just completed
+  /// (ADR-020 decision 15: a pure data class shared as the
+  /// finish route's argument). Meaningful only when the last
+  /// outcome was [ReviewDeleteOutcome.deleted] — Review deletes
+  /// are permanent (ADR-014), so the space state is freed.
+  FinishSummary get finishSummary => FinishSummary(
+    deletedCount: lastDeletedCount.value,
+    sizeBytes: lastDeletedBytes.value,
+    spaceState: FinishSpaceState.freed,
+  );
 
   /// Shared recoverable-until date for a trashed run (trashedAt +
   /// 30 days, from the controller's clock — the service records the
@@ -362,6 +387,7 @@ class ReviewController extends GetxController {
     protectedExcludedCount.value = 0;
     lastDeletedCount.value = 0;
     lastFailedCount.value = 0;
+    lastDeletedBytes.value = 0;
     // Phase 3B: protection filtering lives in review_delete.dart
     // (extracted to hold the controller's line budget).
     final ReviewDeletePlan plan = await planReviewDelete(
@@ -431,6 +457,16 @@ class ReviewController extends GetxController {
       if (deleted.contains(asset.id)) {
         bytes += asset.sizeBytes;
       }
+    }
+    lastDeletedBytes.value = bytes;
+    // Stage 5 counting point (ADR-020 decision 6): every run
+    // that deleted photos counts them, partial and mixed runs
+    // included — this method is exactly where a run's deletions
+    // become real. Fire-and-forget: counting must never delay
+    // or fail the delete flow.
+    final ReviewAskService? ask = reviewAsk;
+    if (ask != null) {
+      unawaited(ask.recordDeleteBatch(count: ids.length, bytes: bytes));
     }
     items.removeWhere((MediaAsset asset) => deleted.contains(asset.id));
     _syncSelection();

@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 480">
+<defs>
+  <linearGradient id="face" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#B7CFF3"/>
+    <stop offset="0.28" stop-color="#EFF5FE"/>
+    <stop offset="0.55" stop-color="#DCE9FB"/>
+    <stop offset="1" stop-color="#A9C3EC"/>
+  </linearGradient>
+  <linearGradient id="band" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#7FB0FA"/>
+    <stop offset="1" stop-color="#4285F4"/>
+  </linearGradient>
+  <linearGradient id="ring" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#D7E5FA"/>
+    <stop offset="1" stop-color="#8FB0E8"/>
+  </linearGradient>
+  <linearGradient id="slot" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#5B97F7"/>
+    <stop offset="1" stop-color="#2F6BE0"/>
+  </linearGradient>
+</defs>
+
+<ellipse cx="240" cy="406" rx="126" ry="14" fill="#202124" opacity="0.10"/>
+
+<!-- binder rings (behind body) -->
+<rect x="166" y="94" width="23" height="58" rx="11.5" fill="url(#ring)"/>
+<rect x="291" y="94" width="23" height="58" rx="11.5" fill="url(#ring)"/>
+
+<!-- calendar body -->
+<rect x="116" y="126" width="248" height="256" rx="22" fill="url(#face)"/>
+
+<!-- header band -->
+<path d="M116 148 Q116 126 138 126 L342 126 Q364 126 364 148 L364 198 L116 198 Z" fill="url(#band)"/>
+<rect x="116" y="194" width="248" height="5" fill="#2F6BE0" opacity="0.22"/>
+
+<!-- rings (front, over the band) -->
+<rect x="166" y="108" width="23" height="42" rx="11.5" fill="url(#ring)"/>
+<rect x="291" y="108" width="23" height="42" rx="11.5" fill="url(#ring)"/>
+<ellipse cx="173" cy="120" rx="4" ry="8" fill="#FFFFFF" opacity="0.65"/>
+<ellipse cx="298" cy="120" rx="4" ry="8" fill="#FFFFFF" opacity="0.65"/>
+
+<!-- day squares -->
+<g fill="#93B4E6">
+  <rect x="144" y="224" width="27" height="27" rx="7"/>
+  <rect x="198" y="224" width="27" height="27" rx="7"/>
+  <rect x="252" y="224" width="27" height="27" rx="7"/>
+  <rect x="306" y="224" width="27" height="27" rx="7"/>
+  <rect x="144" y="269" width="27" height="27" rx="7"/>
+  <rect x="198" y="269" width="27" height="27" rx="7"/>
+  <rect x="306" y="269" width="27" height="27" rx="7"/>
+  <rect x="144" y="314" width="27" height="27" rx="7"/>
+  <rect x="198" y="314" width="27" height="27" rx="7"/>
+  <rect x="252" y="314" width="27" height="27" rx="7"/>
+  <rect x="306" y="314" width="27" height="27" rx="7"/>
+</g>
+<rect x="252" y="269" width="27" height="27" rx="7" fill="url(#slot)"/>
+
+</svg>

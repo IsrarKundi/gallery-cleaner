@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../controller/splash_controller.dart';
 import '../../../services/notifications/reminder_service.dart';
+import '../../../services/review_ask/review_ask_service.dart';
 import '../../../services/warmup/deck_warm_up.dart';
 
 /// Registers the splash controller (AGENTS.md: controllers are registered
@@ -29,6 +30,9 @@ class SplashBinding extends Bindings {
         warmUp: Get.isRegistered<DeckWarmUp>() ? Get.find<DeckWarmUp>() : null,
         reminders: Get.isRegistered<ReminderService>()
             ? Get.find<ReminderService>()
+            : null,
+        reviewAsk: Get.isRegistered<ReviewAskService>()
+            ? Get.find<ReviewAskService>()
             : null,
       ),
     );

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../core/constants/app_icons.dart';
+import '../../../core/routes/app_routes.dart';
 import '../../../core/strings/app_strings.dart';
 import '../../../core/theme/theme_ext.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
@@ -27,8 +28,9 @@ import '../widgets/review_loading_skeleton.dart';
 /// system back gesture (via [PopScope]) and the bottom nav all pop
 /// back to the shell's tabs instead of rebuilding them; standalone
 /// Review falls back to a stack reset. A successful whole-set
-/// permanent delete returns directly to the deck (ADR-014);
-/// leaving Review pops back to the shell, never a rebuild.
+/// permanent delete opens the finish screen (Stage 5, ADR-020;
+/// the delete itself is ADR-014's, unchanged); leaving Review
+/// pops back to the shell, never a rebuild.
 ///
 /// Selection (owner decision 26 Oct 2026): photos are always
 /// shown revealed. Outside selection mode a tile tap unmarks the
@@ -71,8 +73,10 @@ class ReviewView extends GetView<ReviewController> {
     switch (outcome) {
       case ReviewDeleteOutcome.deleted:
         // A partial run (a selection was deleted) stays on screen
-        // with the rest of the set — a whole-set run returns to the
-        // deck directly (nothing was trashed).
+        // with the rest of the set. A whole-set run empties the
+        // grid — the batch is complete, so the finish screen
+        // replaces Review (fix plan Stage 5, ADR-020 decision 1;
+        // ADR-014's permanent delete is unchanged).
         if (controller.items.isNotEmpty) {
           AppSnackbar.show(
             context,
@@ -83,7 +87,10 @@ class ReviewView extends GetView<ReviewController> {
           );
           break;
         }
-        controller.goToDeck();
+        Get.offNamed<dynamic>(
+          AppRoutes.finish,
+          arguments: controller.finishSummary,
+        );
       case ReviewDeleteOutcome.denied:
         // Phase 3B mixed runs: a denied run may also have deleted
         // some photos and failed others. A mixed run gets a counted

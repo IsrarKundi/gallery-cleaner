@@ -15,12 +15,19 @@ import '../../services/local/reminder_state_store_impl.dart';
 import '../../services/media/library_enumeration_service.dart';
 import '../../services/media/library_enumeration_service_impl.dart';
 import '../../services/media/media_enumeration_gateway.dart';
+import '../../services/media/video_frame_gateway.dart';
 import '../../services/media/media_service.dart';
 import '../../services/media/media_service_impl.dart';
 import '../../services/notifications/notification_service.dart';
 import '../../services/notifications/notification_service_impl.dart';
 import '../../services/notifications/reminder_service.dart';
 import '../../services/notifications/reminder_service_impl.dart';
+import '../../services/local/review_ask_store.dart';
+import '../../services/local/review_ask_store_impl.dart';
+import '../../services/review_ask/review_ask_service.dart';
+import '../../services/review_ask/review_ask_service_impl.dart';
+import '../../services/review_ask/review_gateway.dart';
+import '../../services/review_ask/review_gateway_impl.dart';
 import '../../services/share/share_service.dart';
 import '../../services/share/share_service_impl.dart';
 import '../../services/storage/storage_service.dart';
@@ -111,6 +118,11 @@ class InitialBinding extends Bindings {
         media: Get.find<MediaService>(),
         local: Get.find<LocalService>(),
         enumeration: enumeration,
+        // Fix plan Stage 6 (ADR-021): the scan's video pass
+        // reads frames through wipe.'s own native frame
+        // channel — same hand-it-directly pattern as the
+        // enumeration above.
+        videoFrames: const NativeVideoFrameGateway(),
       ),
       permanent: true,
     );
@@ -135,6 +147,22 @@ class InitialBinding extends Bindings {
         notifications: Get.find<NotificationService>(),
         reminderStore: Get.find<ReminderStateStore>(),
         lifecycle: Get.find<AppLifecycle>(),
+      ),
+      fenix: true,
+    );
+    // Fix plan Stage 5 (ADR-020): the review-ask service, lazy
+    // like the reminder engine — built on first use (deck /
+    // smart-deck / review bindings resolve it when present),
+    // never during this binding. Its constructor only wires
+    // dependencies; the store file is first read by an event.
+    Get.lazyPut<ReviewAskStore>(ReviewAskStoreImpl.new, fenix: true);
+    Get.lazyPut<ReviewGateway>(ReviewGatewayImpl.new, fenix: true);
+    Get.lazyPut<ReviewAskService>(
+      () => ReviewAskServiceImpl(
+        local: Get.find<LocalService>(),
+        store: Get.find<ReviewAskStore>(),
+        gateway: Get.find<ReviewGateway>(),
+        share: Get.find<ShareService>(),
       ),
       fenix: true,
     );

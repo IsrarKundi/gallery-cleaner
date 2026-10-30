@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../../../services/lifecycle/app_lifecycle.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/media/media_service.dart';
+import '../../../services/review_ask/review_ask_service.dart';
 import '../../../services/share/share_service.dart';
 import '../../../services/thumbnail/thumbnail_service.dart';
 import '../../../services/trash/trash_service.dart';
@@ -33,6 +34,11 @@ class DeckBinding extends Bindings {
         // exactly as before (no resume handling).
         lifecycle: Get.isRegistered<AppLifecycle>()
             ? Get.find<AppLifecycle>()
+            : null,
+        // Stage 5: without the review-ask service the deck counts
+        // nothing and no ask ever presents.
+        reviewAsk: Get.isRegistered<ReviewAskService>()
+            ? Get.find<ReviewAskService>()
             : null,
       ),
     );
