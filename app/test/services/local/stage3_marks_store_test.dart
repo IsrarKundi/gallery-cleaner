@@ -131,9 +131,10 @@ void main() {
         (await raw.customSelect('PRAGMA user_version').getSingle()).read<int>(
           'user_version',
         );
-    // The chain now continues to schema v3 (Stage 4); the v1
-    // blob still splits on the way through 1 -> 2.
-    expect(version, 3);
+    // The chain now continues to schema v4 (Stage 4's v3, then
+    // Stage 6's v4); the v1 blob still splits on the way
+    // through 1 -> 2.
+    expect(version, 4);
     final List<String> sessionColumns = <String>[
       for (final QueryRow row
           in await raw.customSelect('PRAGMA table_info(sessions)').get())

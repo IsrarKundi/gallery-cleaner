@@ -272,14 +272,16 @@ class DecksController extends GetxController {
     return maybeItemsFor(allSessions, allSnoozes, _assetsById);
   }
 
-  /// Scan-level decks (bursts, duplicates, blurry, dark — the
-  /// Stage 4 memberships) are ready only when the scan completes;
-  /// the rest are ready as soon as pages arrive.
+  /// Scan-level decks (bursts, duplicates, blurry, dark,
+  /// similar videos — the Stage 4/6 memberships) are ready only
+  /// when the scan completes; the rest are ready as soon as
+  /// pages arrive.
   bool deckReady(SmartDeckId id) {
     if (id == SmartDeckId.bursts ||
         id == SmartDeckId.duplicates ||
         id == SmartDeckId.blurry ||
-        id == SmartDeckId.dark) {
+        id == SmartDeckId.dark ||
+        id == SmartDeckId.similarVideos) {
       return scanComplete.value;
     }
     return scanned.value > 0 || scanComplete.value;
@@ -567,7 +569,8 @@ class DecksController extends GetxController {
   /// Applies the scan's membership decks (Stage 4): duplicates =
   /// the union of exact-duplicate and similar group members (the
   /// hub row's "Identical & similar"), blurry / dark = their
-  /// membership sets. Members resolve against this scan's asset
+  /// membership sets, similar videos (Stage 6) = their groups
+  /// flattened. Members resolve against this scan's asset
   /// list; anything unresolvable is dropped.
   void _applyMemberships(ScanMemberships memberships) {
     final List<DuplicateGroup> dupGroups = groupsFromMemberships(
@@ -599,6 +602,18 @@ class DecksController extends GetxController {
       SmartDeckId.dark,
       _allAssets.where((MediaAsset a) => darkIds.contains(a.id)).toList(),
     );
+    // Stage 6: similar videos = the flattened similar-video
+    // groups, in stored (group, then date) order — the swipe
+    // deck's queue is the grouped membership, like the
+    // duplicates union above.
+    final Set<String> seenVideos = <String>{};
+    _setDeck(SmartDeckId.similarVideos, <MediaAsset>[
+      for (final ScanGroup group in memberships.groupsOfKind(
+        ScanGroupKind.similarVideos,
+      ))
+        for (final String id in group.memberIds)
+          if (seenVideos.add(id) && _assetsById[id] != null) _assetsById[id]!,
+    ]);
   }
 
   /// Computes burst membership off the UI isolate and applies it

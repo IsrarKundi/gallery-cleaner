@@ -32,6 +32,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 /// - back → caretLeft → Regular (chevron)
 /// - decks → squaresFour → Regular (smart-deck hub)
 /// - duplicates → copySimple → Regular (duplicate groups)
+/// - similarVideos → filmReel → Regular (similar-video groups)
 /// - screenshots → imageSquare → Regular
 /// - whatsapp → chatCircleText → Regular
 /// - downloads → downloadSimple → Regular
@@ -63,6 +64,7 @@ class AppIcons {
   static const IconData back = PhosphorIconsRegular.caretLeft;
   static const IconData decks = PhosphorIconsRegular.squaresFour;
   static const IconData duplicates = PhosphorIconsRegular.copySimple;
+  static const IconData similarVideos = PhosphorIconsRegular.filmReel;
   static const IconData screenshots = PhosphorIconsRegular.imageSquare;
   static const IconData whatsapp = PhosphorIconsRegular.chatCircleText;
   static const IconData downloads = PhosphorIconsRegular.downloadSimple;
@@ -112,6 +114,7 @@ class AppIcons {
     back,
     decks,
     duplicates,
+    similarVideos,
     screenshots,
     whatsapp,
     downloads,

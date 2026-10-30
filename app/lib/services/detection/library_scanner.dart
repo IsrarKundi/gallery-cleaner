@@ -23,7 +23,11 @@
 //   2. blur — a SEPARATE second pass, one worker batch per 8
 //      photos (Cleanup's parallelism cap), from 512 px
 //      thumbnails;
-//   3. grouping + duplicate keys + membership build on a worker.
+//   3. grouping + duplicate keys + membership build on a worker;
+//   4. similar videos (Stage 6) — frame sampling through the
+//      native frame channel, sequential per video, fingerprinted
+//      with the photo batch; its groups merge into the same
+//      snapshot before the single save.
 // The finished memberships REPLACE the persisted snapshot
 // wholesale (which is also the prune: memberships for deleted
 // assets simply are not in the new snapshot). A cancelled or
@@ -54,6 +58,7 @@ import 'grouping.dart';
 import 'photo_assessment.dart';
 import 'scan_memberships.dart';
 import 'thumbnail_analysis.dart';
+import 'video_scan_pass.dart';
 
 /// Result of a completed (or page-failed / cancelled) scan.
 class LibraryScan {
@@ -106,6 +111,7 @@ class LibraryScanner {
     this.fingerprintBatch = fingerprintBatchOnIsolate,
     this.blurBatch = blurBatchOnIsolate,
     this.membershipsRunner = buildScanMembershipsOnIsolate,
+    this.videoPass,
   });
 
   final MediaService media;
@@ -122,6 +128,13 @@ class LibraryScanner {
   final FingerprintBatchRunner fingerprintBatch;
   final BlurBatchRunner blurBatch;
   final MembershipsRunner membershipsRunner;
+
+  /// The Stage 6 video pass, when wired (production): samples
+  /// frames of videos at or under the size gate and appends
+  /// similar-video groups to the memberships before they are
+  /// saved. Null (unit tests, degraded setups) skips the pass:
+  /// the scan completes with no similar-video groups.
+  final VideoScanPass? videoPass;
 
   static const int pageSize = 50;
 
@@ -441,6 +454,32 @@ class LibraryScanner {
     } catch (_) {
       markDegraded();
       memberships = buildScanMemberships(assets: all, assessments: assessments);
+    }
+
+    // B4: similar videos (Stage 6). The pass reads frames
+    // natively, one video at a time; its groups merge into the
+    // same snapshot, so the save below stays the scan's single
+    // write. A cancelled pass abandons the whole result —
+    // nothing is persisted, exactly like a cancelled photo
+    // phase.
+    final VideoScanPass? pass = videoPass;
+    if (pass != null) {
+      final List<ScanGroup>? videoGroups = await pass.run(
+        assets: all,
+        isCancelled: cancelled,
+        onDegraded: markDegraded,
+      );
+      if (videoGroups == null) {
+        return cancelledResult(all);
+      }
+      if (videoGroups.isNotEmpty) {
+        memberships = ScanMemberships(
+          algorithmVersion: memberships.algorithmVersion,
+          assetInfos: memberships.assetInfos,
+          groups: <ScanGroup>[...memberships.groups, ...videoGroups],
+          duplicateReferences: memberships.duplicateReferences,
+        );
+      }
     }
 
     // Persist the finished product. A save failure must not fail

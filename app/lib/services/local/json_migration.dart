@@ -170,9 +170,10 @@ class JsonMigrationRunner {
       );
       // The stamp is the app schema version this import ran
       // under (kDbSchemaVersion in local_service_db_impl.dart):
-      // '3' since fix plan Stage 4 — the import writes through
-      // the v3 stores.
-      await MetaStore(_db).set('schema_version', '3');
+      // '4' since fix plan Stage 6 — the import writes through
+      // the v4 stores (the stamp was '3' under Stage 4, whose
+      // stores the membership import still uses unchanged).
+      await MetaStore(_db).set('schema_version', '4');
       await MetaStore(_db).set('migration_completed', '1');
 
       return JsonMigrationReport(

@@ -31,6 +31,8 @@ String smartDeckTitleKey(SmartDeckId id) {
       return AppStrings.deckDark;
     case SmartDeckId.duplicates:
       return AppStrings.deckDuplicates;
+    case SmartDeckId.similarVideos:
+      return AppStrings.deckSimilarVideos;
     case SmartDeckId.onThisDay:
       return AppStrings.deckOnThisDay;
     case SmartDeckId.camera:
@@ -61,6 +63,8 @@ IconData smartDeckIcon(SmartDeckId id) {
       return AppIcons.dark;
     case SmartDeckId.duplicates:
       return AppIcons.duplicates;
+    case SmartDeckId.similarVideos:
+      return AppIcons.similarVideos;
     case SmartDeckId.onThisDay:
       return AppIcons.onThisDay;
     case SmartDeckId.camera:
@@ -77,6 +81,7 @@ const List<SmartDeckId> smartDeckOrder = <SmartDeckId>[
   SmartDeckId.camera,
   SmartDeckId.downloads,
   SmartDeckId.duplicates,
+  SmartDeckId.similarVideos,
   SmartDeckId.old,
   SmartDeckId.bursts,
   SmartDeckId.blurry,

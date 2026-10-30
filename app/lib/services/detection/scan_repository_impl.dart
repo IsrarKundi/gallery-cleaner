@@ -22,9 +22,11 @@ import '../local/local_service.dart';
 import '../media/library_enumeration_service.dart';
 import '../media/media_asset.dart';
 import '../media/media_service.dart';
+import '../media/video_frame_gateway.dart';
 import 'library_scanner.dart';
 import 'photo_assessment.dart';
 import 'scan_repository.dart';
+import 'video_scan_pass.dart';
 
 /// Cancellation token for one scan run. Callbacks registered via
 /// [onCancel] fire exactly once, synchronously inside [cancel] —
@@ -121,6 +123,7 @@ class ScanRepositoryImpl implements ScanRepository {
     required this.media,
     required this.local,
     this.enumeration,
+    this.videoFrames,
   });
 
   final MediaService media;
@@ -131,6 +134,11 @@ class ScanRepositoryImpl implements ScanRepository {
   /// over it. Optional — without it the scanner keeps its
   /// paged plugin source.
   final LibraryEnumerationService? enumeration;
+
+  /// The native frame source for the Stage 6 video pass,
+  /// handed to each run's scanner. Optional — without it the
+  /// scan runs no video pass (the pattern [enumeration] set).
+  final VideoFrameGateway? videoFrames;
 
   final List<_Subscriber> _subscribers = <_Subscriber>[];
   _RunningScan? _running;
@@ -283,6 +291,9 @@ class ScanRepositoryImpl implements ScanRepository {
       media: media,
       local: local,
       enumeration: enumeration,
+      videoPass: videoFrames == null
+          ? null
+          : VideoScanPass(gateway: videoFrames!),
     );
     final LibraryScan result = await scanner.scan(
       isCancelled: () => token.isCancelled,

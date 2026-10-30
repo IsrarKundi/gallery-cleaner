@@ -14,5 +14,13 @@ class MainActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             MediaEnumerationChannel.CHANNEL_NAME,
         ).setMethodCallHandler(MediaEnumerationChannel(contentResolver))
+        // Fix plan Stage 6 (ADR-021): wipe.'s own video frame
+        // grabber for the similar-videos check. Read-only frame
+        // extraction at chosen timestamps; see VideoFrameChannel
+        // for the contract.
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            VideoFrameChannel.CHANNEL_NAME,
+        ).setMethodCallHandler(VideoFrameChannel(applicationContext))
     }
 }

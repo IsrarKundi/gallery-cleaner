@@ -33,6 +33,16 @@
 // the converted facts are never mistaken for fresh memberships)
 // and drops the analyses table: the old engine's groups are
 // discarded and the next scan recomputes them.
+//
+// Schema v4 (fix plan Stage 6, ADR-021): similar-video groups
+// join the membership product. Group kinds are TEXT
+// ([ScanGroups.kind]), so the new 'similarVideos' kind needs
+// no DDL — the bump exists so the version chain and the
+// downgrade guard recognise Stage 6 builds, and the 3 -> 4
+// upgrade restamps the membership version 0: a v3 snapshot
+// predates video groups, so it must never read as fresh (the
+// membership algorithm version also moved to 2 — the stamp is
+// the same belt-and-braces the 2 -> 3 upgrade applied).
 
 import 'dart:convert';
 
@@ -70,7 +80,7 @@ class ScanGroups extends Table {
   IntColumn get id => integer().autoIncrement()();
 
   /// ScanGroupKind.name: 'similar' / 'duplicate' / 'blurry' /
-  /// 'dark'.
+  /// 'dark' / 'similarVideos' (Stage 6).
   TextColumn get kind => text()();
   TextColumn get seedId => text().nullable()();
   TextColumn get keeperId => text().nullable()();
@@ -222,7 +232,7 @@ class KlaraDatabase extends _$KlaraDatabase {
   KlaraDatabase(super.e);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -235,6 +245,9 @@ class KlaraDatabase extends _$KlaraDatabase {
       }
       if (from < 3) {
         await _upgrade2To3(m);
+      }
+      if (from < 4) {
+        await _upgrade3To4(m);
       }
     },
     beforeOpen: (OpeningDetails details) async {
@@ -381,5 +394,21 @@ class KlaraDatabase extends _$KlaraDatabase {
       );
     });
     await customStatement('DROP TABLE IF EXISTS analyses');
+  }
+
+  /// Schema 3 -> 4 (fix plan Stage 6, ADR-021): no table
+  /// changes — group kinds are text, so similar-video groups
+  /// fit the v3 tables as they are. The upgrade's one job is
+  /// the membership restamp: every v3 snapshot predates video
+  /// groups, so its membership version is set to 0 (never
+  /// fresh), and the first Stage 6 scan recomputes the whole
+  /// matching phase and restamps at the current version. All
+  /// v3 rows — facts, groups, the duplicate reference, and
+  /// every other store — carry over untouched.
+  Future<void> _upgrade3To4(Migrator m) async {
+    await into(metaEntries).insert(
+      MetaEntriesCompanion.insert(key: 'scan_membership_version', value: '0'),
+      mode: InsertMode.insertOrReplace,
+    );
   }
 }

@@ -61,6 +61,8 @@ class DeckRow extends StatelessWidget {
         return '$countStr photos · Over 1 year old';
       case SmartDeckId.duplicates:
         return '$countStr photos · Identical & similar';
+      case SmartDeckId.similarVideos:
+        return '$countStr videos · ${Formatters.formatBytes(totalBytes)}';
       case SmartDeckId.bursts:
         return '$countStr photos · Rapid series';
       case SmartDeckId.screenshots:

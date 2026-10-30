@@ -53,8 +53,11 @@ import 'trash_store.dart';
 /// Schema version this build writes (see [MetaStore]).
 /// v2 = fix plan Stage 3: marks/favourites split into their
 /// own tables (ADR-018). v3 = fix plan Stage 4: scan
-/// memberships replace the analyses table (ADR-019).
-const int kDbSchemaVersion = 3;
+/// memberships replace the analyses table (ADR-019). v4 =
+/// fix plan Stage 6: similar-video groups join the membership
+/// product; the upgrade only restamps the membership version
+/// (ADR-021).
+const int kDbSchemaVersion = 4;
 
 /// Meta key carrying the schema version stamp.
 const String kDbSchemaVersionKey = 'schema_version';

@@ -24,6 +24,10 @@
 //   [burstAssetIds]. A burst is a run of 3+ photos where every
 //   consecutive gap is at most 5 seconds.
 // - duplicates / blurry / dark: scan memberships — see above.
+// - similarVideos: scan memberships too (fix plan Stage 6) —
+//   the union of the scan's similar-video groups, applied by
+//   the hub like blurry/dark. Never a per-asset predicate: it
+//   needs frame fingerprints only the scan computes.
 
 import 'dart:isolate';
 
@@ -41,6 +45,7 @@ enum SmartDeckId {
   blurry,
   dark,
   duplicates,
+  similarVideos,
   onThisDay,
   camera,
 }

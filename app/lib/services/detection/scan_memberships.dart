@@ -3,8 +3,9 @@
 // Cleanup's three kinds of things, in wipe.'s stores —
 //   1. asset-info facts (one row per asset: type, dimensions,
 //      size, modified date, edited flag, screenshot marking),
-//   2. group memberships (similar groups, duplicate groups, and
-//      the blurry / dark membership sets),
+//   2. group memberships (similar groups, duplicate groups,
+//      the blurry / dark membership sets, and — Stage 6 —
+//      similar-video groups),
 //   3. the duplicate reference (per duplicate set: the main
 //      photo + its duplicates).
 // NO hash and NO blur score is ever persisted: fingerprints and
@@ -28,14 +29,18 @@ import '../media/media_asset.dart';
 /// rescanned instead of mixed with new ones. Version 0 means
 /// "legacy / none" (rows converted from the pre-Stage 4 analysis
 /// cache carry facts only, at version 0).
-const int scanMembershipAlgorithmVersion = 1;
+/// Version 2 (fix plan Stage 6): similar-video groups join the
+/// persisted product — a version 1 snapshot has none, so it is
+/// stale by this check alone and the first Stage 6 scan
+/// recomputes the whole matching phase, videos included.
+const int scanMembershipAlgorithmVersion = 2;
 
 /// Meta key (in the stores' key/value area) holding the
 /// persisted membership algorithm version.
 const String kMembershipVersionKey = 'scan_membership_version';
 
 /// The membership families a scan produces.
-enum ScanGroupKind { similar, duplicate, blurry, dark }
+enum ScanGroupKind { similar, duplicate, blurry, dark, similarVideos }
 
 /// Facts about one asset, as the enumeration reported them when
 /// the scan ran (the asset-info third of the Stage 3 split).
@@ -130,10 +135,13 @@ class AssetInfo {
 }
 
 /// One persisted group: its kind, its members in stored order,
-/// and (for similar groups) the seed the group grew from and
-/// (for similar + duplicate groups) the suggested keeper/main.
-/// Blurry and dark are single membership sets, stored as one
-/// group each with no seed/keeper.
+/// and (for similar and similar-video groups) the seed the
+/// group grew from and (for similar + duplicate groups) the
+/// suggested keeper/main. Blurry and dark are single membership
+/// sets, stored as one group each with no seed/keeper;
+/// similar-video groups carry a seed and no keeper (a swipe
+/// deck has no keeper concept — the keeper machinery belongs
+/// to the Duplicates screen, which is photo-only).
 class ScanGroup {
   const ScanGroup({
     required this.kind,
@@ -243,6 +251,16 @@ class ScanMemberships {
       }
     }
     return <String>{};
+  }
+
+  /// Union of the member ids of EVERY group of [kind] — the
+  /// multi-group families (similar, duplicate, similarVideos),
+  /// whose membership is a list of groups, not one set.
+  Set<String> allMemberIdsOf(ScanGroupKind kind) {
+    return <String>{
+      for (final ScanGroup group in groups)
+        if (group.kind == kind) ...group.memberIds,
+    };
   }
 
   Set<String> get blurryIds => memberSetOf(ScanGroupKind.blurry);
