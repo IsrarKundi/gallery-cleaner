@@ -136,8 +136,12 @@ enum SwipeDirections { rightKeepLeftDelete, rightDeleteLeftKeep }
 ///   or delete, so wrong decisions would be more likely, not less.
 /// - protection OFF — protection changes delete behaviour, so it
 ///   must be an explicit user choice, never a surprise.
-/// - weeklyNudge OFF — no notification is scheduled until the user
-///   asks for one. haptics ON (design.md §8 feedback is the norm).
+/// - reminders OFF — no notification is scheduled until the user
+///   asks for one (fix plan Stage 1: the toggle now controls the
+///   state-based reminders, not the old weekly nudge; records
+///   saved by older builds under the `weeklyNudge` key still read
+///   correctly — see [AppSettings.fromJson]). haptics ON
+///   (design.md §8 feedback is the norm).
 /// - reducedMotion OFF — the system setting applies until the user
 ///   overrides it in-app. trashAutoEmptyPrompt OFF — see the
 ///   trust-rule resolution on [AppSettings.trashAutoEmptyPrompt].
@@ -147,7 +151,7 @@ class AppSettings {
     this.theme = ThemePreference.system,
     this.privateBlur = false,
     this.protection = false,
-    this.weeklyNudge = false,
+    this.reminders = false,
     this.haptics = true,
     this.reducedMotion = false,
     this.trashAutoEmptyPrompt = false,
@@ -157,7 +161,7 @@ class AppSettings {
   final ThemePreference theme;
   final bool privateBlur;
   final bool protection;
-  final bool weeklyNudge;
+  final bool reminders;
   final bool haptics;
   final bool reducedMotion;
   final bool trashAutoEmptyPrompt;
@@ -177,7 +181,7 @@ class AppSettings {
       'theme': theme.name,
       'privateBlur': privateBlur,
       'protection': protection,
-      'weeklyNudge': weeklyNudge,
+      'reminders': reminders,
       'haptics': haptics,
       'reducedMotion': reducedMotion,
       'trashAutoEmptyPrompt': trashAutoEmptyPrompt,
@@ -209,7 +213,9 @@ class AppSettings {
       theme: theme,
       privateBlur: flag('privateBlur', false),
       protection: flag('protection', false),
-      weeklyNudge: flag('weeklyNudge', false),
+      // Fix plan Stage 1 renamed the toggle: older records carry
+      // the choice under the weekly-nudge key and must keep it.
+      reminders: flag('reminders', flag('weeklyNudge', false)),
       haptics: flag('haptics', true),
       reducedMotion: flag('reducedMotion', false),
       trashAutoEmptyPrompt: flag('trashAutoEmptyPrompt', false),
@@ -221,7 +227,7 @@ class AppSettings {
     ThemePreference? theme,
     bool? privateBlur,
     bool? protection,
-    bool? weeklyNudge,
+    bool? reminders,
     bool? haptics,
     bool? reducedMotion,
     bool? trashAutoEmptyPrompt,
@@ -231,7 +237,7 @@ class AppSettings {
       theme: theme ?? this.theme,
       privateBlur: privateBlur ?? this.privateBlur,
       protection: protection ?? this.protection,
-      weeklyNudge: weeklyNudge ?? this.weeklyNudge,
+      reminders: reminders ?? this.reminders,
       haptics: haptics ?? this.haptics,
       reducedMotion: reducedMotion ?? this.reducedMotion,
       trashAutoEmptyPrompt: trashAutoEmptyPrompt ?? this.trashAutoEmptyPrompt,

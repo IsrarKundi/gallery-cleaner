@@ -140,8 +140,14 @@ storage projection bar (device storage before → after).
 Private blur mode for trash thumbnails (review thumbnails are always revealed); favourites /
 edited / starred protection toggle;
 denied-confirmation and partial-access polish; large-library performance (50,000+ photos);
-settings (theme, dark mode, notifications — one gentle weekly nudge only, haptics, reduced motion,
-trash auto-empty preference); accessibility (buttons for every gesture, large tap targets);
+settings (theme, dark mode, notifications — state-based reminders only (AMENDED 30 Oct 2026,
+owner decision, wipe. fix plan Stage 1: the single weekly nudge is replaced. A reminder fires
+only for unfinished work the user left behind — photos waiting in the Trash tab, a deck
+finished with nothing deleted, a deck left part-way, or a first swipe never tried. Each state
+gets a first reminder and one repeat on the owner-approved timings, at most one reminder a
+day in the early evening, and finishing the work cancels it. See ADR-016), haptics, reduced
+motion, trash auto-empty preference); accessibility (buttons for every gesture, large tap
+targets);
 no mid-session ads ever (applies whenever ads exist).
 
 ### Phase 4 — Later

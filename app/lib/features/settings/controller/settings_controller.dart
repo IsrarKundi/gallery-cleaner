@@ -8,9 +8,11 @@
 // - haptics: [AppHaptics.enabled].
 // - reduced motion: [reducedMotion] is read by main.dart's builder,
 //   which forces MediaQuery disableAnimations when ON.
-// - weekly nudge: the notification service schedules exactly one
-//   weekly nudge when ON and cancels it when OFF; a denied
-//   notification permission leaves the toggle OFF with an error.
+// - reminders (fix plan Stage 1): the toggle controls the
+//   state-based reminders. Turning ON requests the notification
+//   permission (from the view's permission sheet) and refreshes
+//   the reminder engine; a denial leaves the toggle OFF with an
+//   error. Turning OFF cancels every scheduled reminder.
 // - private blur / protection: read live by review, trash, deck,
 //   smart-deck and duplicates controllers from LocalService, so a
 //   change here applies on the next screen load without restart.
@@ -31,6 +33,7 @@ import '../../../core/utils/result.dart';
 import '../../../services/appinfo/app_info_service.dart';
 import '../../../services/local/local_service.dart';
 import '../../../services/notifications/notification_service.dart';
+import '../../../services/notifications/reminder_service.dart';
 
 class SettingsController extends GetxController {
   SettingsController({
@@ -42,14 +45,14 @@ class SettingsController extends GetxController {
 
   final LocalService local;
 
-  /// Null in tests that only check persistence: toggling the nudge
-  /// then only persists, it never schedules.
+  /// Null in tests that only check persistence: toggling
+  /// reminders then only persists, it never schedules.
   ///
   /// Phase 1.7: in production this is null too — InitialBinding
   /// deliberately does NOT resolve the service at launch (that would
   /// defeat its lazy registration). [_notifications] resolves it on
   /// first use instead, so the plugin object is created on the first
-  /// nudge toggle, not at startup.
+  /// reminders toggle, not at startup.
   final NotificationService? notifications;
 
   /// Null in tests: the version then reads as "unknown".
@@ -85,6 +88,13 @@ class SettingsController extends GetxController {
       appInfo ??
       (Get.isRegistered<AppInfoService>() ? Get.find<AppInfoService>() : null);
 
+  /// The reminder engine, resolved lazily like [_notifications]:
+  /// never a constructor dependency, so constructing this
+  /// controller at launch never builds the engine (or the
+  /// notification plugin behind it) before it is needed.
+  ReminderService? get _reminders =>
+      Get.isRegistered<ReminderService>() ? Get.find<ReminderService>() : null;
+
   final Rx<AppSettings> settings = const AppSettings().obs;
   final RxString errorKey = ''.obs;
   final RxString version = ''.obs;
@@ -92,7 +102,7 @@ class SettingsController extends GetxController {
   ThemePreference get theme => settings.value.theme;
   bool get privateBlur => settings.value.privateBlur;
   bool get protection => settings.value.protection;
-  bool get weeklyNudge => settings.value.weeklyNudge;
+  bool get reminders => settings.value.reminders;
   bool get haptics => settings.value.haptics;
   bool get reducedMotion => settings.value.reducedMotion;
   bool get trashAutoEmptyPrompt => settings.value.trashAutoEmptyPrompt;
@@ -202,22 +212,55 @@ class SettingsController extends GetxController {
     }
   }
 
-  Future<void> setWeeklyNudge(bool value) async {
-    if (value == weeklyNudge) {
+  /// Whether the system currently allows notifications, without
+  /// prompting. The view asks this before turning reminders on:
+  /// already-allowed means no permission sheet is needed. With
+  /// no notification service (persistence-only tests) the toggle
+  /// behaves as if allowed: it only persists.
+  Future<bool> notificationsEnabled() async {
+    final NotificationService? service = _notifications;
+    if (service == null) {
+      return true;
+    }
+    final Result<bool> result = await service.areEnabled();
+    return result.fold(
+      onSuccess: (bool value) => value,
+      onFailure: (_) => false,
+    );
+  }
+
+  Future<void> setReminders(bool value) async {
+    if (value == reminders) {
       return;
     }
     if (value) {
-      final Result<void> scheduled =
-          await _notifications?.scheduleWeeklyNudge() ??
-          const Success<void>(null);
-      if (scheduled.isFailure) {
-        errorKey.value = (scheduled as Failure<void>).failure.messageKey;
-        return;
+      // The one permission request in the app (the view shows
+      // the in-app permission sheet first, Cleanup's pattern —
+      // teardown notes/retention.md §1.2). A denial or an error
+      // leaves the toggle OFF with the reason shown, instead of
+      // pretending reminders are set.
+      final NotificationService? service = _notifications;
+      if (service != null) {
+        final Result<bool> permission = await service.requestPermission();
+        if (permission is Failure<bool>) {
+          errorKey.value = permission.failure.messageKey;
+          return;
+        }
+        final bool granted = (permission as Success<bool>).value;
+        if (!granted) {
+          errorKey.value = AppStrings.settingsNotificationsDenied;
+          return;
+        }
       }
     } else {
-      await _notifications?.cancelWeeklyNudge();
+      await _notifications?.cancelAllReminders();
     }
-    if (await _persist(settings.value.copyWith(weeklyNudge: value))) {
+    if (await _persist(settings.value.copyWith(reminders: value))) {
+      if (value) {
+        // Plan from the state the user is in right now, not from
+        // the next launch.
+        await _reminders?.refresh();
+      }
       AppHaptics.mark();
     }
   }

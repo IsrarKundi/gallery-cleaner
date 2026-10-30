@@ -51,7 +51,7 @@ The owner provided rephrased versions of Cleanup's messages (a primary + two alt
 
 | wipe. state | Chosen title | Chosen message | Why this one |
 |---|---|---|---|
-| 1. Photos waiting in Review / Trash tab | "Finish what you started 🗑️" (Alt B) | "Your trash is still full. Empty it now and see how much space you get back." | Matches the unfinished-work idea and our own "Trash" tab name |
+| 1. Photos waiting in the Trash tab | "Finish what you started 🗑️" (Alt B) | "Your trash is still full. Empty it now and see how much space you get back." | Matches the unfinished-work idea and our own "Trash" tab name |
 | 2. Deck finished, photos found, nothing deleted | "Your results are ready ✅" (primary) | "We found duplicates eating up your storage. Review and clean them up in seconds." | Clear benefit, no false promise |
 | 3. Deck/scan left unfinished, first time | "Curious what we'll find? 👀" (Alt A) | "Your scan is paused. Finish it and see what's taking up your space." | Honest — does not claim the scan is "almost done" when we don't know how far it got |
 | 4. Still unfinished, with real counts | "Ready to clean up? ✨" (Alt B) | "%@ photos and %@ videos are lined up for deletion. Open the app and finish the job." | The only variant with no "one tap" claim — wipe. always has review + confirm steps, so "one tap" would not be true |
@@ -72,14 +72,14 @@ All chosen titles are under 40 characters, so they will not be cut off on a lock
 ### What wipe. does today
 
 - One weekly reminder, same for everybody, not based on what the user left unfinished.
-- The reminder's receivers are **missing from our Android manifest** (audit finding F-33) — so the weekly reminder most likely never fires at all.
+- The reminder's receivers are **already in our Android manifest** (audit finding F-33 was fixed before this plan was executed): the scheduled-notification receiver, the boot/update receiver (BOOT_COMPLETED, MY_PACKAGE_REPLACED) and RECEIVE_BOOT_COMPLETED are all declared.
 - No state-based messages. No "are you sure you want to leave?" popup. Permission is not introduced with a benefit line like Cleanup's sheet.
 
 ### The exact change
 
-1. Add the same two receivers Cleanup uses (scheduled-notification receiver + boot/update receiver) and the matching permissions, so reminders actually fire and survive a phone restart.
+1. Use the same two receivers Cleanup uses (scheduled-notification receiver + boot/update receiver) — already declared in our manifest (see above), so no manifest change is needed: reminders fire and survive a phone restart.
 2. Replace the single weekly reminder with state-based reminders, using the same states, mapped to wipe.'s own flow:
-   - Cleanup state 1 (trash waiting) → wipe.: **photos marked and still waiting in Review** (our waiting room before deletion). Message meaning stays the same: "you have photos waiting — come back and finish."
+   - Cleanup state 1 (trash waiting) → wipe.: **photos marked and still waiting in the Trash tab** (our waiting room before deletion). Message meaning stays the same: "you have photos waiting — come back and finish."
    - Cleanup state 2 (scan done, nothing deleted) → wipe.: **a deck was finished (for example Duplicates) and photos were found, but nothing was marked/deleted.**
    - Cleanup states 3+4 (scan unfinished) → wipe.: **a deck was started and left part-way.** The numbers version shows the real count of photos waiting, like theirs.
    - Cleanup state 5 (never swiped) → wipe.: **app installed, photos allowed, but no first swipe session yet.**
@@ -94,7 +94,7 @@ Cleanup hides its times, so these are wipe.'s own chosen numbers, approved by th
 
 | State | First reminder | One last repeat |
 |---|---|---|
-| 1. Photos waiting in Review (marked, not deleted yet) | after **1 day** | after **3 more days**, then stop |
+| 1. Photos waiting in the Trash tab (marked, not deleted yet) | after **1 day** | after **3 more days**, then stop |
 | 2. Deck finished, photos found, nothing deleted | after **1 day** | after **3 more days**, then stop |
 | 3. Deck started, left unfinished (simple message) | after **1 day** | — (state 4 is the repeat) |
 | 4. Still unfinished (message shows the real count of waiting photos) | after **3 more days** (day 4 in total) | then stop |

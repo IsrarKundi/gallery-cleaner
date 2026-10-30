@@ -10,10 +10,14 @@ import '../../services/lifecycle/app_lifecycle_impl.dart';
 import '../../services/media/library_change_source.dart';
 import '../../services/local/local_service.dart';
 import '../../services/local/local_service_db_impl.dart';
+import '../../services/local/reminder_state_store.dart';
+import '../../services/local/reminder_state_store_impl.dart';
 import '../../services/media/media_service.dart';
 import '../../services/media/media_service_impl.dart';
 import '../../services/notifications/notification_service.dart';
 import '../../services/notifications/notification_service_impl.dart';
+import '../../services/notifications/reminder_service.dart';
+import '../../services/notifications/reminder_service_impl.dart';
 import '../../services/share/share_service.dart';
 import '../../services/share/share_service_impl.dart';
 import '../../services/storage/storage_service.dart';
@@ -96,6 +100,23 @@ class InitialBinding extends Bindings {
     Get.lazyPut<StorageService>(StorageServiceImpl.new, fenix: true);
     Get.lazyPut<ShareService>(ShareServiceImpl.new, fenix: true);
     Get.lazyPut<NotificationService>(NotificationServiceImpl.new, fenix: true);
+    // Fix plan Stage 1: the state-reminder engine, lazy for the
+    // same reason as the notification service — it is built on
+    // first use (the splash binding resolves it at launch, the
+    // Settings toggle after a flip), never during this binding.
+    // Its constructor only wires dependencies and a pause
+    // listener; all plugin work waits for refresh().
+    Get.lazyPut<ReminderStateStore>(ReminderStateStoreImpl.new, fenix: true);
+    Get.lazyPut<ReminderService>(
+      () => ReminderServiceImpl(
+        local: Get.find<LocalService>(),
+        media: Get.find<MediaService>(),
+        notifications: Get.find<NotificationService>(),
+        reminderStore: Get.find<ReminderStateStore>(),
+        lifecycle: Get.find<AppLifecycle>(),
+      ),
+      fenix: true,
+    );
     Get.lazyPut<AppInfoService>(AppInfoServiceImpl.new, fenix: true);
     Get.put<TrashService>(
       TrashServiceImpl(

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
 import '../controller/splash_controller.dart';
+import '../../../services/notifications/reminder_service.dart';
 import '../../../services/warmup/deck_warm_up.dart';
 
 /// Registers the splash controller (AGENTS.md: controllers are registered
@@ -26,6 +27,9 @@ class SplashBinding extends Bindings {
         onComplete: onComplete,
         beforeComplete: beforeComplete,
         warmUp: Get.isRegistered<DeckWarmUp>() ? Get.find<DeckWarmUp>() : null,
+        reminders: Get.isRegistered<ReminderService>()
+            ? Get.find<ReminderService>()
+            : null,
       ),
     );
   }

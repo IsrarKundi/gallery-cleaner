@@ -280,10 +280,31 @@ class AppStrings {
   static const String settingsNotificationsTitle = 'settingsNotificationsTitle';
   static const String settingsNotificationsMessage =
       'settingsNotificationsMessage';
-  static const String settingsNudgeTitle = 'settingsNudgeTitle';
-  static const String settingsNudgeBody = 'settingsNudgeBody';
   static const String settingsNotificationsDenied =
       'settingsNotificationsDenied';
+
+  // State-based reminders (wipe. fix plan Stage 1, requirements §7).
+  // Copy is wipe.'s own; no swipe directions are ever named (the
+  // direction mapping is a user setting, §3 amendment 27 Oct 2026).
+  static const String reminderPermissionBenefit = 'reminderPermissionBenefit';
+  static const String reminderPermissionTurnOn = 'reminderPermissionTurnOn';
+  static const String reminderPermissionNotNow = 'reminderPermissionNotNow';
+  static const String reminderWaitingTitle = 'reminderWaitingTitle';
+  static const String reminderWaitingBody = 'reminderWaitingBody';
+  static const String reminderFinishedTitle = 'reminderFinishedTitle';
+  static const String reminderFinishedBody = 'reminderFinishedBody';
+  static const String reminderUnfinishedTitle = 'reminderUnfinishedTitle';
+  static const String reminderUnfinishedBody = 'reminderUnfinishedBody';
+  static const String reminderCountsTitle = 'reminderCountsTitle';
+  static const String reminderCountsBody = 'reminderCountsBody';
+  static const String reminderNeverSwipedTitle = 'reminderNeverSwipedTitle';
+  static const String reminderNeverSwipedBody = 'reminderNeverSwipedBody';
+
+  // Review leave-guard (fix plan Stage 1, requirements §4).
+  static const String reviewLeaveTitle = 'reviewLeaveTitle';
+  static const String reviewLeaveMessage = 'reviewLeaveMessage';
+  static const String reviewLeaveOpenReview = 'reviewLeaveOpenReview';
+  static const String reviewLeaveSaveExit = 'reviewLeaveSaveExit';
   static const String settingsHapticsTitle = 'settingsHapticsTitle';
   static const String settingsHapticsMessage = 'settingsHapticsMessage';
   static const String settingsReducedMotionTitle = 'settingsReducedMotionTitle';
@@ -599,16 +620,46 @@ class AppStrings {
         'this is on — your Wipe favourites and photos starred on '
         'the device. There is no reliable edited flag on-device, so '
         'edited photos are not covered by this toggle.',
-    settingsNotificationsTitle: 'Weekly nudge',
+    settingsNotificationsTitle: 'Reminders',
     settingsNotificationsMessage:
-        'One gentle reminder a week to clean up. No countdowns, no '
-        'marketing.',
-    settingsNudgeTitle: 'Time for a quick clean?',
-    settingsNudgeBody:
-        'A few swipes can free up space. Open Wipe when you have a minute.',
+        'A gentle reminder when cleaning is left unfinished — photos '
+        'waiting, a deck left part-way, or a first swipe still to try. '
+        'At most one a day, never at night.',
     settingsNotificationsDenied:
-        'Notifications are off on this device, so the weekly nudge '
-        'could not be set. The toggle stays off.',
+        'Notifications are off on this device, so reminders could '
+        'not be set. The toggle stays off.',
+    reminderPermissionBenefit:
+        'One short reminder when photos are left waiting, so the '
+        'space you meant to free is not forgotten. Easy to turn off '
+        'anytime.',
+    reminderPermissionTurnOn: 'Turn on reminders',
+    reminderPermissionNotNow: 'Not now',
+    reminderWaitingTitle: 'Finish what you started 🗑️',
+    reminderWaitingBody:
+        'Your trash is still full. Empty it now and see how much '
+        'space you get back.',
+    reminderFinishedTitle: 'Your results are ready ✅',
+    reminderFinishedBody:
+        'We found duplicates eating up your storage. Review and '
+        'clean them up in seconds.',
+    reminderUnfinishedTitle: 'Curious what we\'ll find? 👀',
+    reminderUnfinishedBody:
+        'Your scan is paused. Finish it and see what\'s taking up '
+        'your space.',
+    reminderCountsTitle: 'Ready to clean up? ✨',
+    reminderCountsBody:
+        '{photos} photos and {videos} videos are lined up for '
+        'deletion. Open the app and finish the job.',
+    reminderNeverSwipedTitle: 'Fun way to declutter ✨',
+    reminderNeverSwipedBody:
+        'Swipe through your photos and say goodbye to the ones '
+        'you don\'t need.',
+    reviewLeaveTitle: 'Leave with photos waiting?',
+    reviewLeaveMessage:
+        '{count} photos are still waiting in Review. They stay '
+        'marked until you keep or delete them.',
+    reviewLeaveOpenReview: 'Open Review',
+    reviewLeaveSaveExit: 'Save and Exit',
     settingsHapticsTitle: 'Haptics',
     settingsHapticsMessage:
         'A light tick on each mark, a medium click when a delete is '
@@ -646,7 +697,7 @@ class AppStrings {
         'trash now removes everything in trash, including photos '
         'still within their 30 days. Nothing is removed without '
         'the system confirmation that follows.',
-    errorNotifications: 'The weekly nudge could not be set. Try again.',
+    errorNotifications: 'Reminders could not be updated. Try again.',
     snackMovedToTrash: 'Moved to trash. You have 30 days to restore.',
     snackMovedToTrashUntil: 'Moved to trash, recoverable until {date}',
     snackMovedToTrashMany: '{count} photos moved to trash. The rest could not be moved — try again.',

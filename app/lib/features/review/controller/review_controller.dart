@@ -75,6 +75,12 @@ class ReviewController extends GetxController {
   /// The review set. Shrinks as items are unmarked or trashed.
   final RxList<MediaAsset> items = <MediaAsset>[].obs;
 
+  /// Leave-guard prompt state (fix plan Stage 1): true while the
+  /// view's "leave with photos waiting?" confirmation is on
+  /// screen, so a second exit attempt cannot stack a second
+  /// prompt on top of it.
+  bool leavePromptOpen = false;
+
   /// Service-owned bytes / failures for the review size.
   RxMap<String, Uint8List> get thumbnails =>
       _thumbnails.thumbnailsFor(thumbnailSize);

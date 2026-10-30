@@ -29,22 +29,32 @@ import 'package:klara/services/notifications/notification_service.dart';
 
 class _Notifications implements NotificationService {
   bool deny = false;
+  int permissionRequests = 0;
   int scheduled = 0;
   int cancelled = 0;
 
   @override
-  Future<Result<void>> scheduleWeeklyNudge() async {
-    if (deny) {
-      return const Failure<void>(
-        AppFailure(messageKey: 'settingsNotificationsDenied'),
-      );
-    }
+  Future<Result<bool>> areEnabled() async => Success<bool>(!deny);
+
+  @override
+  Future<Result<bool>> requestPermission() async {
+    permissionRequests++;
+    return Success<bool>(!deny);
+  }
+
+  @override
+  Future<Result<void>> scheduleReminder({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime fireAt,
+  }) async {
     scheduled++;
     return const Success<void>(null);
   }
 
   @override
-  Future<Result<void>> cancelWeeklyNudge() async {
+  Future<Result<void>> cancelAllReminders() async {
     cancelled++;
     return const Success<void>(null);
   }
@@ -186,7 +196,7 @@ void main() {
       expect(settings.theme, ThemePreference.system);
       expect(settings.privateBlur, isFalse);
       expect(settings.protection, isFalse);
-      expect(settings.weeklyNudge, isFalse);
+      expect(settings.reminders, isFalse);
       expect(settings.haptics, isTrue);
       expect(settings.reducedMotion, isFalse);
       expect(settings.trashAutoEmptyPrompt, isFalse);
@@ -214,6 +224,19 @@ void main() {
       expect(
         AppSettings.fromJson(<String, dynamic>{'theme': 'bogus'}).theme,
         ThemePreference.system,
+      );
+      // Stage 1 rename: a record saved by the weekly-nudge build
+      // keeps the user's choice under the new name.
+      expect(
+        AppSettings.fromJson(<String, dynamic>{'weeklyNudge': true}).reminders,
+        isTrue,
+      );
+      expect(
+        AppSettings.fromJson(<String, dynamic>{
+          'weeklyNudge': true,
+          'reminders': false,
+        }).reminders,
+        isFalse,
       );
     });
 
@@ -300,19 +323,19 @@ void main() {
       expect(applied, contains(ThemeMode.light));
     });
 
-    test('weekly nudge schedules on, cancels off', () async {
+    test('reminders ask permission on, cancel all off', () async {
       final LocalServiceImpl local = await _tempLocal();
       final _Notifications notifications = _Notifications();
       final SettingsController controller = await make(
         local: local,
         notifications: notifications,
       );
-      await controller.setWeeklyNudge(true);
-      expect(notifications.scheduled, 1);
-      expect(controller.weeklyNudge, isTrue);
-      await controller.setWeeklyNudge(false);
+      await controller.setReminders(true);
+      expect(notifications.permissionRequests, 1);
+      expect(controller.reminders, isTrue);
+      await controller.setReminders(false);
       expect(notifications.cancelled, 1);
-      expect(controller.weeklyNudge, isFalse);
+      expect(controller.reminders, isFalse);
     });
 
     test('denied notification permission leaves the toggle off', () async {
@@ -322,10 +345,10 @@ void main() {
         local: local,
         notifications: notifications,
       );
-      await controller.setWeeklyNudge(true);
-      expect(controller.weeklyNudge, isFalse);
+      await controller.setReminders(true);
+      expect(controller.reminders, isFalse);
       expect(controller.errorKey.value, isNotEmpty);
-      expect(notifications.scheduled, 0);
+      expect(notifications.permissionRequests, 1);
     });
 
     test(

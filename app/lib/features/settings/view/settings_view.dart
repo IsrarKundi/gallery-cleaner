@@ -9,6 +9,7 @@ import '../../../core/widgets/app_scaffold.dart';
 import '../../../core/widgets/error_banner.dart';
 import '../../../services/local/local_service.dart';
 import '../controller/settings_controller.dart';
+import '../widgets/reminder_permission_sheet.dart';
 
 /// Redesigned settings screen matching modern grouped-card aesthetics.
 ///
@@ -81,10 +82,11 @@ class SettingsView extends GetView<SettingsController> {
                   icon: AppIcons.bell,
                   title: AppStrings.tr(AppStrings.settingsNotifications),
                   trailing: Switch.adaptive(
-                    value: controller.weeklyNudge,
+                    value: controller.reminders,
                     activeThumbColor: context.palette.primary,
                     activeTrackColor: context.palette.primaryContainer,
-                    onChanged: controller.setWeeklyNudge,
+                    onChanged: (bool value) =>
+                        _onRemindersToggled(context, controller, value),
                   ),
                 ),
                 const _SettingsDivider(),
@@ -161,6 +163,34 @@ class SettingsView extends GetView<SettingsController> {
         ),
       );
     });
+  }
+
+  /// Reminders toggle (fix plan Stage 1): turning OFF is
+  /// immediate. Turning ON first checks the system permission —
+  /// already allowed needs no ask; otherwise the in-app
+  /// permission sheet (one-line benefit, Cleanup's pattern) runs
+  /// before the controller makes the system request, so the bare
+  /// system popup never appears unexplained.
+  Future<void> _onRemindersToggled(
+    BuildContext context,
+    SettingsController controller,
+    bool value,
+  ) async {
+    if (!value) {
+      await controller.setReminders(false);
+      return;
+    }
+    if (await controller.notificationsEnabled()) {
+      await controller.setReminders(true);
+      return;
+    }
+    if (!context.mounted) {
+      return;
+    }
+    final bool confirmed = await ReminderPermissionSheet.show(context);
+    if (confirmed) {
+      await controller.setReminders(true);
+    }
   }
 
   void _showThemePicker(BuildContext context, SettingsController controller) {

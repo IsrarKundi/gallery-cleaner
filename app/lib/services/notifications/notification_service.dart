@@ -1,19 +1,39 @@
-// Weekly-nudge scheduling (Phase 3A, requirements §7).
+// Low-level notification gateway for the state-based reminders
+// (wipe. fix plan Stage 1, requirements §7 as amended 30 Oct
+// 2026; replaces the Phase 3A weekly nudge).
 //
-// Interface only. The implementation is the single file allowed to
-// import flutter_local_notifications. Exactly ONE notification is
-// ever scheduled: a gentle weekly nudge (see the copy in
-// app_strings.dart: no countdown, no marketing). Cancelling removes
-// it. Nothing here reads, logs or sends photo content.
+// Interface only. The implementation is the single file allowed
+// to import flutter_local_notifications. This gateway knows
+// nothing about states or copy: the reminder engine
+// (reminder_service.dart) decides WHAT is scheduled and WHEN;
+// this file only talks to the plugin. Nothing here reads, logs
+// or sends photo content.
 
 import '../../core/utils/result.dart';
 
 abstract class NotificationService {
-  /// Schedules the single weekly nudge. Returns failure when the
-  /// device notification permission is denied, so the caller can
-  /// leave the toggle OFF instead of pretending a nudge is set.
-  Future<Result<void>> scheduleWeeklyNudge();
+  /// Whether notifications are currently enabled for the app
+  /// (system permission granted). Never prompts: safe to call
+  /// at launch or on resume.
+  Future<Result<bool>> areEnabled();
 
-  /// Cancels the weekly nudge, if one is scheduled.
-  Future<Result<void>> cancelWeeklyNudge();
+  /// Requests the Android notification permission (the system
+  /// popup). Only ever called from the in-app permission sheet
+  /// flow in Settings, never at launch. Success(false) means the
+  /// user (or the system) said no — an answer, not an error.
+  Future<Result<bool>> requestPermission();
+
+  /// Schedules one reminder for [fireAt] (local time). Inexact
+  /// scheduling: the system may shift it slightly — a reminder,
+  /// not an alarm, and no exact-alarm permission is requested.
+  Future<Result<void>> scheduleReminder({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime fireAt,
+  });
+
+  /// Cancels every notification this system may have scheduled,
+  /// including the legacy weekly nudge from older builds.
+  Future<Result<void>> cancelAllReminders();
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -35,6 +37,11 @@ import '../widgets/review_loading_skeleton.dart';
 /// selection (Keep X / Delete X) instead of the whole set. The
 /// back control first cancels an active selection, and only then
 /// leaves the screen.
+///
+/// Leave-guard (fix plan Stage 1): leaving via back or the
+/// bottom nav while photos still wait in the grid first shows a
+/// confirmation ("Open Review" / "Save and Exit"); the marks are
+/// persisted either way, so exiting loses nothing.
 class ReviewView extends GetView<ReviewController> {
   const ReviewView({super.key});
 
@@ -129,10 +136,53 @@ class ReviewView extends GetView<ReviewController> {
 
   /// Back control shared by the AppBar button and the system
   /// gesture: an active selection is cancelled first (the pop is
-  /// swallowed); only a second back leaves the screen.
-  void _onBack() {
-    if (!controller.selection.cancel()) {
+  /// swallowed); only a second back leaves the screen — and when
+  /// photos are still waiting, the leave-guard asks first.
+  Future<void> _onBack(BuildContext context) async {
+    if (controller.selection.cancel()) {
+      return;
+    }
+    if (await _confirmLeave(context)) {
       controller.goToDeck();
+    }
+  }
+
+  /// Leave-guard (fix plan Stage 1; Cleanup's trash-leave popup
+  /// pattern in wipe.'s own words — teardown notes/retention.md
+  /// §1.3): leaving Review while photos are still waiting in the
+  /// grid asks first. The dialog's confirm is "Save and Exit" —
+  /// the marks are already persisted, so leaving loses nothing;
+  /// "Open Review" and dismissing the dialog both stay. An empty
+  /// grid never prompts.
+  Future<bool> _confirmLeave(BuildContext context) async {
+    final int waiting = controller.items.length;
+    if (waiting == 0) {
+      return true;
+    }
+    if (controller.leavePromptOpen) {
+      return false;
+    }
+    controller.leavePromptOpen = true;
+    try {
+      return await AppDialog.showConfirmation(
+        context,
+        title: AppStrings.tr(AppStrings.reviewLeaveTitle),
+        message: AppStrings.tr(AppStrings.reviewLeaveMessage, <String, String>{
+          'count': '$waiting',
+        }),
+        confirmLabel: AppStrings.tr(AppStrings.reviewLeaveSaveExit),
+        cancelLabel: AppStrings.tr(AppStrings.reviewLeaveOpenReview),
+      );
+    } finally {
+      controller.leavePromptOpen = false;
+    }
+  }
+
+  /// Bottom-nav exit: same leave-guard as the back control, then
+  /// the controller's pop-to-shell navigation.
+  Future<void> _onNavDestination(BuildContext context, int index) async {
+    if (await _confirmLeave(context)) {
+      controller.goToShellTab(index);
     }
   }
 
@@ -142,7 +192,7 @@ class ReviewView extends GetView<ReviewController> {
       canPop: false,
       onPopInvokedWithResult: (bool didPop, Object? result) {
         if (!didPop) {
-          _onBack();
+          unawaited(_onBack(context));
         }
       },
       child: Obx(() {
@@ -188,7 +238,8 @@ class ReviewView extends GetView<ReviewController> {
           // current tab).
           bottomNav: AppBottomNav(
             currentIndex: 2,
-            onDestinationSelected: controller.goToShellTab,
+            onDestinationSelected: (int index) =>
+                unawaited(_onNavDestination(context, index)),
           ),
           body: isEmpty
               ? (controller.isLoading.value

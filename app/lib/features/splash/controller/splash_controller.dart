@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
 import '../../../core/constants/app_sizes.dart';
+import '../../../services/notifications/reminder_service.dart';
 import '../../../services/warmup/deck_warm_up.dart';
 
 /// Splash completion contract (design.md §13).
@@ -26,6 +27,7 @@ class SplashController extends GetxController {
     Duration? holdDuration,
     Duration? reducedMotionHoldDuration,
     this.warmUp,
+    this.reminders,
   }) : holdDuration = holdDuration ?? const AppSizes().splashHold,
        reducedMotionHoldDuration =
            reducedMotionHoldDuration ??
@@ -44,6 +46,13 @@ class SplashController extends GetxController {
   /// page 0 overlap the animation instead of following it. Null in
   /// tests, where no warm-up runs.
   final DeckWarmUp? warmUp;
+
+  /// Fix plan Stage 1: refreshed while the splash plays, so the
+  /// state reminders are re-planned from the persisted state at
+  /// every launch (a state finished since the last plan cancels
+  /// its reminder here). Fire-and-forget like the warm-up: it
+  /// never gates or delays completion. Null in tests.
+  final ReminderService? reminders;
 
   /// Fallback duration; see the class doc.
   final Duration holdDuration;
@@ -71,6 +80,9 @@ class SplashController extends GetxController {
     // The animation itself is not shortened; this only starts the
     // work early so the deck can join it.
     warmUp?.start();
+    // Stage 1: same overlap for the reminder re-plan (see the
+    // [reminders] field doc). refresh() never throws.
+    unawaited(reminders?.refresh() ?? Future<void>.value());
     _holdTimer = Timer(holdDuration, _complete);
   }
 
