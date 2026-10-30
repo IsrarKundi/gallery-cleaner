@@ -15,6 +15,14 @@
 // a grant expansion must not reuse limited-grant paths. Library
 // changes mid-session are picked up on the next launch; the Phase 4
 // change observer is the proper fix, not cache-busting here.
+//
+// Fix plan Stage 2 (ADR-017): when a [LibraryEnumerationService]
+// is wired (production binding), [getAssets] and [getAssetsByIds]
+// are served from its memoised one-pass enumeration — every field
+// including file size arrives with the pass, so the per-asset size
+// calls below simply never run. The Phase 2.1 plugin path remains
+// as the fallback for when the native pass fails (and for tests
+// that wire no enumeration), with its behaviour unchanged.
 
 import 'dart:collection';
 import 'dart:typed_data';
@@ -23,16 +31,23 @@ import 'package:photo_manager/photo_manager.dart';
 
 import '../../core/strings/app_strings.dart';
 import '../../core/utils/result.dart';
+import 'enumerated_asset.dart';
+import 'enumeration_pages.dart';
+import 'library_enumeration_service.dart';
 import 'media_asset.dart';
 import 'media_mappings.dart';
 import 'media_plugin_gateway.dart';
 import 'media_service.dart';
 
 class MediaServiceImpl implements MediaService {
-  MediaServiceImpl({MediaPluginGateway? gateway})
+  MediaServiceImpl({MediaPluginGateway? gateway, this.enumeration})
     : _gateway = gateway ?? PhotoManagerGateway();
 
   final MediaPluginGateway _gateway;
+
+  /// The one-pass enumeration (Stage 2), when wired. Optional so
+  /// the plugin path stays fully testable on its own.
+  final LibraryEnumerationService? enumeration;
 
   /// Path lists by query shape. Album listings and asset pages use
   /// different filter options, so they never share an entry: reusing
@@ -146,6 +161,29 @@ class MediaServiceImpl implements MediaService {
           AppFailure(messageKey: AppStrings.errorMediaLoad),
         );
       }
+      // Stage 2 (ADR-017): the enumeration serves the page when
+      // it can. A null result means "not servable from the pass"
+      // (no enumeration wired, the pass failed, or the album is
+      // unknown to it) and the plugin path below runs instead.
+      final LibraryEnumerationService? enumerationService = enumeration;
+      if (enumerationService != null) {
+        final Result<LibraryEnumeration> enumerated = await enumerationService
+            .enumerate();
+        final List<MediaAsset>? enumeratedPage = enumerated.fold(
+          onSuccess: (LibraryEnumeration data) => pageFromEnumeration(
+            data,
+            albumId: albumId,
+            monthKey: monthKey,
+            type: type,
+            page: page,
+            pageSize: pageSize,
+          ),
+          onFailure: (_) => null,
+        );
+        if (enumeratedPage != null) {
+          return Success<List<MediaAsset>>(enumeratedPage);
+        }
+      }
       final List<AssetPathEntity> paths = await _paths(
         type: mapFilterType(type),
         monthKey: monthKey,
@@ -184,7 +222,7 @@ class MediaServiceImpl implements MediaService {
       final List<MediaAsset> assets = <MediaAsset>[];
       for (int i = 0; i < kept.length; i++) {
         final AssetEntity entity = kept[i].entity;
-        final String album = _resolveAlbumName(entity.relativePath, path.name);
+        final String album = resolveAlbumName(entity.relativePath, path.name);
         assets.add(
           MediaAsset(
             id: entity.id,
@@ -196,6 +234,7 @@ class MediaServiceImpl implements MediaService {
             title: entity.title ?? '',
             albumName: album,
             isSystemFavourite: entity.isFavorite,
+            isScreenshot: isScreenshotAssetName(entity.title ?? ''),
             modifiedDate: entity.modifiedDateTime,
           ),
         );
@@ -214,8 +253,28 @@ class MediaServiceImpl implements MediaService {
   /// ids and non-image/video kinds are skipped, never failed, and
   /// the result is newest first (createDate descending, id
   /// tiebreak) to match the route-argument path's ordering.
+  ///
+  /// Stage 2 (ADR-017): with an enumeration wired, ids resolve
+  /// from the memoised pass instead — same skip-gone contract
+  /// (an id the completed pass does not contain is an id the
+  /// library, as this session knows it, does not have), same
+  /// ordering. The plugin resolution below remains the fallback
+  /// for a failed pass.
   @override
   Future<Result<List<MediaAsset>>> getAssetsByIds(List<String> ids) async {
+    final LibraryEnumerationService? enumerationService = enumeration;
+    if (enumerationService != null) {
+      final Result<LibraryEnumeration> enumerated = await enumerationService
+          .enumerate();
+      final List<MediaAsset>? assets = enumerated.fold(
+        onSuccess: (LibraryEnumeration data) =>
+            assetsByIdsFromEnumeration(data, ids),
+        onFailure: (_) => null,
+      );
+      if (assets != null) {
+        return Success<List<MediaAsset>>(assets);
+      }
+    }
     try {
       final List<AssetEntity> entities = await _entitiesFor(ids);
       final List<({AssetEntity entity, MediaAssetType type})> kept =
@@ -243,8 +302,9 @@ class MediaServiceImpl implements MediaService {
             sizeBytes: sizes[i],
             createDate: entity.createDateTime,
             title: entity.title ?? '',
-            albumName: _resolveAlbumName(entity.relativePath, ''),
+            albumName: resolveAlbumName(entity.relativePath, ''),
             isSystemFavourite: entity.isFavorite,
+            isScreenshot: isScreenshotAssetName(entity.title ?? ''),
             modifiedDate: entity.modifiedDateTime,
           ),
         );
@@ -447,20 +507,9 @@ class MediaServiceImpl implements MediaService {
     _pathLists.clear();
     _counts.clear();
     _entities.clear();
-  }
-
-  static String _resolveAlbumName(String? relativePath, String fallback) {
-    if (relativePath != null && relativePath.trim().isNotEmpty) {
-      final String trimmed = relativePath.trim();
-      final List<String> segments = trimmed
-          .split(RegExp(r'[/\\]'))
-          .where((String s) => s.isNotEmpty)
-          .toList();
-      if (segments.isNotEmpty) {
-        return segments.last;
-      }
-    }
-    return fallback;
+    // Stage 2: a changed grant must not reuse a pass enumerated
+    // under the old one (a limited grant's rows are a subset).
+    enumeration?.invalidate();
   }
 }
 

@@ -30,6 +30,7 @@ class MediaAsset {
     required this.title,
     required this.albumName,
     this.isSystemFavourite = false,
+    this.isScreenshot = false,
     this.modifiedDate,
   });
 
@@ -62,6 +63,14 @@ class MediaAsset {
   /// false on Android 10 and below). Used ONLY by favourites
   /// protection (Phase 3A): Klara never stars or unstars photos.
   final bool isSystemFavourite;
+
+  /// Screenshot marking from the file name alone (fix plan
+  /// Stage 2: the enumeration applies the teardown's exact name
+  /// rules as the asset is listed — see
+  /// `isScreenshotAssetName`). Data only in this stage: smart
+  /// deck membership keeps its existing album/title predicate
+  /// until the grouping stage revisits it.
+  final bool isScreenshot;
 }
 
 /// One album/folder from the library, with its asset count.

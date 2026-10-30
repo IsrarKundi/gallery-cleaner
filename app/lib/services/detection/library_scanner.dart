@@ -34,13 +34,28 @@
 // The total is an estimate: the largest album count (the
 // whole-library album is normally the largest). When albums fail,
 // progress reports the scanned count with no total.
+//
+// Fix plan Stage 2 (ADR-017): when a [LibraryEnumerationService]
+// is wired (production), the page source above is replaced by
+// ONE fresh enumeration pass per run — the scanner forces the
+// pass, then delivers its list in the same pageSize chunks
+// through the identical pipeline below (same per-page analysis,
+// checkpoints, cancellation and pause boundaries, prune rule).
+// The total is then the pass's exact length. A failed pass is
+// the one-pass form of a page-0 failure: no pages delivered, no
+// checkpoint save, no prune, [LibraryScan.pageFailed] set. The
+// paged plugin source remains for callers that wire no
+// enumeration (unit tests, degraded setups).
 
 import 'dart:isolate';
 import 'dart:typed_data';
 
 import '../../core/utils/result.dart';
 import '../local/local_service.dart';
+import '../media/enumerated_asset.dart';
+import '../media/library_enumeration_service.dart';
 import '../media/media_asset.dart';
+import '../media/media_mappings.dart';
 import '../media/media_service.dart';
 import 'analysis_worker.dart';
 import 'photo_analysis.dart';
@@ -85,11 +100,17 @@ class LibraryScanner {
   LibraryScanner({
     required this.media,
     required this.local,
+    this.enumeration,
     this.analyzeBatch = analyzeBatchOnIsolate,
   });
 
   final MediaService media;
   final LocalService local;
+
+  /// The one-pass enumeration (Stage 2), when wired: each scan
+  /// run forces one fresh pass and pages over its list. Null
+  /// keeps the original paged plugin source.
+  final LibraryEnumerationService? enumeration;
 
   /// Batch analysis runner, injectable so tests can prove the
   /// degraded fallback with a throwing runner. Production uses
@@ -131,19 +152,23 @@ class LibraryScanner {
     cached.fold(onSuccess: analyses.addAll, onFailure: (_) {});
 
     int? estimatedTotal;
-    final Result<List<MediaAlbum>> albums = await media.getAlbums();
-    albums.fold(
-      onSuccess: (List<MediaAlbum> list) {
-        int max = 0;
-        for (final MediaAlbum album in list) {
-          if (album.count > max) {
-            max = album.count;
+    if (enumeration == null) {
+      // The album-count estimate belongs to the paged source;
+      // the enumeration source knows its exact total (below).
+      final Result<List<MediaAlbum>> albums = await media.getAlbums();
+      albums.fold(
+        onSuccess: (List<MediaAlbum> list) {
+          int max = 0;
+          for (final MediaAlbum album in list) {
+            if (album.count > max) {
+              max = album.count;
+            }
           }
-        }
-        estimatedTotal = max > 0 ? max : null;
-      },
-      onFailure: (_) {},
-    );
+          estimatedTotal = max > 0 ? max : null;
+        },
+        onFailure: (_) {},
+      );
+    }
 
     // Phase 5.1: set once, the first time a page's analysis falls
     // back to the UI thread. A cancelled scan still reports it:
@@ -164,6 +189,50 @@ class LibraryScanner {
     final List<MediaAsset> all = <MediaAsset>[];
     final List<PhotoAnalysis> unsavedFresh = <PhotoAnalysis>[];
     bool pageFailed = false;
+
+    // Stage 2 (ADR-017): the enumeration page source. One fresh
+    // pass, forced per run; the loop below then slices it into
+    // pages. A failed pass returns the page-0-failure shape
+    // directly (no pages, no saves — the final write below is
+    // only for runs that entered the loop). The row filter
+    // mirrors the plugin's paged lists, which the old scan
+    // paged through: gone files and stored-dimension-zero
+    // images never entered a scan (ADR-017 §4).
+    List<MediaAsset>? enumeratedAssets;
+    if (enumeration != null) {
+      if (cancelled()) {
+        return cancelledResult(all);
+      }
+      final Result<LibraryEnumeration> enumerated = await enumeration!
+          .enumerate(forceRefresh: true);
+      enumeratedAssets = enumerated.fold(
+        onSuccess: (LibraryEnumeration data) => data.rows
+            .where(
+              (EnumeratedAsset row) => row.fileExists && isPluginListRow(row),
+            )
+            .map(
+              (EnumeratedAsset row) => mediaAssetFromEnumerated(
+                row,
+                albumNameFallback: wholeLibraryAlbumName,
+              ),
+            )
+            .toList(),
+        onFailure: (_) => null,
+      );
+      if (enumeratedAssets == null) {
+        return LibraryScan(
+          assets: const <MediaAsset>[],
+          analyses: analyses,
+          scanned: 0,
+          pageFailed: true,
+          degraded: degraded,
+        );
+      }
+      estimatedTotal = enumeratedAssets.isEmpty
+          ? null
+          : enumeratedAssets.length;
+    }
+
     int page = 0;
     while (true) {
       if (cancelled()) {
@@ -172,14 +241,27 @@ class LibraryScanner {
       if (waitIfPaused != null && !await waitIfPaused()) {
         return cancelledResult(all);
       }
-      final Result<List<MediaAsset>> result = await media.getAssets(
-        page: page,
-        pageSize: pageSize,
-      );
-      final List<MediaAsset>? pageAssets = result.fold(
-        onSuccess: (List<MediaAsset> value) => value,
-        onFailure: (_) => null,
-      );
+      final List<MediaAsset>? pageAssets;
+      if (enumeratedAssets != null) {
+        final int start = page * pageSize;
+        pageAssets = start >= enumeratedAssets.length
+            ? <MediaAsset>[]
+            : enumeratedAssets.sublist(
+                start,
+                start + pageSize > enumeratedAssets.length
+                    ? enumeratedAssets.length
+                    : start + pageSize,
+              );
+      } else {
+        final Result<List<MediaAsset>> result = await media.getAssets(
+          page: page,
+          pageSize: pageSize,
+        );
+        pageAssets = result.fold(
+          onSuccess: (List<MediaAsset> value) => value,
+          onFailure: (_) => null,
+        );
+      }
       if (pageAssets == null) {
         pageFailed = true;
         break;

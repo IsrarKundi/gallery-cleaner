@@ -19,6 +19,7 @@
 import 'dart:async';
 
 import '../local/local_service.dart';
+import '../media/library_enumeration_service.dart';
 import '../media/media_asset.dart';
 import '../media/media_service.dart';
 import 'library_scanner.dart';
@@ -113,10 +114,20 @@ class _RunningScan {
 }
 
 class ScanRepositoryImpl implements ScanRepository {
-  ScanRepositoryImpl({required this.media, required this.local});
+  ScanRepositoryImpl({
+    required this.media,
+    required this.local,
+    this.enumeration,
+  });
 
   final MediaService media;
   final LocalService local;
+
+  /// The one-pass enumeration (fix plan Stage 2), handed to
+  /// each run's scanner: a run forces one fresh pass and pages
+  /// over it. Optional — without it the scanner keeps its
+  /// paged plugin source.
+  final LibraryEnumerationService? enumeration;
 
   final List<_Subscriber> _subscribers = <_Subscriber>[];
   _RunningScan? _running;
@@ -265,7 +276,11 @@ class ScanRepositoryImpl implements ScanRepository {
 
   Future<LibraryScan> _runScan(_RunningScan run) async {
     final ScanCancelToken token = run.token;
-    final LibraryScanner scanner = LibraryScanner(media: media, local: local);
+    final LibraryScanner scanner = LibraryScanner(
+      media: media,
+      local: local,
+      enumeration: enumeration,
+    );
     final LibraryScan result = await scanner.scan(
       isCancelled: () => token.isCancelled,
       waitIfPaused: () => _waitIfPaused(token),

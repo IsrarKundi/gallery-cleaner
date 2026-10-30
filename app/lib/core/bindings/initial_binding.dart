@@ -12,6 +12,9 @@ import '../../services/local/local_service.dart';
 import '../../services/local/local_service_db_impl.dart';
 import '../../services/local/reminder_state_store.dart';
 import '../../services/local/reminder_state_store_impl.dart';
+import '../../services/media/library_enumeration_service.dart';
+import '../../services/media/library_enumeration_service_impl.dart';
+import '../../services/media/media_enumeration_gateway.dart';
 import '../../services/media/media_service.dart';
 import '../../services/media/media_service_impl.dart';
 import '../../services/notifications/notification_service.dart';
@@ -55,7 +58,38 @@ class InitialBinding extends Bindings {
     // json_migration.dart); fresh installs start empty. Settings
     // still reads JSON through the same implementation.
     Get.put<LocalService>(LocalServiceDbImpl(), permanent: true);
-    Get.put<MediaService>(MediaServiceImpl(), permanent: true);
+    // Phase 4.4: the single foreground/background observer.
+    // Permanent: controllers register listeners in onInit and
+    // unregister in onClose. Constructed (not lazy) so attach()
+    // registers the observer at launch; pause flushes pending
+    // session writes centrally (see app_lifecycle_impl.dart).
+    // The change source is best-effort: if native delivery
+    // fails to start, consumers fall back to resume-time
+    // refresh and this stream simply never emits.
+    // (Constructed before the media service since fix plan
+    // Stage 2: the enumeration below invalidates on the same
+    // library-change stream the deck and hub reconcile on.)
+    final AppLifecycleImpl lifecycle = AppLifecycleImpl(
+      local: Get.find<LocalService>(),
+      changeSource: PhotoManagerChangeSource(),
+    );
+    lifecycle.attach();
+    Get.put<AppLifecycle>(lifecycle, permanent: true);
+    // Fix plan Stage 2 (ADR-017): the one-pass library
+    // enumeration — one native MediaStore query per media type,
+    // memoised and shared. The media service serves its pages
+    // and id lookups from it; the shared scan forces one fresh
+    // pass per run. Not registered behind Get: it is a
+    // capability of the media layer, handed to its two
+    // consumers directly (the LibraryChangeSource precedent).
+    final LibraryEnumerationService enumeration = LibraryEnumerationServiceImpl(
+      gateway: NativeMediaEnumerationGateway(),
+      libraryChanged: lifecycle.libraryChanged,
+    );
+    Get.put<MediaService>(
+      MediaServiceImpl(enumeration: enumeration),
+      permanent: true,
+    );
     // Phase 2.3: the single shared thumbnail cache for the app.
     // Controllers receive it through their bindings; the deck
     // warm-up does not need it (it warms the page, not bytes).
@@ -76,23 +110,10 @@ class InitialBinding extends Bindings {
       ScanRepositoryImpl(
         media: Get.find<MediaService>(),
         local: Get.find<LocalService>(),
+        enumeration: enumeration,
       ),
       permanent: true,
     );
-    // Phase 4.4: the single foreground/background observer.
-    // Permanent: controllers register listeners in onInit and
-    // unregister in onClose. Constructed (not lazy) so attach()
-    // registers the observer at launch; pause flushes pending
-    // session writes centrally (see app_lifecycle_impl.dart).
-    // The change source is best-effort: if native delivery
-    // fails to start, consumers fall back to resume-time
-    // refresh and this stream simply never emits.
-    final AppLifecycleImpl lifecycle = AppLifecycleImpl(
-      local: Get.find<LocalService>(),
-      changeSource: PhotoManagerChangeSource(),
-    );
-    lifecycle.attach();
-    Get.put<AppLifecycle>(lifecycle, permanent: true);
     Get.lazyPut<VideoCompressionService>(
       VideoCompressionServiceImpl.new,
       fenix: true,
