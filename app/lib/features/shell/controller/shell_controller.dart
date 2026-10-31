@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import '../../../core/routes/app_routes.dart';
@@ -56,6 +57,11 @@ class ShellController extends GetxController {
 
   /// Current IndexedStack child index.
   int get stackIndex => stackIndexForNav(navIndex.value);
+
+  /// App-exit guard prompt state (ADR-016 addendum): true while
+  /// the view's "Before you go…" confirmation is on screen, so a
+  /// second back press cannot stack a second prompt on top of it.
+  bool exitPromptOpen = false;
 
   /// True once the stack child has been built (and so is retained).
   bool isTabVisited(int stackIndex) => visitedStacks.contains(stackIndex);
@@ -117,21 +123,7 @@ class ShellController extends GetxController {
       return;
     }
     try {
-      final LocalService localService = local ?? Get.find<LocalService>();
-      final MediaService mediaService = media ?? Get.find<MediaService>();
-      final DeckController? deck = Get.isRegistered<DeckController>()
-          ? Get.find<DeckController>()
-          : null;
-      final SmartDeckController? smart = Get.isRegistered<SmartDeckController>()
-          ? Get.find<SmartDeckController>()
-          : null;
-
-      final ReviewLaunch launch = await buildReviewUnion(
-        local: localService,
-        media: mediaService,
-        deck: deck,
-        liveSmartDeck: smart,
-      );
+      final ReviewLaunch launch = await _buildUnion();
 
       Get.toNamed<dynamic>(
         AppRoutes.review,
@@ -142,4 +134,47 @@ class ShellController extends GetxController {
       Get.toNamed<dynamic>(AppRoutes.review);
     }
   }
+
+  /// Builds the Trash tab's union (ADR-015) from the injected
+  /// services plus the live deck controllers when they are
+  /// registered — the one resolution [_pushReview] and the exit
+  /// guard's count share, so both always name the same set.
+  Future<ReviewLaunch> _buildUnion() async {
+    final LocalService localService = local ?? Get.find<LocalService>();
+    final MediaService mediaService = media ?? Get.find<MediaService>();
+    final DeckController? deck = Get.isRegistered<DeckController>()
+        ? Get.find<DeckController>()
+        : null;
+    final SmartDeckController? smart = Get.isRegistered<SmartDeckController>()
+        ? Get.find<SmartDeckController>()
+        : null;
+    return buildReviewUnion(
+      local: localService,
+      media: mediaService,
+      deck: deck,
+      liveSmartDeck: smart,
+    );
+  }
+
+  /// How many items are waiting in Trash right now: the size of
+  /// the ADR-015 union — exactly what opening the Trash tab
+  /// would show (Clean-deck delete marks plus `smart:`-family
+  /// delete marks; the `duplicates` session never joins the
+  /// union). This is the same waiting set the reminder engine's
+  /// state 1 mirrors (ADR-016 §1). A failed read counts as zero:
+  /// the exit guard must never trap the user in the app over a
+  /// count it could not read.
+  Future<int> waitingInTrashCount() async {
+    try {
+      final ReviewLaunch launch = await _buildUnion();
+      return launch.assets.length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Exits the app. The shell is the root route, so the system
+  /// navigator pop IS the exit; kept as one seam so the view's
+  /// exit guard and its tests share the exact action.
+  Future<void> exitApp() => SystemNavigator.pop();
 }

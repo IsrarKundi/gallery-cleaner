@@ -324,11 +324,11 @@ class AppStrings {
   static const String feedbackSubmit = 'feedbackSubmit';
   static const String feedbackThanks = 'feedbackThanks';
 
-  // Review leave-guard (fix plan Stage 1, requirements §4).
-  static const String reviewLeaveTitle = 'reviewLeaveTitle';
-  static const String reviewLeaveMessage = 'reviewLeaveMessage';
-  static const String reviewLeaveOpenReview = 'reviewLeaveOpenReview';
-  static const String reviewLeaveSaveExit = 'reviewLeaveSaveExit';
+  // Home exit-guard (ADR-016 addendum; owner decision 31 Oct 2026).
+  static const String homeExitTitle = 'homeExitTitle';
+  static const String homeExitMessage = 'homeExitMessage';
+  static const String homeExitStay = 'homeExitStay';
+  static const String homeExitExit = 'homeExitExit';
   static const String settingsHapticsTitle = 'settingsHapticsTitle';
   static const String settingsHapticsMessage = 'settingsHapticsMessage';
   static const String settingsReducedMotionTitle = 'settingsReducedMotionTitle';
@@ -700,12 +700,12 @@ class AppStrings {
     feedbackHint: 'What should we do better?',
     feedbackSubmit: 'Send feedback',
     feedbackThanks: 'Thanks for telling us',
-    reviewLeaveTitle: 'Leave with photos waiting?',
-    reviewLeaveMessage:
-        '{count} photos are still waiting in Review. They stay '
-        'marked until you keep or delete them.',
-    reviewLeaveOpenReview: 'Open Review',
-    reviewLeaveSaveExit: 'Save and Exit',
+    homeExitTitle: 'Before you go…',
+    homeExitMessage:
+        'You still have {count} photos waiting in Trash. '
+        "Everything you've decided is saved.",
+    homeExitStay: 'Stay',
+    homeExitExit: 'Exit',
     settingsHapticsTitle: 'Haptics',
     settingsHapticsMessage:
         'A light tick on each mark, a medium click when a delete is '

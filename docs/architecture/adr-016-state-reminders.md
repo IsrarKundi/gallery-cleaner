@@ -154,3 +154,42 @@ is kept as the record of what Stage 1 shipped. A priming sheet
 remains a legitimate pattern for a future ask the user did not
 start (none exists today); it must not return to the Settings
 toggle.
+
+## Addendum — 31 Oct 2026: decision 10 SUPERSEDED — the popup moves to Home app-exit (owner decision)
+
+The owner, testing on a real device, rejected the Review
+leave-guard's placement and its copy: "Open Review" (while
+already standing in Review) and "Save and Exit" (when the marks
+were already saved automatically) read as alien — neither button
+said plainly what it does. His ruling: the popup leaves Review
+entirely and exists in exactly one place — the user is on Home
+(the shell, no pushed route on top) and presses the Android back
+button to exit the app, while items are still waiting in Trash.
+Leaving Review (back control or bottom nav) never prompts again;
+Review returns to its pre-guard exits, with selection-cancel
+still taking precedence on back. If nothing is waiting, the back
+press exits the app silently — no popup, ever.
+
+Final copy is the owner's, character-exact:
+
+- Title: "Before you go…"
+- Body: "You still have {count} photos waiting in Trash.
+  Everything you've decided is saved."
+- Buttons: "Stay" (dismisses the popup; the user stays in the
+  app) and "Exit" (exits the app via `SystemNavigator.pop()`).
+
+The count is the ADR-015 Trash-tab waiting set — the same set
+decision 1's waiting state mirrors: Clean-deck delete marks plus
+`smart:`-family session delete marks, `duplicates` session
+excluded. Implementation reuses the shell's own union builder
+(`buildReviewUnion`, the set tapping Trash actually opens Review
+with), so the number always matches what the user would see
+waiting. The count includes videos when videos are waiting; the
+owner's text says "photos" and is kept exactly as he wrote it. A
+failed count read counts as zero (silent exit): the guard must
+never trap the user in the app over a count it could not read.
+Decision 10's original text above is kept as the record of what
+Stage 1 shipped; the `reviewLeave*` strings and the Review-side
+prompt state are removed, replaced by the `homeExit*` strings and
+the guard at the shell root (`PopScope`, the codebase's
+established back-interception pattern).
