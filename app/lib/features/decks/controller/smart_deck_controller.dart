@@ -130,6 +130,10 @@ class SmartDeckController extends GetxController {
 
   SmartDeckId? get deckId => _launch?.deckId;
 
+  /// Title override for deck-less launches (ADR-027 albums);
+  /// null for smart decks and the month launch.
+  String? get launchTitle => _launch?.customTitle;
+
   MediaAsset? get currentAsset {
     final int index = currentIndex.value;
     if (index < 0 || index >= queue.length) {

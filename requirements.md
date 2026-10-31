@@ -139,6 +139,13 @@ AMENDED 26 Oct 2026 (owner decision): the Smart decks hub is labelled "Albums" i
 app UI, and a single smart deck screen is labelled "Album". The internal feature name
 ("smart decks") and code names are unchanged — only the user-visible labels change.
 
+AMENDED 31 Oct 2026 (owner instruction, ADR-027): the hub's "See all (N) ›" opens an
+All Albums screen listing every device album from the media service (cover = the
+album's latest asset, name, item count), with the hub's own loading/denied/empty
+states. Tapping an album opens that album's photos as a swipe deck through the
+smart-deck route (session key `smart:album:<id>`, marks-only like every smart deck);
+no album photo-grid screen exists.
+
 Duplicate / similar grouping with changeable keeper (app suggests best shot, user may pick another);
 blurry and dark photo detection; smart decks (Screenshots, WhatsApp, Downloads, Videos, Large
 photos, Old photos 90+ days, Bursts); Maybe snooze (7 / 14 / 30 days); goals

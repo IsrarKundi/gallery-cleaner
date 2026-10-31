@@ -238,13 +238,33 @@ class _SmartDecksSection extends StatelessWidget {
                 ),
               ),
               SizedBox(width: context.sizes.xs),
-              Text(
-                AppStrings.tr(AppStrings.seeAllDecks, <String, String>{
-                  'count': visibleDecks.length.toString(),
-                }),
-                style: context.textStyles.labelMedium.copyWith(
-                  color: context.palette.primary,
-                  fontWeight: FontWeight.w700,
+              // ADR-027: the "See all" is a real target (48dp
+              // hit area per design.md §9) opening All Albums;
+              // the text style is unchanged.
+              InkWell(
+                onTap: controller.openAllAlbums,
+                borderRadius: BorderRadius.circular(context.sizes.radiusSm),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: context.sizes.hitArea,
+                    minWidth: context.sizes.hitArea,
+                  ),
+                  child: Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: context.sizes.sm,
+                      ),
+                      child: Text(
+                        AppStrings.tr(AppStrings.seeAllDecks, <String, String>{
+                          'count': visibleDecks.length.toString(),
+                        }),
+                        style: context.textStyles.labelMedium.copyWith(
+                          color: context.palette.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],

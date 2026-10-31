@@ -24,6 +24,7 @@ class AppStrings {
   static const String screenDecks = 'screenDecks';
   static const String screenDuplicates = 'screenDuplicates';
   static const String screenSmartDeck = 'screenSmartDeck';
+  static const String screenAlbums = 'screenAlbums';
 
   // Bottom navigation.
   static const String navClean = 'navClean';
@@ -423,6 +424,7 @@ class AppStrings {
     screenDecks: 'Albums',
     screenDuplicates: 'Duplicates',
     screenSmartDeck: 'Album',
+    screenAlbums: 'Albums',
     navClean: 'Clean',
     navDecks: 'Albums',
     navTrash: 'Trash',

@@ -102,7 +102,8 @@ class SmartDeckView extends GetView<SmartDeckController> {
 
         return AppScaffold(
           title: deckId == null
-              ? AppStrings.tr(AppStrings.screenSmartDeck)
+              ? (controller.launchTitle ??
+                    AppStrings.tr(AppStrings.screenSmartDeck))
               : AppStrings.tr(smartDeckTitleKey(deckId)),
           actions: <Widget>[
             if (showBar && total > 0)

@@ -1,9 +1,11 @@
 import 'package:get/get.dart';
 
 import '../../core/routes/app_routes.dart';
+import '../../features/decks/binding/albums_binding.dart';
 import '../../features/decks/binding/decks_binding.dart';
 import '../../features/decks/binding/duplicates_binding.dart';
 import '../../features/decks/binding/smart_deck_binding.dart';
+import '../../features/decks/view/albums_view.dart';
 import '../../features/decks/view/decks_view.dart';
 import '../../features/decks/view/duplicates_view.dart';
 import '../../features/decks/view/smart_deck_view.dart';
@@ -103,6 +105,11 @@ class AppPages {
       name: AppRoutes.smartDeck,
       page: SmartDeckView.new,
       binding: SmartDeckBinding(),
+    ),
+    GetPage<dynamic>(
+      name: AppRoutes.albums,
+      page: AlbumsView.new,
+      binding: AlbumsBinding(),
     ),
     GetPage<dynamic>(
       name: AppRoutes.settings,

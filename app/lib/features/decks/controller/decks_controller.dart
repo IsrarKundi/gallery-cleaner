@@ -642,6 +642,13 @@ class DecksController extends GetxController {
     );
   }
 
+  /// Opens the All Albums screen (ADR-027) — the destination of
+  /// the Smart decks header's "See all" (owner instruction
+  /// 31 Oct 2026).
+  void openAllAlbums() {
+    Get.toNamed<dynamic>(AppRoutes.albums);
+  }
+
   /// Opens a deck: duplicates go to their own screen; every other
   /// deck opens as a swipe deck with its precomputed assets.
   void openDeck(SmartDeckId id) {

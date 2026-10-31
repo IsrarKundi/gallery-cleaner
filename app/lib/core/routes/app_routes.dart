@@ -41,6 +41,11 @@ class AppRoutes {
   /// travel as route arguments (see SmartDeckLaunch).
   static const String smartDeck = '/smart-deck';
 
+  /// All Albums screen (owner instruction 31 Oct 2026, ADR-027):
+  /// every device album from the hub's "See all" — tapping one
+  /// opens it as a swipe deck via the smart-deck route.
+  static const String albums = '/albums';
+
   /// Settings screen (Phase 3A).
   static const String settings = '/settings';
 

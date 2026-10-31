@@ -123,6 +123,12 @@ For Klara — a utility, not a portfolio piece — borrow the boring parts: one 
   unhappy path, which swaps the SAME sheet to the feedback form (sheets never stack). The
   artwork's own soft gradient (the stars) is the owner's accepted asset, not UI chrome —
   §2's flat rule for surfaces is unchanged.
+- **All Albums screen (31 Oct 2026, ADR-027):** the hub "See all" destination — a plain
+  list of the §6 list-row shape: leading square cover thumbnail (the album's latest
+  asset, shared thumbnail service), album name, trailing item count. Rows follow the
+  album picker sheet's precedent (per-row dividers). Loading is skeleton rows; denied
+  and empty reuse the hub's states verbatim. No new component, colour or size — the
+  screen is existing pieces only.
 - **Duplicates screen (Stage 7, ADR-022):** results first — one summary line (non-keeper
   count + size), one explanation line for the whole screen, Select all / Deselect all as
   tertiary text actions; group cards headed by non-keeper count + size, their photos
