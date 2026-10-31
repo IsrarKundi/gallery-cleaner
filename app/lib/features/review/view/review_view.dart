@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 
 import '../../../core/constants/app_icons.dart';
@@ -255,13 +256,36 @@ class ReviewView extends GetView<ReviewController> {
           body: isEmpty
               ? (controller.isLoading.value
                     ? const ReviewLoadingSkeleton()
-                    : EmptyView(
-                        icon: AppIcons.review,
-                        title: AppStrings.tr(AppStrings.reviewEmptyTitle),
-                        message: AppStrings.tr(AppStrings.reviewEmptyMessage),
-                        // ctaLabel: AppStrings.tr(AppStrings.actionBackToDeck),
-                        // onCta: controller.goToDeck,
-                      ))
+                    : Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SvgPicture.asset(
+                              "assets/images/img_empty_trash.svg",
+                              height: 130,
+                            ),
+                            Text(
+                              AppStrings.tr(AppStrings.reviewEmptyTitle),
+                              style: context.textStyles.titleLarge,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              AppStrings.tr(AppStrings.reviewEmptyMessage),
+                              style: context.textStyles.bodyMedium,
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      )
+                // EmptyView(
+                //     icon: AppIcons.review,
+                //     title: AppStrings.tr(AppStrings.reviewEmptyTitle),
+                //     message: AppStrings.tr(AppStrings.reviewEmptyMessage),
+                //     // ctaLabel: AppStrings.tr(AppStrings.actionBackToDeck),
+                //     // onCta: controller.goToDeck,
+                //   )
+                )
               : Column(
                   children: <Widget>[
                     // const SizedBox(height: 10),

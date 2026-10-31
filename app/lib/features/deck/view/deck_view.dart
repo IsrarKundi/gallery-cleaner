@@ -467,7 +467,7 @@ class _ReadyBody extends StatelessWidget {
           // honest states with the numbers the code already
           // calculates. The other switched-off F-29 surfaces
           // stay exactly as the owner left them.
-          Obx(() => SpaceMeterBar(totals: controller.meter)),
+          // Obx(() => SpaceMeterBar(totals: controller.meter)),
           // Phase 3.1: the stack owns the thumbnail Obx, so preload
           // arrivals rebuild only the stack — this Obx reads the
           // queue and index, never the thumbnail maps.
