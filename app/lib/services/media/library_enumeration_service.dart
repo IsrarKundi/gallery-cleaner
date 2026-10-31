@@ -16,6 +16,13 @@
 // memoised until [invalidate] — permission change or a library
 // change event — or until a forced fresh pass replaces it.
 // A failed pass is never memoised.
+//
+// The pass can also be read one media type at a time
+// ([enumerateImages] / [enumerateVideos], ADR-026): the two
+// shapes share the SAME underlying gateway calls — a merged
+// reader and a per-type reader arriving together still cost one
+// call per type — so the library scan can page the images the
+// moment the images pass lands instead of waiting for both.
 
 import '../../core/utils/result.dart';
 import 'enumerated_asset.dart';
@@ -42,6 +49,20 @@ abstract class LibraryEnumerationService {
   /// [forceRefresh] is set. Concurrent callers join the single
   /// in-flight pass instead of starting another.
   Future<Result<LibraryEnumeration>> enumerate({bool forceRefresh = false});
+
+  /// The images half of the pass alone, in the pass's own order
+  /// (MediaStore id descending). Shares the underlying gateway
+  /// call with [enumerate]: memoised, in-flight-joined and
+  /// invalidated exactly as the merged read is (ADR-026). A
+  /// failure of the other type does not fail this read.
+  Future<Result<List<EnumeratedAsset>>> enumerateImages({
+    bool forceRefresh = false,
+  });
+
+  /// The videos half of the pass alone — see [enumerateImages].
+  Future<Result<List<EnumeratedAsset>>> enumerateVideos({
+    bool forceRefresh = false,
+  });
 
   /// Drops the memoised pass; the next [enumerate] re-queries.
   /// A pass already in flight still delivers to its callers but

@@ -51,17 +51,22 @@ class EnumeratedAsset {
   /// File size in bytes, from the enumeration query itself.
   final int sizeBytes;
 
-  /// Dimensions the consumers see: the MediaStore columns with
-  /// any zero repaired from the file header by the native pass,
-  /// as the plugin's entity conversion repaired them.
+  /// Dimensions the consumers see: the MediaStore columns
+  /// exactly as stored, zeroes included. The native pass takes
+  /// cursor values as-is and never opens a file to repair them
+  /// (ADR-026, following Cleanup's enumerator) — before ADR-026
+  /// a zero was repaired from the file header, mirroring the
+  /// plugin; that repair is what could stall the pass.
   final int width;
   final int height;
 
-  /// The MediaStore WIDTH column exactly as stored, before the
-  /// header repair that produced [width]. The plugin's paged
-  /// lists excluded images whose stored width or height was 0
-  /// (see [isPluginListRow]); the repaired values cannot
-  /// reproduce that rule, so the raw columns ride along.
+  /// The MediaStore WIDTH column exactly as stored. The plugin's
+  /// paged lists excluded images whose stored width or height
+  /// was 0 (see [isPluginListRow]); the rule is written on the
+  /// raw columns, so they ride along under their own names.
+  /// Since ADR-026 removed the header repair these always equal
+  /// [width] / [height] in rows the native pass produces; both
+  /// fields stay because the list rule is judged on them.
   final int storeWidth;
 
   /// The MediaStore HEIGHT column exactly as stored — see
@@ -101,8 +106,7 @@ class EnumeratedAsset {
 /// rows, no dimension condition for videos — and wipe. never
 /// ignored it (default FilterOption), so an image whose STORED
 /// width or height is 0 never appeared in a page or a scan,
-/// even when its file header carries real dimensions (the
-/// repair visible in [EnumeratedAsset.width] / `height`).
+/// even when its file header carries real dimensions.
 /// List serving applies this rule; id resolution does NOT —
 /// the plugin's per-id entity path was unfiltered, so a
 /// stored-dimension-zero image still resolves by id.

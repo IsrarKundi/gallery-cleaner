@@ -85,7 +85,14 @@ outranks Cleanup's choices wherever the two differ.
    as the plugin repaired from EXIF/retriever.
    (Substitution noted: bounds decode reads the same header
    dimensions without depending on a transitive plugin
-   dependency for EXIF classes.) Cleanup's `_size > 0`
+   dependency for EXIF classes.) **SUPERSEDED in part by
+   ADR-026 (31 Oct 2026): the header repair described here is
+   REMOVED — it opened files inside the enumeration loop and
+   could stall the whole pass on a real library; width/height
+   are now the raw cursor values, as in Cleanup's enumerator.
+   The rest of this section (list set, store-dimension rule,
+   id resolution, file-gone flagging) stands.** Cleanup's
+   `_size > 0`
    selection is NOT adopted: the plan's change list does not
    drop assets, and a size-0 row the plugin listed must stay
    listed.

@@ -5,7 +5,11 @@
 // pipeline; each run forces exactly one fresh pass; and two
 // repository consumers starting together share one run and
 // one pass (the already-running guard, end to end).
+// ADR-026: delivery is per type — image pages land while the
+// videos pass is still pending, a videos failure after images
+// is a partial scan, an images failure is the page-0 shape.
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -15,6 +19,7 @@ import 'package:klara/services/detection/analysis_worker.dart';
 import 'package:klara/services/detection/library_scanner.dart';
 import 'package:klara/services/detection/blur_detection.dart';
 import 'package:klara/services/detection/photo_assessment.dart';
+import 'package:klara/services/detection/scan_memberships.dart';
 import 'package:klara/services/detection/thumbnail_analysis.dart';
 import 'package:klara/services/detection/scan_repository_impl.dart';
 import 'package:klara/services/local/local_service_impl.dart';
@@ -88,11 +93,22 @@ class _FakeEnumerationGateway implements MediaEnumerationGateway {
   List<EnumeratedAsset> videos = <EnumeratedAsset>[];
   bool fail = false;
 
+  /// Per-type controls (ADR-026): fail or hold one type's pass
+  /// while the other completes normally.
+  bool failImages = false;
+  bool failVideos = false;
+  Completer<void>? imagesGate;
+  Completer<void>? videosGate;
+
   @override
   Future<List<EnumeratedAsset>> enumerateImages() async {
     imageCalls++;
-    if (fail) {
+    if (fail || failImages) {
       throw StateError('native query failed');
+    }
+    final Completer<void>? gate = imagesGate;
+    if (gate != null) {
+      await gate.future;
     }
     return images;
   }
@@ -100,8 +116,12 @@ class _FakeEnumerationGateway implements MediaEnumerationGateway {
   @override
   Future<List<EnumeratedAsset>> enumerateVideos() async {
     videoCalls++;
-    if (fail) {
+    if (fail || failVideos) {
       throw StateError('native query failed');
+    }
+    final Completer<void>? gate = videosGate;
+    if (gate != null) {
+      await gate.future;
     }
     return videos;
   }
@@ -267,9 +287,11 @@ void main() {
       '10',
       '5',
     });
-    // The progress total is the list-visible set, the same
-    // length the old plugin-paged scan would have counted.
-    expect(totals, everyElement(3));
+    // The progress total grows as results land (ADR-026): the
+    // images page reports the images count (1 list-visible),
+    // the videos page the combined list-visible total (3) —
+    // the same final length the old plugin-paged scan counted.
+    expect(totals, <int?>[1, 3]);
     expect(gateway.imageCalls, 1);
     expect(media.getAssetsCalls, 0);
   });
@@ -289,6 +311,108 @@ void main() {
 
   test('a failed pass is a page-0 failure: no pages, no results', () async {
     gateway.fail = true;
+    int pages = 0;
+    final LibraryScan scan = await scanner().scan(
+      onPage: (List<MediaAsset> page, Map<String, PhotoAssessment> fresh) {
+        pages++;
+      },
+    );
+    expect(scan.pageFailed, isTrue);
+    expect(scan.scanned, 0);
+    expect(scan.assets, isEmpty);
+    expect(pages, 0);
+    expect(media.getAssetsCalls, 0);
+  });
+
+  test('image pages arrive while the videos pass is still '
+      'pending (ADR-026)', () async {
+    gateway.images = <EnumeratedAsset>[
+      for (int i = 1; i <= 60; i++) _image('$i'),
+    ];
+    gateway.videos = <EnumeratedAsset>[_video('100'), _video('101')];
+    gateway.videosGate = Completer<void>();
+    final List<List<String>> pages = <List<String>>[];
+    bool scanDone = false;
+    final Future<LibraryScan> scanFuture = scanner()
+        .scan(
+          onPage: (List<MediaAsset> page, Map<String, PhotoAssessment> fresh) {
+            pages.add(page.map((MediaAsset a) => a.id).toList());
+          },
+        )
+        .whenComplete(() {
+          scanDone = true;
+        });
+    // Wait (real time: the local store does real IO) until the
+    // image pages have been delivered.
+    for (int i = 0; i < 400 && pages.length < 2; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+    // Both image pages (50 + 10) landed although the videos
+    // pass has not returned yet — and the scan is still running.
+    expect(pages.length, 2);
+    expect(pages[0].length, 50);
+    expect(pages[1].length, 10);
+    expect(scanDone, isFalse);
+    expect(gateway.videoCalls, 1);
+    gateway.videosGate!.complete();
+    final LibraryScan scan = await scanFuture;
+    expect(scanDone, isTrue);
+    expect(scan.pageFailed, isFalse);
+    expect(scan.scanned, 62);
+    expect(pages.length, 3);
+    expect(pages[2], <String>['101', '100']);
+  });
+
+  test('a videos pass failing after images is a partial scan; '
+      'the snapshot stands (ADR-026)', () async {
+    const ScanMemberships seeded = ScanMemberships(
+      algorithmVersion: scanMembershipAlgorithmVersion,
+      assetInfos: <String, AssetInfo>{
+        'seed-1': AssetInfo(
+          assetId: 'seed-1',
+          type: MediaAssetType.image,
+          width: 10,
+          height: 10,
+          sizeBytes: 5,
+          modifiedDateMs: null,
+          isEdited: false,
+          isScreenshot: false,
+        ),
+      },
+      groups: <ScanGroup>[],
+      duplicateReferences: <DuplicateReference>[],
+    );
+    await local.saveScanMemberships(seeded);
+    gateway.images = <EnumeratedAsset>[_image('3'), _image('2'), _image('1')];
+    gateway.failVideos = true;
+    final LibraryScan scan = await scanner().scan();
+    // The delivered images stand as a partial result — the same
+    // shape a mid-scan page failure has on the paged source.
+    expect(scan.pageFailed, isTrue);
+    expect(scan.cancelled, isFalse);
+    expect(scan.scanned, 3);
+    expect(scan.assets.map((MediaAsset a) => a.id).toList(), <String>[
+      '3',
+      '2',
+      '1',
+    ]);
+    // The previous snapshot is the result's memberships, and
+    // the persisted one was not overwritten.
+    expect(scan.memberships.assetInfos.keys.toList(), <String>['seed-1']);
+    final Result<ScanMemberships> reloaded = await local.loadScanMemberships();
+    expect(
+      reloaded.fold(
+        onSuccess: (ScanMemberships m) => m.assetInfos.keys.toList(),
+        onFailure: (_) => <String>[],
+      ),
+      <String>['seed-1'],
+    );
+  });
+
+  test('an images pass failing is a page-0 failure even when '
+      'videos are fine (ADR-026)', () async {
+    gateway.failImages = true;
+    gateway.videos = <EnumeratedAsset>[_video('1')];
     int pages = 0;
     final LibraryScan scan = await scanner().scan(
       onPage: (List<MediaAsset> page, Map<String, PhotoAssessment> fresh) {

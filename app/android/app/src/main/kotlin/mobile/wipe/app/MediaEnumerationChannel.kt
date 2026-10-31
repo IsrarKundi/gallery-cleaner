@@ -2,8 +2,6 @@ package mobile.wipe.app
 
 import android.content.ContentResolver
 import android.database.Cursor
-import android.graphics.BitmapFactory
-import android.media.MediaMetadataRetriever
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -15,36 +13,49 @@ import java.util.concurrent.Executors
 
 /**
  * Wipe.'s own one-pass library enumeration (fix plan Stage 2,
- * ADR-017). photo_manager 3.12 cannot return a file's size in the
- * same pass as the asset list (its entity map has no size field;
- * `fileSize` is one ContentResolver query per id), so the list
- * pass lives here instead: ONE MediaStore query per media type,
- * on a background executor, returning every field the Dart side
- * needs — id, display name, bucket id/name, size, dimensions,
- * date added/taken/modified, favourite flag, relative path.
+ * ADR-017; enumeration rules revised in ADR-026). photo_manager
+ * 3.12 cannot return a file's size in the same pass as the asset
+ * list (its entity map has no size field; `fileSize` is one
+ * ContentResolver query per id), so the list pass lives here
+ * instead: ONE MediaStore query per media type, returning every
+ * field the Dart side needs — id, display name, bucket id/name,
+ * size, dimensions, date added/taken/modified, favourite flag,
+ * relative path.
  *
- * The row semantics deliberately mirror photo_manager's Android
- * cursor conversion, because the Dart side used to be fed by it:
+ * The row semantics follow Cleanup's enumerator (teardown
+ * notes/pipeline.md Q1), not a plugin's cursor conversion:
+ * - rows carry the MediaStore cursor values AS-IS. Width and
+ *   height are the stored columns, zeroes included — nothing is
+ *   repaired, and NO file is ever opened during enumeration:
+ *   no header decode, no metadata retriever. Cleanup's asset
+ *   records take `originalSize` straight from the cursor the
+ *   same way. (ADR-017 §4 originally mirrored photo_manager's
+ *   header repair; on a real library that repair opened files
+ *   inside the cursor loop and could stall the whole pass —
+ *   ADR-026 removed it on purpose.)
  * - rows whose backing file no longer exists are FLAGGED
- *   (`fileExists=false`), not dropped here; Dart drops them,
- *   exactly as the plugin skipped them in paged lists;
- * - a zero width or height is repaired from the file header
- *   (bounds decode for images, metadata retriever for videos),
- *   as the plugin repaired it from EXIF/retriever;
+ *   (`fileExists=false` — a stat, never an open), not dropped
+ *   here; Dart drops them for asset lists.
  * - the RAW store dimensions ride along (`storeWidth` /
  *   `storeHeight`): the plugin's paged lists excluded images
  *   whose store WIDTH or HEIGHT was 0 (its size condition,
  *   which wipe. never ignored), so Dart applies that rule at
- *   list level from the raw columns — the repaired values
- *   alone cannot reproduce it. Id resolution never applies
- *   it: the plugin's per-id path was unfiltered;
+ *   list level from the raw columns. Id resolution never
+ *   applies it: the plugin's per-id path was unfiltered. With
+ *   the repair gone, `width`/`height` now always equal the
+ *   store columns; both fields stay because the Dart rule is
+ *   written on the raw ones.
+ * - the two type passes run CONCURRENTLY on a small pool, as
+ *   Cleanup fans its per-type queries out on one scope — Dart
+ *   asks for both at once and can consume the images pass
+ *   before the videos pass lands (ADR-026).
  * - sort is `_id DESC` per pass, the plugin's default order
  *   (its Dart FilterOptionGroup carries no explicit orders, and
  *   empty orders fall back to `_id DESC` natively); Dart merges
  *   the two passes by id, which reproduces the mixed-type order.
  *
- * No file content is read beyond header metadata for the
- * zero-dimension repair; no photo bytes ever cross this channel.
+ * No file content is read at all; no photo bytes ever cross
+ * this channel.
  */
 class MediaEnumerationChannel(
     private val resolver: ContentResolver,
@@ -56,25 +67,27 @@ class MediaEnumerationChannel(
         private const val METHOD_VIDEOS = "enumerateVideos"
     }
 
-    private val executor = Executors.newSingleThreadExecutor()
+    // Two threads: one per media type, so the images and videos
+    // passes genuinely overlap instead of queueing behind each
+    // other (ADR-026; Cleanup fans its queries out the same way).
+    private val executor = Executors.newFixedThreadPool(2)
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
-            METHOD_IMAGES -> enumerate(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, result)
-            METHOD_VIDEOS -> enumerate(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, false, result)
+            METHOD_IMAGES -> enumerate(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, result)
+            METHOD_VIDEOS -> enumerate(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, result)
             else -> result.notImplemented()
         }
     }
 
     private fun enumerate(
         uri: android.net.Uri,
-        isImage: Boolean,
         result: MethodChannel.Result,
     ) {
         executor.execute {
             try {
-                val rows = query(uri, isImage)
+                val rows = query(uri)
                 mainHandler.post { result.success(rows) }
             } catch (e: Exception) {
                 // No exception text crosses the channel: Dart maps
@@ -84,7 +97,7 @@ class MediaEnumerationChannel(
         }
     }
 
-    private fun query(uri: android.net.Uri, isImage: Boolean): List<Map<String, Any?>> {
+    private fun query(uri: android.net.Uri): List<Map<String, Any?>> {
         val columns = mutableListOf(
             MediaStore.MediaColumns._ID,
             MediaStore.MediaColumns.DISPLAY_NAME,
@@ -97,7 +110,6 @@ class MediaEnumerationChannel(
             MediaStore.MediaColumns.DATE_TAKEN,
             MediaStore.MediaColumns.DATE_MODIFIED,
             MediaStore.MediaColumns.DATA,
-            MediaStore.MediaColumns.MIME_TYPE,
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             columns.add(MediaStore.MediaColumns.RELATIVE_PATH)
@@ -115,13 +127,13 @@ class MediaEnumerationChannel(
             "${MediaStore.MediaColumns._ID} DESC",
         )?.use { cursor ->
             while (cursor.moveToNext()) {
-                rows.add(row(cursor, isImage))
+                rows.add(row(cursor))
             }
         }
         return rows
     }
 
-    private fun row(cursor: Cursor, isImage: Boolean): Map<String, Any?> {
+    private fun row(cursor: Cursor): Map<String, Any?> {
         fun long(column: String): Long {
             val index = cursor.getColumnIndex(column)
             return if (index >= 0) cursor.getLong(index) else 0L
@@ -135,26 +147,20 @@ class MediaEnumerationChannel(
             return if (index >= 0) cursor.getString(index) else null
         }
 
+        // Cursor values as-is (ADR-026): a stored zero stays a
+        // zero. Nothing here opens the file — the only file
+        // touch in the whole pass is the exists() stat below.
         val storeWidth = int(MediaStore.MediaColumns.WIDTH)
         val storeHeight = int(MediaStore.MediaColumns.HEIGHT)
-        var width = storeWidth
-        var height = storeHeight
         val data = string(MediaStore.MediaColumns.DATA)
-        if (width == 0 || height == 0) {
-            val repaired = repairDimensions(data, isImage, string(MediaStore.MediaColumns.MIME_TYPE))
-            if (repaired != null) {
-                width = repaired.first
-                height = repaired.second
-            }
-        }
         return mapOf(
             "id" to long(MediaStore.MediaColumns._ID),
             "title" to (string(MediaStore.MediaColumns.DISPLAY_NAME) ?: ""),
             "bucketId" to long(MediaStore.MediaColumns.BUCKET_ID),
             "bucketName" to (string(MediaStore.MediaColumns.BUCKET_DISPLAY_NAME) ?: ""),
             "sizeBytes" to long(MediaStore.MediaColumns.SIZE),
-            "width" to width,
-            "height" to height,
+            "width" to storeWidth,
+            "height" to storeHeight,
             "storeWidth" to storeWidth,
             "storeHeight" to storeHeight,
             // DATE_ADDED / DATE_MODIFIED are seconds, DATE_TAKEN
@@ -174,52 +180,5 @@ class MediaEnumerationChannel(
             // paths were NOT skipped); Dart applies the same rule.
             "fileExists" to (data.isNullOrBlank() || File(data).exists()),
         )
-    }
-
-    /**
-     * Zero-dimension repair, mirroring the plugin's fallback:
-     * images via header bounds (skipped for SVG, whose header has
-     * no pixel size), videos via the metadata retriever. Any
-     * failure keeps the cursor's zeroes.
-     */
-    private fun repairDimensions(
-        data: String?,
-        isImage: Boolean,
-        mimeType: String?,
-    ): Pair<Int, Int>? {
-        if (data.isNullOrBlank()) {
-            return null
-        }
-        return try {
-            if (isImage) {
-                if (mimeType?.contains("svg") == true) {
-                    null
-                } else {
-                    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    BitmapFactory.decodeFile(data, options)
-                    if (options.outWidth > 0 && options.outHeight > 0) {
-                        options.outWidth to options.outHeight
-                    } else {
-                        null
-                    }
-                }
-            } else {
-                val retriever = MediaMetadataRetriever()
-                try {
-                    retriever.setDataSource(data)
-                    val w = retriever.extractMetadata(
-                        MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH,
-                    )?.toIntOrNull() ?: 0
-                    val h = retriever.extractMetadata(
-                        MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT,
-                    )?.toIntOrNull() ?: 0
-                    if (w > 0 && h > 0) w to h else null
-                } finally {
-                    retriever.release()
-                }
-            }
-        } catch (e: Exception) {
-            null
-        }
     }
 }

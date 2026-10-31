@@ -6,9 +6,12 @@
 // (the hub shows metadata decks as pages land) with progress
 // through [onProgress]. With a [LibraryEnumerationService] wired
 // (production, Stage 2) the page source is ONE fresh enumeration
-// pass per run, sliced into pages; otherwise the paged plugin
-// source remains (unit tests, degraded setups). Cancellation and
-// pause are honoured at page boundaries exactly as before.
+// pass per run — one gateway query per media type, requested
+// together — delivered per type as each type's pass lands
+// (images, then videos; ADR-026), each type's rows sliced into
+// pages; otherwise the paged plugin source remains (unit tests,
+// degraded setups). Cancellation and pause are honoured at page
+// boundaries exactly as before.
 //
 // Phase B — matching (Stage 4). Only a COMPLETE enumeration gets
 // here. The scanner first compares the live asset-info facts
@@ -118,8 +121,9 @@ class LibraryScanner {
   final LocalService local;
 
   /// The one-pass enumeration (Stage 2), when wired: each scan
-  /// run forces one fresh pass and pages over its list. Null
-  /// keeps the original paged plugin source.
+  /// run forces one fresh pass and pages over its per-type
+  /// results as they land (ADR-026). Null keeps the original
+  /// paged plugin source.
   final LibraryEnumerationService? enumeration;
 
   /// Batch runners, injectable so tests can prove the degraded
@@ -216,19 +220,26 @@ class LibraryScanner {
     final List<MediaAsset> all = <MediaAsset>[];
     bool pageFailed = false;
 
-    // Stage 2 (ADR-017): the enumeration page source. One fresh
-    // pass, forced per run; the loop below then slices it into
-    // pages. A failed pass returns the page-0-failure shape
-    // directly (no pages delivered, nothing persisted).
-    List<MediaAsset>? enumeratedAssets;
+    // ---- Phase A: enumeration pages. ----
     if (enumeration != null) {
+      // Stage 2 (ADR-017) source, ADR-026 delivery: both type
+      // passes are requested up front (they run concurrently on
+      // the native side), but pages are delivered per type as
+      // each pass lands — images first, then videos — so the
+      // hub starts filling while the other pass is still
+      // running, the shape Cleanup's progressive results have.
+      // The old shape awaited the merged pass and delivered
+      // nothing until the whole library was read.
       if (cancelled()) {
         return cancelledResult(all);
       }
-      final Result<LibraryEnumeration> enumerated = await enumeration!
-          .enumerate(forceRefresh: true);
-      enumeratedAssets = enumerated.fold(
-        onSuccess: (LibraryEnumeration data) => data.rows
+      final Future<Result<List<EnumeratedAsset>>> imagesPass = enumeration!
+          .enumerateImages(forceRefresh: true);
+      final Future<Result<List<EnumeratedAsset>>> videosPass = enumeration!
+          .enumerateVideos(forceRefresh: true);
+
+      List<MediaAsset> convert(List<EnumeratedAsset> rows) {
+        return rows
             .where(
               (EnumeratedAsset row) => row.fileExists && isPluginListRow(row),
             )
@@ -238,10 +249,43 @@ class LibraryScanner {
                 albumNameFallback: wholeLibraryAlbumName,
               ),
             )
-            .toList(),
+            .toList();
+      }
+
+      int pagesDelivered = 0;
+
+      // Delivers [assets] in page-size slices, honouring the
+      // cancel/pause gates per page exactly as the paged source
+      // does. Returns false when cancelled mid-delivery.
+      Future<bool> deliver(List<MediaAsset> assets) async {
+        for (int start = 0; start < assets.length; start += pageSize) {
+          if (cancelled()) {
+            return false;
+          }
+          if (waitIfPaused != null && !await waitIfPaused()) {
+            return false;
+          }
+          final int end = start + pageSize > assets.length
+              ? assets.length
+              : start + pageSize;
+          final List<MediaAsset> pageAssets = assets.sublist(start, end);
+          all.addAll(pageAssets);
+          pagesDelivered++;
+          onPage?.call(pageAssets, const <String, PhotoAssessment>{});
+          onProgress?.call(all.length, estimatedTotal);
+        }
+        return true;
+      }
+
+      final Result<List<EnumeratedAsset>> imagesResult = await imagesPass;
+      final List<MediaAsset>? imageAssets = imagesResult.fold(
+        onSuccess: convert,
         onFailure: (_) => null,
       );
-      if (enumeratedAssets == null) {
+      if (imageAssets == null) {
+        // A failed images pass is the page-0 failure shape,
+        // unchanged: no pages delivered, nothing persisted —
+        // the videos pass is never consumed.
         return LibraryScan(
           assets: const <MediaAsset>[],
           assessments: const <String, PhotoAssessment>{},
@@ -251,52 +295,73 @@ class LibraryScanner {
           degraded: degraded,
         );
       }
-      estimatedTotal = enumeratedAssets.isEmpty
-          ? null
-          : enumeratedAssets.length;
-    }
+      // The total is what is known so far: the images count
+      // until the videos pass lands, the combined count after.
+      estimatedTotal = imageAssets.isEmpty ? null : imageAssets.length;
+      if (!await deliver(imageAssets)) {
+        return cancelledResult(all);
+      }
 
-    // ---- Phase A: enumeration pages. ----
-    int page = 0;
-    while (true) {
-      if (cancelled()) {
-        return cancelledResult(all);
-      }
-      if (waitIfPaused != null && !await waitIfPaused()) {
-        return cancelledResult(all);
-      }
-      final List<MediaAsset>? pageAssets;
-      if (enumeratedAssets != null) {
-        final int start = page * pageSize;
-        pageAssets = start >= enumeratedAssets.length
-            ? <MediaAsset>[]
-            : enumeratedAssets.sublist(
-                start,
-                start + pageSize > enumeratedAssets.length
-                    ? enumeratedAssets.length
-                    : start + pageSize,
-              );
+      final Result<List<EnumeratedAsset>> videosResult = await videosPass;
+      final List<MediaAsset>? videoAssets = videosResult.fold(
+        onSuccess: convert,
+        onFailure: (_) => null,
+      );
+      if (videoAssets == null) {
+        // A failed videos pass after images were delivered is
+        // the mid-scan page failure shape: the partial library
+        // stands, memberships stay untouched (the return below).
+        pageFailed = true;
       } else {
+        final int combined = imageAssets.length + videoAssets.length;
+        estimatedTotal = combined == 0 ? null : combined;
+        if (!await deliver(videoAssets)) {
+          return cancelledResult(all);
+        }
+      }
+
+      if (!pageFailed && pagesDelivered == 0) {
+        // Empty library: the merged source fired exactly one
+        // empty page; keep that shape so consumers see the same
+        // "scan ran, nothing found" signal as before.
+        if (cancelled()) {
+          return cancelledResult(all);
+        }
+        if (waitIfPaused != null && !await waitIfPaused()) {
+          return cancelledResult(all);
+        }
+        onPage?.call(const <MediaAsset>[], const <String, PhotoAssessment>{});
+        onProgress?.call(0, null);
+      }
+    } else {
+      int page = 0;
+      while (true) {
+        if (cancelled()) {
+          return cancelledResult(all);
+        }
+        if (waitIfPaused != null && !await waitIfPaused()) {
+          return cancelledResult(all);
+        }
         final Result<List<MediaAsset>> result = await media.getAssets(
           page: page,
           pageSize: pageSize,
         );
-        pageAssets = result.fold(
+        final List<MediaAsset>? pageAssets = result.fold(
           onSuccess: (List<MediaAsset> value) => value,
           onFailure: (_) => null,
         );
+        if (pageAssets == null) {
+          pageFailed = true;
+          break;
+        }
+        all.addAll(pageAssets);
+        onPage?.call(pageAssets, const <String, PhotoAssessment>{});
+        onProgress?.call(all.length, estimatedTotal);
+        if (pageAssets.length < pageSize) {
+          break;
+        }
+        page++;
       }
-      if (pageAssets == null) {
-        pageFailed = true;
-        break;
-      }
-      all.addAll(pageAssets);
-      onPage?.call(pageAssets, const <String, PhotoAssessment>{});
-      onProgress?.call(all.length, estimatedTotal);
-      if (pageAssets.length < pageSize) {
-        break;
-      }
-      page++;
     }
 
     if (pageFailed) {
