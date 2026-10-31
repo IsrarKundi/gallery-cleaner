@@ -136,3 +136,21 @@ recorded here.
     leaves; the marks are persisted either way, so exiting loses
     nothing. Selection-cancel still takes precedence over the
     guard, and an empty grid never prompts.
+
+## Addendum — 31 Oct 2026: decision 9 SUPERSEDED for the Settings toggle (owner decision)
+
+The owner, testing on a real device, rejected the priming sheet
+at the only place it ever appeared: the Settings notifications
+toggle itself. Tapping that toggle IS the user's own deliberate
+request, so explaining the benefit first is a redundant step —
+decision 9's sheet is removed. Turning the toggle on now calls
+the controller, which requests the system permission directly;
+a denial still leaves the toggle off with the reason shown, and
+no ask happens at first launch. The sheet widget, its three
+strings, and its sheet-first tests were removed; the toggle's
+tests now pin the direct request (grant → on and persisted,
+denial → off with the reason). Decision 9's original text above
+is kept as the record of what Stage 1 shipped. A priming sheet
+remains a legitimate pattern for a future ask the user did not
+start (none exists today); it must not return to the Settings
+toggle.

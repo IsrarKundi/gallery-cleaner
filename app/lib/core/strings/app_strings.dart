@@ -288,9 +288,6 @@ class AppStrings {
   // State-based reminders (wipe. fix plan Stage 1, requirements §7).
   // Copy is wipe.'s own; no swipe directions are ever named (the
   // direction mapping is a user setting, §3 amendment 27 Oct 2026).
-  static const String reminderPermissionBenefit = 'reminderPermissionBenefit';
-  static const String reminderPermissionTurnOn = 'reminderPermissionTurnOn';
-  static const String reminderPermissionNotNow = 'reminderPermissionNotNow';
   static const String reminderWaitingTitle = 'reminderWaitingTitle';
   static const String reminderWaitingBody = 'reminderWaitingBody';
   static const String reminderFinishedTitle = 'reminderFinishedTitle';
@@ -662,12 +659,6 @@ class AppStrings {
     settingsNotificationsDenied:
         'Notifications are off on this device, so reminders could '
         'not be set. The toggle stays off.',
-    reminderPermissionBenefit:
-        'One short reminder when photos are left waiting, so the '
-        'space you meant to free is not forgotten. Easy to turn off '
-        'anytime.',
-    reminderPermissionTurnOn: 'Turn on reminders',
-    reminderPermissionNotNow: 'Not now',
     reminderWaitingTitle: 'Finish what you started 🗑️',
     reminderWaitingBody:
         'Your trash is still full. Empty it now and see how much '

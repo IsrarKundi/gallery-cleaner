@@ -10,9 +10,11 @@
 //   which forces MediaQuery disableAnimations when ON.
 // - reminders (fix plan Stage 1): the toggle controls the
 //   state-based reminders. Turning ON requests the notification
-//   permission (from the view's permission sheet) and refreshes
-//   the reminder engine; a denial leaves the toggle OFF with an
-//   error. Turning OFF cancels every scheduled reminder.
+//   permission directly — the toggle tap is the user's own
+//   request, so no in-app sheet comes first (owner decision
+//   31 Oct 2026, ADR-016 addendum) — and refreshes the reminder
+//   engine; a denial leaves the toggle OFF with an error.
+//   Turning OFF cancels every scheduled reminder.
 // - private blur / protection: read live by review, trash, deck,
 //   smart-deck and duplicates controllers from LocalService, so a
 //   change here applies on the next screen load without restart.
@@ -212,33 +214,17 @@ class SettingsController extends GetxController {
     }
   }
 
-  /// Whether the system currently allows notifications, without
-  /// prompting. The view asks this before turning reminders on:
-  /// already-allowed means no permission sheet is needed. With
-  /// no notification service (persistence-only tests) the toggle
-  /// behaves as if allowed: it only persists.
-  Future<bool> notificationsEnabled() async {
-    final NotificationService? service = _notifications;
-    if (service == null) {
-      return true;
-    }
-    final Result<bool> result = await service.areEnabled();
-    return result.fold(
-      onSuccess: (bool value) => value,
-      onFailure: (_) => false,
-    );
-  }
-
   Future<void> setReminders(bool value) async {
     if (value == reminders) {
       return;
     }
     if (value) {
-      // The one permission request in the app (the view shows
-      // the in-app permission sheet first, Cleanup's pattern —
-      // teardown notes/retention.md §1.2). A denial or an error
-      // leaves the toggle OFF with the reason shown, instead of
-      // pretending reminders are set.
+      // The one permission request in the app, made directly:
+      // the Settings toggle tap is the user's own ask, so no
+      // in-app priming sheet precedes the system request (owner
+      // decision 31 Oct 2026, ADR-016 addendum). A denial or an
+      // error leaves the toggle OFF with the reason shown,
+      // instead of pretending reminders are set.
       final NotificationService? service = _notifications;
       if (service != null) {
         final Result<bool> permission = await service.requestPermission();
